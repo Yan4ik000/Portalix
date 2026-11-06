@@ -1,0 +1,26 @@
+plugins {
+    id 'net.fabricmc.fabric-loom'
+}
+
+loom {
+    accessWidenerPath = file('src/main/resources/portalix.accesswidener')
+    splitEnvironmentSourceSets()
+}
+
+dependencies {
+    minecraft "com.mojang:minecraft:${rootProject.minecraft_version}"
+    compileOnly "net.fabricmc:fabric-loader:${rootProject.loader_version}"
+    compileOnly 'net.fabricmc:sponge-mixin:0.17.4+mixin.0.8.7'
+    compileOnly 'io.github.llamalad7:mixinextras-common:0.5.5'
+    if (rootProject.includeRenderCompat) {
+        clientCompileOnly "maven.modrinth:sodium:${rootProject.sodium_version}"
+        clientCompileOnly "maven.modrinth:iris:${rootProject.iris_version}"
+    }
+}
+
+if (rootProject.includeRenderCompat) {
+    sourceSets.client.java.srcDir 'src/compat/java'
+    sourceSets.client.resources.srcDir 'src/compat/resources'
+}
+
+apply from: rootProject.file('gradle/testing/client-tests.gradle')

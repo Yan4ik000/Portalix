@@ -1,0 +1,22 @@
+{
+  "width": 1856,
+  "height": 1044,
+  "source": "main-window-before-blit",
+  "scenes": [
+    "camera",
+    "portal_views",
+    "gun",
+    "player_traversal",
+    "carry",
+    "combat",
+    "entity_traversal",
+    "vehicles",
+    "world_updates",
+    "audio",
+    "resources",
+    "lifecycle"
+  ],
+  "benchmarks": [
+    "performance"
+  ]
+}

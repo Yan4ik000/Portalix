@@ -1,0 +1,206 @@
+{
+  "version": 1,
+  "gripBone": 9,
+  "gripName": "ValveBiped.Base",
+  "groups": {
+    "v_portalix": {
+      "mode": "SOLID"
+    },
+    "v_portalix_glass": {
+      "mode": "ADDITIVE"
+    },
+    "potatOS_vmodel": {
+      "mode": "SELF_ILLUMINATED"
+    }
+  },
+  "worldGripOffset": [
+    0,
+    -3.3,
+    1.5
+  ],
+  "presentation": {
+    "hand": [
+      {
+        "kind": "scale",
+        "values": [
+          1.65,
+          1.65,
+          1
+        ],
+        "mirror": true
+      },
+      {
+        "kind": "translate",
+        "values": [
+          0,
+          -0.022,
+          0
+        ],
+        "mirror": false
+      },
+      {
+        "kind": "scale",
+        "values": [
+          0.025,
+          0.025,
+          0.025
+        ],
+        "mirror": false
+      },
+      {
+        "kind": "translate",
+        "values": [
+          7,
+          -7,
+          -12
+        ],
+        "mirror": false
+      },
+      {
+        "kind": "rotateX",
+        "values": [
+          -1
+        ],
+        "mirror": false
+      },
+      {
+        "kind": "rotateY",
+        "values": [
+          -5
+        ],
+        "mirror": false
+      },
+      {
+        "kind": "translate",
+        "values": [
+          -7,
+          7,
+          12
+        ],
+        "mirror": false
+      }
+    ],
+    "worldHand": [
+      {
+        "kind": "translate",
+        "values": [
+          0.5,
+          0.5,
+          0.5
+        ],
+        "mirror": false
+      },
+      {
+        "kind": "scale",
+        "values": [
+          0.038,
+          0.038,
+          0.038
+        ],
+        "mirror": true
+      }
+    ],
+    "icon": [
+      {
+        "kind": "translate",
+        "values": [
+          0.5,
+          0.48,
+          0.5
+        ],
+        "mirror": false
+      },
+      {
+        "kind": "rotateY",
+        "values": [
+          -55
+        ],
+        "mirror": false
+      },
+      {
+        "kind": "rotateX",
+        "values": [
+          25
+        ],
+        "mirror": false
+      },
+      {
+        "kind": "scale",
+        "values": [
+          0.037,
+          0.037,
+          0.037
+        ],
+        "mirror": false
+      },
+      {
+        "kind": "translate",
+        "values": [
+          0,
+          -2,
+          12
+        ],
+        "mirror": false
+      }
+    ],
+    "ground": [
+      {
+        "kind": "translate",
+        "values": [
+          0.5,
+          0.25,
+          0.5
+        ],
+        "mirror": false
+      },
+      {
+        "kind": "scale",
+        "values": [
+          0.025,
+          0.025,
+          0.025
+        ],
+        "mirror": false
+      },
+      {
+        "kind": "translate",
+        "values": [
+          0,
+          -2,
+          12
+        ],
+        "mirror": false
+      }
+    ],
+    "item": [
+      {
+        "kind": "translate",
+        "values": [
+          0.5,
+          0.5,
+          0.5
+        ],
+        "mirror": false
+      },
+      {
+        "kind": "scale",
+        "values": [
+          0.035,
+          0.035,
+          0.035
+        ],
+        "mirror": false
+      },
+      {
+        "kind": "translate",
+        "values": [
+          0,
+          -3,
+          8
+        ],
+        "mirror": false
+      }
+    ]
+  },
+  "animationFps": 30.0
+}

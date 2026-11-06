@@ -1,0 +1,49 @@
+plugins {
+    id 'net.fabricmc.fabric-loom'
+}
+
+sourceSets.main {
+    java.srcDir project(':common').file('src/main/java')
+    resources.srcDir project(':common').file('src/main/resources')
+}
+
+loom {
+    accessWidenerPath = project(':common').file('src/main/resources/portalix.accesswidener')
+    splitEnvironmentSourceSets()
+    mods {
+        portalix {
+            sourceSet sourceSets.main
+            sourceSet sourceSets.client
+        }
+    }
+    runs {
+        client { runDir 'build/run/client' }
+        server { runDir 'build/run/server' }
+    }
+}
+
+sourceSets.client {
+    java.srcDir project(':common').file('src/client/java')
+    resources.srcDir project(':common').file('src/client/resources')
+    if (rootProject.includeRenderCompat) {
+        java.srcDir project(':common').file('src/compat/java')
+        resources.srcDir project(':common').file('src/compat/resources')
+    }
+}
+
+dependencies {
+    minecraft "com.mojang:minecraft:${rootProject.minecraft_version}"
+    implementation "net.fabricmc:fabric-loader:${rootProject.loader_version}"
+    implementation "net.fabricmc.fabric-api:fabric-api:${rootProject.fabric_api_version}"
+    if (rootProject.includeRenderCompat) {
+        clientCompileOnly "maven.modrinth:sodium:${rootProject.sodium_version}"
+        clientCompileOnly "maven.modrinth:iris:${rootProject.iris_version}"
+    }
+}
+
+apply from: rootProject.file('gradle/testing/client-tests.gradle')
+apply from: rootProject.file('gradle/testing/fabric-regression.gradle')
+apply from: rootProject.file('gradle/testing/release-contracts.gradle')
+apply from: rootProject.file('gradle/testing/packaged-regression.gradle')
+
+apply from: rootProject.file('gradle/signing.gradle')

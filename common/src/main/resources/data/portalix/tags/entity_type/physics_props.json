@@ -1,0 +1,17 @@
+{
+  "replace": false,
+  "values": [
+    "minecraft:item",
+    "minecraft:falling_block",
+    "minecraft:tnt",
+    "minecraft:armor_stand",
+    "#minecraft:boat",
+    "minecraft:minecart",
+    "minecraft:chest_minecart",
+    "minecraft:furnace_minecart",
+    "minecraft:hopper_minecart",
+    "minecraft:tnt_minecart",
+    "minecraft:command_block_minecart",
+    "minecraft:spawner_minecart"
+  ]
+}

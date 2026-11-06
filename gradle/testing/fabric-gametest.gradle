@@ -1,0 +1,48 @@
+buildscript {
+    dependencies { classpath 'dev.portalix.build:test-infrastructure:1' }
+}
+
+import VerifyGameTestReport
+
+def gameTestReportDirectory = layout.buildDirectory.dir('reports/gametest').get().asFile
+
+loom {
+    runs {
+        regressionServer {
+            server()
+            source sourceSets.regression
+            runDir 'build/run/gametest'
+            property 'fabric-api.gametest', 'true'
+            rootProject.regressionEnvironmentProperties.each { name, value -> property name, value }
+            property 'fabric-api.gametest.filter', rootProject.regressionServerTestFilter
+            property 'fabric-api.gametest.report-file', new File(gameTestReportDirectory, 'results.xml').absolutePath
+            vmArgs '-Xmx4G'
+            ideConfigGenerated false
+        }
+    }
+}
+
+tasks.named('runRegressionServer') {
+    timeout = java.time.Duration.ofMinutes(5)
+    doFirst {
+        def runDirectory = layout.buildDirectory.dir('run/gametest').get().asFile
+        runDirectory.mkdirs()
+        new File(runDirectory, 'server.properties').createNewFile()
+        new File(runDirectory, 'eula.txt').createNewFile()
+        gameTestReportDirectory.mkdirs()
+        java.nio.file.Files.deleteIfExists(new File(gameTestReportDirectory, 'results.xml').toPath())
+        new File(gameTestReportDirectory, 'launch-start.json').setText(
+            groovy.json.JsonOutput.toJson([startedAt: System.currentTimeMillis()]), 'UTF-8')
+    }
+}
+
+tasks.register('testServer', VerifyGameTestReport) {
+    group = 'verification'
+    description = 'Runs and validates the selected synchronous server GameTest systems.'
+    dependsOn 'runRegressionServer'
+    reportFile = layout.buildDirectory.file('reports/gametest/results.xml')
+    launchLogFile = layout.buildDirectory.file('run/gametest/logs/latest.log')
+    launchStartFile = layout.buildDirectory.file('reports/gametest/launch-start.json')
+    expectedTests = rootProject.regressionExpectedServerTests
+    testInstances.from(rootProject.regressionServerTestInstances)
+}

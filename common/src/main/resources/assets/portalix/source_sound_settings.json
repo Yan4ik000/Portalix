@@ -1,0 +1,172 @@
+{
+  "fire_blue": {
+    "source": "Weapon_Portalix.fire_blue",
+    "volume": 0.275,
+    "volumeMax": 0.275,
+    "pitchMin": 0.95,
+    "pitchMax": 1.05,
+    "soundLevel": 140,
+    "channel": "CHAN_STATIC",
+    "engineGain": 1.0
+  },
+  "fire_orange": {
+    "source": "Weapon_Portalix.fire_red",
+    "volume": 0.275,
+    "volumeMax": 0.275,
+    "pitchMin": 0.95,
+    "pitchMax": 1.05,
+    "soundLevel": 140,
+    "channel": "CHAN_STATIC",
+    "engineGain": 1.0
+  },
+  "draw": {
+    "source": "Portal.PortalixActivate",
+    "volume": 0.45,
+    "volumeMax": 0.45,
+    "pitchMin": 0.95,
+    "pitchMax": 1.05,
+    "soundLevel": 90,
+    "channel": "CHAN_STATIC",
+    "engineGain": 1.0
+  },
+  "fizzle": {
+    "source": "Portal.FizzlerShimmy",
+    "volume": 0.4,
+    "volumeMax": 0.4,
+    "pitchMin": 0.95,
+    "pitchMax": 1.05,
+    "soundLevel": 90,
+    "channel": "CHAN_STATIC",
+    "engineGain": 1.0
+  },
+  "hold": {
+    "source": "PortalPlayer.ObjectUse",
+    "volume": 0.4,
+    "volumeMax": 0.4,
+    "pitchMin": 1.0,
+    "pitchMax": 1.0,
+    "soundLevel": 75,
+    "channel": "CHAN_ITEM",
+    "engineGain": 1.0
+  },
+  "hold_intro": {
+    "source": "PortalPlayer.ObjectUse",
+    "volume": 0.4,
+    "volumeMax": 0.4,
+    "pitchMin": 1.0,
+    "pitchMax": 1.0,
+    "soundLevel": 75,
+    "channel": "CHAN_ITEM",
+    "engineGain": 1.0
+  },
+  "release": {
+    "source": "PortalPlayer.ObjectUseStop",
+    "volume": 0.25,
+    "volumeMax": 0.25,
+    "pitchMin": 1.0,
+    "pitchMax": 1.0,
+    "soundLevel": 75,
+    "channel": "CHAN_ITEM",
+    "engineGain": 1.0
+  },
+  "grab_failed": {
+    "source": "PortalPlayer.UseDeny",
+    "volume": 0.15,
+    "volumeMax": 0.15,
+    "pitchMin": 1.0,
+    "pitchMax": 1.0,
+    "soundLevel": 75,
+    "channel": "CHAN_ITEM",
+    "engineGain": 1.0
+  },
+  "invalid": {
+    "source": "Portal.InvalidSurfaceSwt",
+    "volume": 0.3,
+    "volumeMax": 0.3,
+    "pitchMin": 0.95,
+    "pitchMax": 1.05,
+    "soundLevel": 115,
+    "channel": "CHAN_STATIC",
+    "engineGain": 1.0
+  },
+  "invalid_surface": {
+    "source": "Portal.fizzle_invalid_surface",
+    "volume": 0.425,
+    "volumeMax": 0.425,
+    "pitchMin": 0.95,
+    "pitchMax": 1.05,
+    "soundLevel": 90,
+    "channel": "CHAN_ITEM",
+    "engineGain": 1.0
+  },
+  "portal_open_blue": {
+    "source": "Portal.open_blue",
+    "volume": 0.2,
+    "volumeMax": 0.2,
+    "pitchMin": 0.95,
+    "pitchMax": 1.05,
+    "soundLevel": 105,
+    "channel": "CHAN_AUTO",
+    "engineGain": 1.0
+  },
+  "portal_open_orange": {
+    "source": "Portal.open_red",
+    "volume": 0.4,
+    "volumeMax": 0.4,
+    "pitchMin": 0.95,
+    "pitchMax": 1.05,
+    "soundLevel": 105,
+    "channel": "CHAN_AUTO",
+    "engineGain": 1.0
+  },
+  "portal_open_layer": {
+    "source": "Portal.red_rock",
+    "volume": 0.15,
+    "volumeMax": 0.3,
+    "pitchMin": 0.95,
+    "pitchMax": 1.05,
+    "soundLevel": 85,
+    "channel": "CHAN_AUTO",
+    "engineGain": 1.0
+  },
+  "portal_close_blue": {
+    "source": "Portal.close_blue",
+    "volume": 0.2,
+    "volumeMax": 0.2,
+    "pitchMin": 0.95,
+    "pitchMax": 1.05,
+    "soundLevel": 80,
+    "channel": "CHAN_BODY",
+    "engineGain": 1.0
+  },
+  "portal_close_orange": {
+    "source": "Portal.close_red",
+    "volume": 0.2,
+    "volumeMax": 0.2,
+    "pitchMin": 0.95,
+    "pitchMax": 1.05,
+    "soundLevel": 80,
+    "channel": "CHAN_BODY",
+    "engineGain": 1.0
+  },
+  "portal_ambient": {
+    "source": "Portal.ambient_loop",
+    "volume": 0.5,
+    "volumeMax": 0.5,
+    "pitchMin": 1.0,
+    "pitchMax": 1.0,
+    "soundLevel": 70,
+    "channel": "CHAN_STATIC",
+    "engineGain": 0.4
+  },
+  "portal_fizzle": {
+    "source": "Portal.fizzle_moved",
+    "volume": 0.225,
+    "volumeMax": 0.225,
+    "pitchMin": 0.95,
+    "pitchMax": 1.05,
+    "soundLevel": 105,
+    "channel": "CHAN_ITEM",
+    "engineGain": 1.0
+  }
+}

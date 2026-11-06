@@ -1,0 +1,10 @@
+{
+  "type": "minecraft:function",
+  "function": "portalix_regression:carry",
+  "environment": "portalix_regression:carry",
+  "structure": "portalix_regression:empty",
+  "max_ticks": 1200,
+  "setup_ticks": 0,
+  "required": true,
+  "sky_access": true
+}

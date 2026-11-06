@@ -1,0 +1,36 @@
+if (!rootProject.regressionPackaged) return
+
+def archive = tasks.named('jar', Jar).flatMap { it.archiveFile }
+def productionOutputs = files(sourceSets.main.output, sourceSets.client.output)
+sourceSets {
+    packagedMod {
+        java.setSrcDirs([])
+        resources.setSrcDirs([])
+        output.classesDirs.setFrom([])
+        output.resourcesDir = null
+        output.dir([builtBy: tasks.named('jar')], archive)
+    }
+}
+['regression', 'regressionClient'].each { name ->
+    def source = sourceSets.named(name).get()
+    source.runtimeClasspath = source.runtimeClasspath.filter { !productionOutputs.contains(it) } + files(archive)
+}
+
+def runNames = ['regressionClient', 'benchmarkClient', 'regressionServer']
+if (project.name == 'fabric') {
+    loom.mods.named('portalix') {
+        modSourceSets.set([])
+        modFiles.setFrom(archive)
+    }
+    loom.runs.configureEach {
+        if (name in runNames) property 'portalix.test.packagedArchive', archive.get().asFile.absolutePath
+    }
+} else {
+    neoForge.mods.named('portalix') { modSourceSets.set([sourceSets.packagedMod]) }
+    neoForge.runs.configureEach {
+        if (name in runNames) systemProperty 'portalix.test.packagedArchive', archive.get().asFile.absolutePath
+    }
+}
+tasks.matching { it.name in ['runRegressionClient', 'runBenchmarkClient', 'runRegressionServer'] }.configureEach {
+    dependsOn 'verifyModArchive'
+}

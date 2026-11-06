@@ -1,0 +1,17 @@
+{
+  "required": true,
+  "package": "dev.portalix.neoforge.mixin",
+  "compatibilityLevel": "JAVA_${java_version}",
+  "mixins": [
+    "PlayerPortalDataMixin",
+    "ItemPortalDataMixin",
+    "PortalBuiltinLootMixin",
+    "PortalSweepHitboxMixin"
+  ],
+  "client": [
+    "PortalScreenEffectsMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}

@@ -1,0 +1,120 @@
+buildscript {
+    dependencies { classpath 'dev.portalix.build:test-infrastructure:1' }
+}
+
+import VerifyRegressionReport
+
+def profiles = [:]
+def profileCatalog = new groovy.json.JsonSlurper().parse(file('tests/test-profiles.json'), 'UTF-8')
+profileCatalog.loaders.each { loader ->
+    profileCatalog.backends.each { backend ->
+        profileCatalog.renderers.each { renderer ->
+            def id = "${loader}-${renderer}-${backend}".toString()
+            profiles[id] = [loader: loader, renderer: renderer, backend: backend,
+                            supported: !profileCatalog.unsupported.contains(id)]
+        }
+    }
+}
+ext.regressionProfiles = profiles
+def packagedSelection = providers.gradleProperty('testPackaged').getOrElse('false')
+if (!(packagedSelection in ['true', 'false'])) throw new GradleException('testPackaged must be true or false')
+ext.regressionPackaged = packagedSelection == 'true'
+ext.regressionProductDirectory = regressionPackaged ? "packaged/${includeRenderCompat ? 'all' : 'none'}/" :
+    (includeRenderCompat ? '' : 'no-compat/')
+ext.regressionProfileId = providers.gradleProperty('testProfile').getOrElse('fabric-native-opengl')
+if (!profiles.containsKey(regressionProfileId)) {
+    throw new GradleException("Unknown testProfile '${regressionProfileId}'. Choose: ${profiles.keySet().join(', ')}")
+}
+ext.regressionProfile = profiles[regressionProfileId]
+if (!includeRenderCompat && regressionProfile.renderer != 'native') {
+    throw new GradleException("Profile '${regressionProfileId}' requires -PrenderCompat=all")
+}
+
+def sceneCatalogFile = layout.projectDirectory.file('tests/src/client/resources/portalix-regression-scenes.json')
+def sceneCatalog = new groovy.json.JsonSlurper().parseText(providers.fileContents(sceneCatalogFile).asText.get())
+ext.regressionClientTestSelection = providers.gradleProperty('clientTest').getOrElse('all')
+if (regressionClientTestSelection != 'all' && !sceneCatalog.scenes.contains(regressionClientTestSelection)) {
+    throw new GradleException("Unknown clientTest '${regressionClientTestSelection}'. Choose all or: ${sceneCatalog.scenes.join(', ')}")
+}
+ext.regressionBenchmarkSelection = providers.gradleProperty('benchmark').getOrElse('performance')
+if (!sceneCatalog.benchmarks.contains(regressionBenchmarkSelection)) {
+    throw new GradleException("Unknown benchmark '${regressionBenchmarkSelection}'. Choose: ${sceneCatalog.benchmarks.join(', ')}")
+}
+// These OSHI workarounds apply only to Windows process performance counters.
+ext.regressionEnvironmentProperties = System.getProperty('os.name').startsWith('Windows') ? [
+    'oshi.util.wmi.timeout': '5000',
+    'oshi.os.windows.hkeyperfdata': 'false',
+    'oshi.os.windows.perfproc.disabled': 'true'
+] : [:]
+
+ext.regressionDiagnostics = providers.gradleProperty('testDiagnostics').getOrElse('compact')
+if (!(regressionDiagnostics in ['compact', 'full'])) {
+    throw new GradleException('testDiagnostics must be compact or full')
+}
+
+ext.regressionServerTestInstances = fileTree('tests/src/main/resources/data/portalix_regression/test_instance') {
+    include '*.json'
+}
+def serverTests = regressionServerTestInstances.files.collect {
+    it.name.substring(0, it.name.length() - '.json'.length())
+}.sort()
+if (serverTests.isEmpty()) throw new GradleException('No server GameTest instances are registered')
+ext.regressionServerTestSelection = providers.gradleProperty('serverTest').getOrElse('all')
+if (regressionServerTestSelection != 'all' && !serverTests.contains(regressionServerTestSelection)) {
+    throw new GradleException("Unknown serverTest '${regressionServerTestSelection}'. Choose all or: ${serverTests.join(', ')}")
+}
+ext.regressionServerTestFilter = 'portalix_regression:' +
+    (regressionServerTestSelection == 'all' ? '*' : regressionServerTestSelection)
+ext.regressionExpectedServerTests = (regressionServerTestSelection == 'all' ? serverTests : [regressionServerTestSelection])
+    .collect { 'portalix_regression:' + it }
+
+tasks.register('listTestProfiles') {
+    group = 'verification'
+    description = 'Lists the 12 independently selectable client regression profiles.'
+    def entries = profiles.collect { id, profile ->
+        "${id}${profile.supported ? '' : " (UNSUPPORTED: Iris ${profileCatalog.unsupportedIrisVersion} cannot enable shaders on Vulkan)"}"
+    }
+    doLast { entries.each { logger.lifecycle(it) } }
+}
+
+tasks.register('test') {
+    group = 'verification'
+    description = 'Runs shared common and client CPU JUnit contracts against both loader builds.'
+    dependsOn ':fabric:test', ':fabric:clientTest', ':neoforge:test', ':neoforge:clientTest'
+}
+
+tasks.register('testServer') {
+    group = 'verification'
+    description = 'Runs server GameTests on both loaders; -PserverTest=<system> selects one system.'
+    dependsOn ':fabric:testServer', ':neoforge:testServer'
+}
+
+['testClient': false, 'benchmarkClient': true].each { taskName, benchmark ->
+    tasks.register(taskName, VerifyRegressionReport) {
+        group = benchmark ? 'benchmark' : 'verification'
+        description = benchmark ? 'Measures the selected -Pbenchmark in a real client; not a performance pass/fail gate.'
+            : 'Runs real GPU integration and verifies log/evidence for -PtestProfile=<profile>.'
+        def loader = regressionProfile.loader
+        profileName = regressionProfileId
+        clientTestSelection = benchmark ? regressionBenchmarkSelection : regressionClientTestSelection
+        diagnosticsMode = regressionDiagnostics
+        reportDirectory = layout.buildDirectory.dir("reports/${benchmark ? 'benchmarks' : 'regression'}/${regressionProductDirectory}${regressionProfileId}")
+        sceneContract = layout.projectDirectory.file('tests/src/client/resources/portalix-regression-scenes.json')
+        dependsOn ":${loader}:run${benchmark ? 'Benchmark' : 'Regression'}Client", ":${loader}:verify${benchmark ? 'Benchmark' : 'Regression'}Log"
+    }
+}
+
+tasks.register('testProfile') {
+    group = 'verification'
+    description = 'Runs CPU, server and GPU checks for -PtestProfile=<profile>; serverTest optionally narrows server coverage.'
+    def loader = regressionProfile.loader
+    dependsOn ":${loader}:test", ":${loader}:clientTest", ":${loader}:testServer", 'testClient'
+}
+
+tasks.register('testInfrastructure') {
+    group = 'verification'
+    description = 'Runs the regression infrastructure contracts.'
+    dependsOn gradle.includedBuild('test-infrastructure').task(':test')
+}
+
+tasks.named('check') { dependsOn 'test', 'testInfrastructure' }

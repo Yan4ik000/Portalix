@@ -1,0 +1,93 @@
+plugins {
+    id 'base'
+    id 'net.fabricmc.fabric-loom' version "${loom_version}" apply false
+    id 'net.neoforged.moddev' version "${moddev_version}" apply false
+}
+
+layout.buildDirectory = layout.projectDirectory.dir('tests/build')
+
+def renderCompat = providers.gradleProperty('renderCompat').getOrElse('all')
+if (!(renderCompat in ['all', 'none'])) {
+    throw new GradleException("Unknown renderCompat '${renderCompat}'; choose all or none")
+}
+ext.includeRenderCompat = renderCompat == 'all'
+
+subprojects {
+    apply plugin: 'java-library'
+    group = rootProject.group
+    version = rootProject.version
+    repositories {
+        mavenCentral()
+        maven { url = 'https://api.modrinth.com/maven' }
+        maven { url = 'https://maven.fabricmc.net/' }
+    }
+    java {
+        toolchain.languageVersion = JavaLanguageVersion.of(rootProject.java_version as int)
+    }
+    tasks.withType(JavaCompile).configureEach {
+        options.release = rootProject.java_version as int
+        options.encoding = 'UTF-8'
+    }
+    tasks.withType(ProcessResources).configureEach {
+        def metadata = [
+            version: project.version,
+            minecraft_version: rootProject.minecraft_version,
+            java_version: rootProject.java_version,
+            loader_version: rootProject.loader_version,
+            fabric_api_version: rootProject.fabric_api_version.split('\\+')[0],
+            neoforge_version: rootProject.neoforge_version,
+            sodium_compat_version: rootProject.sodium_compat_version,
+            iris_compat_version: rootProject.iris_compat_version,
+            render_dependency_type: rootProject.includeRenderCompat ? 'optional' : 'incompatible',
+            sodium_compat_range: rootProject.includeRenderCompat ? "[${rootProject.sodium_compat_version}]" : '[0,)',
+            iris_compat_range: rootProject.includeRenderCompat ? "[${rootProject.iris_compat_version}]" : '[0,)',
+            render_dependency_reason: rootProject.includeRenderCompat
+                ? 'Only the tested version is supported. Install that version or remove this optional mod.'
+                : 'This Portalix build has no Sodium/Iris integration. Use the standard build or remove these mods.'
+        ]
+        inputs.properties(metadata)
+        inputs.property('renderCompat', rootProject.includeRenderCompat)
+        filesMatching(['fabric.mod.json', 'META-INF/neoforge.mods.toml', '*.mixins.json']) {
+            expand metadata
+        }
+        if (!rootProject.includeRenderCompat && name == 'processResources') {
+            doLast {
+                def fabricMetadata = new File(destinationDir, 'fabric.mod.json')
+                if (fabricMetadata.isFile()) {
+                    def json = new groovy.json.JsonSlurper().parse(fabricMetadata, 'UTF-8')
+                    json.mixins.removeAll { it instanceof Map && it.config == 'portalix.compat.mixins.json' }
+                    json.breaks = (json.breaks ?: [:]) + [sodium: '*', iris: '*']
+                    fabricMetadata.setText(groovy.json.JsonOutput.prettyPrint(groovy.json.JsonOutput.toJson(json)) + '\n', 'UTF-8')
+                }
+                def neoMetadata = new File(destinationDir, 'META-INF/neoforge.mods.toml')
+                if (neoMetadata.isFile()) {
+                    def text = neoMetadata.getText('UTF-8').replace('[[mixins]]\nconfig="portalix.compat.mixins.json"', '')
+                    neoMetadata.setText(text, 'UTF-8')
+                }
+            }
+        }
+    }
+    tasks.withType(Jar).configureEach {
+        from(rootProject.file('LICENSE'), rootProject.file('NOTICE'))
+        preserveFileTimestamps = false
+        reproducibleFileOrder = true
+    }
+    base.archivesName = "Portalix-${project.name}-${rootProject.minecraft_version}"
+
+    dependencies {
+        testImplementation platform('org.junit:junit-bom:5.13.4')
+        testImplementation 'org.junit.jupiter:junit-jupiter'
+        testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+    }
+    tasks.withType(Test).configureEach {
+        useJUnitPlatform()
+        maxHeapSize = '2G'
+        testLogging { events 'failed', 'skipped' }
+    }
+}
+
+apply from: 'gradle/testing/regression.gradle'
+
+tasks.named('build') {
+    dependsOn ':common:classes', ':common:clientClasses', ':fabric:build', ':neoforge:build'
+}

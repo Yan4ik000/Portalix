@@ -1,0 +1,44 @@
+{
+  "particle/beam_portaledge_01_oriented_add.vmt": {
+    "texture": "particle/beam_portaledge_01",
+    "orientation": 3,
+    "additive": true,
+    "refract": false,
+    "textureWidth": 256
+  },
+  "particle/beam_portaledge_01b_oriented_add.vmt": {
+    "texture": "particle/beam_portaledge_01b",
+    "orientation": 3,
+    "additive": true,
+    "refract": false,
+    "textureWidth": 256
+  },
+  "particle/beam_portaledge_04_oriented_add.vmt": {
+    "texture": "particle/beam_portaledge_04",
+    "orientation": 3,
+    "additive": true,
+    "refract": false,
+    "textureWidth": 256
+  },
+  "particle/particle_glow_03_trail.vmt": {
+    "texture": "particle/particle_glow_03",
+    "orientation": 0,
+    "additive": false,
+    "refract": false,
+    "textureWidth": 128
+  },
+  "particle/particle_glow_04_additive.vmt": {
+    "texture": "particle/particle_glow_04",
+    "orientation": 0,
+    "additive": true,
+    "refract": false,
+    "textureWidth": 128
+  },
+  "particle/warp2_warp.vmt": {
+    "texture": "particle/warp1_normal",
+    "orientation": 0,
+    "additive": false,
+    "refract": true,
+    "textureWidth": 256
+  }
+}

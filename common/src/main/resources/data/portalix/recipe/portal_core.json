@@ -1,0 +1,20 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "misc",
+  "pattern": [
+    "IGI",
+    "QEQ",
+    "IBI"
+  ],
+  "key": {
+    "I": "minecraft:iron_ingot",
+    "G": "minecraft:glass",
+    "Q": "minecraft:quartz",
+    "E": "minecraft:ender_pearl",
+    "B": "portalix:control_board"
+  },
+  "result": {
+    "id": "portalix:portal_core",
+    "count": 1
+  }
+}

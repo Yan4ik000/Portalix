@@ -1,0 +1,52 @@
+Portalix
+Required Notice: Copyright © 2026 Yan4ik000
+
+The project's original code is distributed under the PolyForm Perimeter License 1.0.1.
+The full license text is available in LICENSE. This license does not apply
+to the original Valve materials listed below or their modified portions.
+
+Portal 2 materials
+
+The mod uses the following materials from Portal 2 and modified versions of them:
+
+- models and animations;
+- textures and shaders;
+- sounds and particle definitions.
+
+In the source tree, the resources listed below are located relative to
+common/src/main/resources/assets/portalix/; in the JAR, relative to assets/portalix/:
+
+- meshes/*.pgmesh — gun models and animations;
+- textures/model/, textures/portals/, textures/source_particles/ — textures;
+- textures/gui/*/reticle_*.png — crosshair variants;
+- textures/particle/core_glow.png and textures/effects/: combinemuzzle2.png,
+  energyball.png, impact_sparks_sequence6.png, particle_glow_01.png,
+  particle_glow_05.png, projectile_fiber.png, spark.png, sparks.png,
+  strider_bluebeam.png — effect textures, including a cropped portion of
+  particle/sparks/sparks.vtf used for impact_sparks_sequence6.png;
+- source_particles/ and portals/ — material and particle definitions, effect
+  recordings and extracted data tables;
+- sounds/*.ogg and source_sound_settings.json — sounds and their parameters;
+- gun_palettes.json — particle, crosshair and portal palettes extracted from Portal 2.
+
+This list includes converted and edited versions of these materials,
+as well as extracted animation frame coordinates in the accompanying .png.mcmeta files.
+
+shaders/include/source_portal.glsl contains a translation of portal_refract_ps20b.
+shaders/core/portal.vsh adapts portal_refract_vs20, and
+shaders/core/portal_particle_refract.fsh adapts refraction sampling from refract_ps20b.
+
+The rights to the original materials belong to Valve Corporation and/or its
+licensors. I (Yan4ik000) do not claim authorship of these materials and do not
+license them under PolyForm Perimeter 1.0.1.
+
+LicenseRef-PolyForm-Perimeter-1.0.1 in the metadata refers to LICENSE.
+
+LicenseRef-Portalix-ThirdParty in the metadata refers to this notice
+and identifies third-party materials and code fragments excluded from PolyForm Perimeter 1.0.1.
+This identifier does not grant rights to use or distribute third-party materials
+and does not replace the terms set by their rights holders.
+
+The Portal and Portal 2 names and trademarks belong to their respective owners.
+Portalix is an independent fan project, is not an official Valve product
+and is not endorsed by Valve.

@@ -1,0 +1,44 @@
+{
+  "schemaVersion": 1,
+  "id": "portalix",
+  "version": "${version}",
+  "name": "Portalix",
+  "icon": "assets/portalix/icon.png",
+  "authors": [
+    "Yan4ik000"
+  ],
+  "license": "LicenseRef-PolyForm-Perimeter-1.0.1 AND LicenseRef-Portalix-ThirdParty",
+  "description": "A mod that adds a portal gun to Minecraft.",
+  "environment": "*",
+  "accessWidener": "portalix.accesswidener",
+  "entrypoints": {
+    "main": [
+      "dev.portalix.fabric.PortalixFabric"
+    ],
+    "client": [
+      "dev.portalix.fabric.client.PortalixFabricClient"
+    ]
+  },
+  "mixins": [
+    "portalix.mixins.json",
+    "portalix.fabric.mixins.json",
+    {
+      "config": "portalix.client.mixins.json",
+      "environment": "client"
+    },
+    {
+      "config": "portalix.compat.mixins.json",
+      "environment": "client"
+    }
+  ],
+  "depends": {
+    "fabricloader": ">=${loader_version}",
+    "minecraft": "${minecraft_version}",
+    "java": ">=${java_version}",
+    "fabric-api": ">=${fabric_api_version}"
+  },
+  "breaks": {
+    "sodium": ["<${sodium_compat_version}", ">${sodium_compat_version}"],
+    "iris": ["<${iris_compat_version}", ">${iris_compat_version}"]
+  }
+}

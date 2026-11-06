@@ -1,0 +1,51 @@
+buildscript {
+    dependencies { classpath 'dev.portalix.build:test-infrastructure:1' }
+}
+
+import VerifyModArchive
+import VerifyRenderDependencies
+
+if (rootProject.includeRenderCompat) {
+    configurations {
+        renderMetadataArtifacts {
+            canBeConsumed = false
+            transitive = false
+        }
+    }
+    dependencies {
+        renderMetadataArtifacts "maven.modrinth:sodium:${project.name == 'fabric' ? rootProject.sodium_version : rootProject.sodium_neoforge_version}"
+        renderMetadataArtifacts "maven.modrinth:iris:${project.name == 'fabric' ? rootProject.iris_version : rootProject.iris_neoforge_version}"
+    }
+    def dependencyContract = tasks.register('verifyRenderDependencies', VerifyRenderDependencies) {
+        group = 'verification'
+        description = 'Checks exact compatibility declarations against the resolved loader artifacts.'
+        loaderName = project.name
+        declaredVersions = [sodium: rootProject.sodium_compat_version, iris: rootProject.iris_compat_version]
+        artifacts.from(configurations.renderMetadataArtifacts)
+    }
+    tasks.named('jar') { dependsOn dependencyContract }
+    tasks.matching { it.name in ['prepareRegressionClient', 'prepareBenchmarkClient'] }.configureEach {
+        dependsOn dependencyContract
+    }
+}
+
+def archiveContract = tasks.register('verifyModArchive', VerifyModArchive) {
+    group = 'verification'
+    description = 'Checks actual release classes, resources, loader metadata and service providers.'
+    archiveFile = tasks.named('jar', Jar).flatMap { it.archiveFile }
+    loaderName = project.name
+    modVersion = project.version.toString()
+    renderCompat = rootProject.includeRenderCompat
+    declaredRenderVersions = [sodium: rootProject.sodium_compat_version, iris: rootProject.iris_compat_version]
+    classDirectories.from(sourceSets.main.output.classesDirs, sourceSets.client.output.classesDirs)
+    requiredResources = provider {
+        Set<String> entries = [] as Set
+        [sourceSets.main.resources, sourceSets.client.resources].each { source ->
+            source.asFileTree.visit { detail ->
+                if (!detail.directory) entries.add(detail.relativePath.pathString)
+            }
+        }
+        entries.toList().sort()
+    }
+}
+tasks.named('check') { dependsOn archiveContract }

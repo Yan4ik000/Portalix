@@ -1,0 +1,64 @@
+apply from: rootProject.file('gradle/testing/regression-sources.gradle')
+
+loom {
+    mods {
+        portalix_regression {
+            sourceSet sourceSets.regression
+            sourceSet sourceSets.regressionClient
+        }
+    }
+    runs {
+        regressionClient {
+            client()
+            source sourceSets.regressionClient
+            runDir regressionRunDirectory.get().asFile.absolutePath
+            property 'portalix.test.profile', rootProject.regressionProfileId
+            property 'portalix.test.clientTest', rootProject.regressionClientTestSelection
+            property 'portalix.test.diagnostics', rootProject.regressionDiagnostics
+            property 'portalix.test.reportDir', regressionReportDirectory.get().asFile.absolutePath
+            rootProject.regressionEnvironmentProperties.each { name, value -> property name, value }
+            vmArgs '-Xmx6G'
+            programArgs '--width', '1856', '--height', '1044', '--offlineDeveloperMode'
+            ideConfigGenerated false
+        }
+        benchmarkClient {
+            client()
+            source sourceSets.regressionClient
+            runDir benchmarkRunDirectory.get().asFile.absolutePath
+            property 'portalix.test.profile', rootProject.regressionProfileId
+            property 'portalix.test.clientTest', rootProject.regressionBenchmarkSelection
+            property 'portalix.test.diagnostics', rootProject.regressionDiagnostics
+            property 'portalix.test.reportDir', benchmarkReportDirectory.get().asFile.absolutePath
+            ['benchmarkRenderDistance', 'pregeneratedRegions'].each { name ->
+                def value = rootProject.providers.gradleProperty(name).orNull
+                if (value != null) property "portalix.test.${name}", value
+            }
+            rootProject.regressionEnvironmentProperties.each { name, value -> property name, value }
+            vmArgs '-Xmx6G'
+            programArgs '--width', '1856', '--height', '1044', '--offlineDeveloperMode'
+            ideConfigGenerated false
+        }
+    }
+}
+
+if (rootProject.regressionProfile.loader == 'fabric') {
+    dependencies {
+        if (rootProject.regressionProfile.renderer != 'native')
+            regressionClientRuntimeOnly "maven.modrinth:sodium:${rootProject.sodium_version}"
+        if (rootProject.regressionProfile.renderer == 'sodium-iris')
+            regressionClientRuntimeOnly "maven.modrinth:iris:${rootProject.iris_version}"
+    }
+}
+
+tasks.named('runRegressionClient') {
+    timeout = java.time.Duration.ofMinutes(45)
+    dependsOn 'prepareRegressionClient'
+    mustRunAfter 'test', 'clientTest', 'testServer'
+}
+tasks.named('runBenchmarkClient') {
+    timeout = java.time.Duration.ofMinutes(45)
+    dependsOn 'prepareBenchmarkClient'
+    mustRunAfter 'runRegressionClient'
+}
+
+apply from: rootProject.file('gradle/testing/fabric-gametest.gradle')

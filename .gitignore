@@ -1,0 +1,48 @@
+# Gradle outputs and caches in all modules and included builds
+.gradle/
+build/
+*.class
+
+# Minecraft runtime files
+run/
+runs/
+logs/
+crash-reports/
+
+# Build logs and JVM dumps
+*.log
+*.hprof
+
+# Local IDE files
+.idea/
+.vscode/
+.settings/
+.classpath
+.project
+.factorypath
+*.iml
+*.ipr
+*.iws
+bin/
+out/
+
+# OS and editor temporary files
+.DS_Store
+Thumbs.db
+Desktop.ini
+*~
+*.swp
+*.swo
+
+# Python tooling
+.venv/
+__pycache__/
+.ruff_cache/
+*.py[cod]
+
+# Local reference sources and tools
+.agents/
+
+# Local release signing
+/portalix.p12
+/signing.properties

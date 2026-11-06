@@ -1,0 +1,92 @@
+buildscript {
+    dependencies { classpath 'dev.portalix.build:test-infrastructure:1' }
+}
+
+import PrepareRegressionRun
+import VerifyRegressionLog
+
+sourceSets {
+    test {
+        java.srcDir rootProject.file('common/src/test/java')
+        resources.srcDir rootProject.file('common/src/test/resources')
+    }
+    regression {
+        java.srcDir rootProject.file('tests/src/main/java')
+        resources.srcDir rootProject.file('tests/src/main/resources')
+        resources.srcDir rootProject.file("tests/${project.name}/resources")
+        java.srcDir rootProject.file("tests/${project.name}/java")
+        compileClasspath += sourceSets.main.output + sourceSets.main.compileClasspath
+        runtimeClasspath += sourceSets.main.output + sourceSets.main.runtimeClasspath
+    }
+    regressionClient {
+        java.srcDir rootProject.file('tests/src/client/java')
+        java.srcDir rootProject.file("tests/${project.name}/client/java")
+        resources.srcDir rootProject.file("tests/${project.name}/client/resources")
+        java.srcDir rootProject.file('tests/src/benchmark/java')
+        if (rootProject.includeRenderCompat) {
+            java.srcDir rootProject.file('tests/src/compat/java')
+            resources.srcDir rootProject.file('tests/src/compat/resources')
+        }
+        resources.srcDir rootProject.file('tests/src/client/resources')
+        resources.srcDir rootProject.file('tests/src/benchmark/resources')
+        compileClasspath += sourceSets.regression.output + sourceSets.client.output + sourceSets.client.compileClasspath
+        runtimeClasspath += sourceSets.regression.output + sourceSets.client.output + sourceSets.client.runtimeClasspath
+    }
+}
+
+if (!rootProject.includeRenderCompat) {
+    tasks.named('processRegressionResources', ProcessResources) {
+        doLast {
+            def configFile = new File(destinationDir, 'portalix.regression.client.mixins.json')
+            def config = new groovy.json.JsonSlurper().parse(configFile, 'UTF-8')
+            config.client.removeAll { it.startsWith('RegressionSodium') || it.startsWith('RegressionIris') }
+            configFile.setText(groovy.json.JsonOutput.prettyPrint(groovy.json.JsonOutput.toJson(config)) + '\n', 'UTF-8')
+        }
+    }
+}
+
+configurations {
+    regressionImplementation.extendsFrom implementation
+    regressionRuntimeOnly.extendsFrom runtimeOnly
+    regressionClientImplementation.extendsFrom clientImplementation, regressionImplementation
+    regressionClientCompileOnly.extendsFrom clientCompileOnly
+    regressionClientRuntimeOnly.extendsFrom clientRuntimeOnly, regressionRuntimeOnly
+}
+
+def profileId = rootProject.regressionProfileId
+def profile = rootProject.regressionProfile
+ext.regressionRunDirectory = layout.buildDirectory.dir("run/regression/${rootProject.regressionProductDirectory}${profileId}")
+ext.regressionReportDirectory = rootProject.layout.buildDirectory.dir("reports/regression/${rootProject.regressionProductDirectory}${profileId}")
+ext.benchmarkRunDirectory = layout.buildDirectory.dir("run/benchmarks/${rootProject.regressionProductDirectory}${profileId}")
+ext.benchmarkReportDirectory = rootProject.layout.buildDirectory.dir("reports/benchmarks/${rootProject.regressionProductDirectory}${profileId}")
+
+['Regression': false, 'Benchmark': true].each { kind, benchmark ->
+    tasks.register("prepare${kind}Client", PrepareRegressionRun) {
+        profileName = profileId
+        clientTestSelection = benchmark ? rootProject.regressionBenchmarkSelection : rootProject.regressionClientTestSelection
+        loaderName = profile.loader
+        moduleName = project.name
+        backend = profile.backend
+        shaders = profile.renderer == 'sodium-iris'
+        supported = profile.supported
+        runDirectory = benchmark ? benchmarkRunDirectory : regressionRunDirectory
+        reportDirectory = benchmark ? benchmarkReportDirectory : regressionReportDirectory
+        shaderCacheDirectory = rootProject.layout.projectDirectory.dir('.gradle/regression-assets')
+        minecraftClasspath.from(sourceSets.main.compileClasspath)
+    }
+
+    tasks.register("verify${kind}Log", VerifyRegressionLog) {
+        profileName = profileId
+        loaderName = profile.loader
+        moduleName = project.name
+        backend = profile.backend
+        shaders = profile.renderer == 'sodium-iris'
+        supported = profile.supported
+        runDirectory = benchmark ? benchmarkRunDirectory : regressionRunDirectory
+        reportDirectory = benchmark ? benchmarkReportDirectory : regressionReportDirectory
+        mustRunAfter "run${kind}Client"
+    }
+    tasks.matching { it.name == "run${kind}Client" }.configureEach {
+        finalizedBy tasks.named("verify${kind}Log")
+    }
+}

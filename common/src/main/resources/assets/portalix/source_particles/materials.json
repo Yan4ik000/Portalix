@@ -1,0 +1,119 @@
+{
+  "particle/beam_generic_2_add.vmt": {
+    "texture": "portalix:textures/source_particles/particle/beam_generic_2.png",
+    "overbright": 1.0,
+    "noz": false,
+    "sheet": {},
+    "texture_height": 256
+  },
+  "particle/particle_glow_05_add_15ob.vmt": {
+    "texture": "portalix:textures/source_particles/particle/particle_glow_05.png",
+    "overbright": 15.0,
+    "noz": false,
+    "sheet": {},
+    "texture_height": 256
+  },
+  "particle/particle_glow_05_add_15ob_noz.vmt": {
+    "texture": "portalix:textures/source_particles/particle/particle_glow_05.png",
+    "overbright": 15.0,
+    "noz": true,
+    "sheet": {},
+    "texture_height": 256
+  },
+  "particle/particle_ring_pulled_add_oriented.vmt": {
+    "texture": "portalix:textures/source_particles/particle/particle_ring_pulled.png",
+    "overbright": 2.0,
+    "noz": false,
+    "sheet": {},
+    "texture_height": 512
+  },
+  "particle/particle_ring_wave_5_add.vmt": {
+    "texture": "portalix:textures/source_particles/particle/particle_ring_wave_5.png",
+    "overbright": 1.0,
+    "noz": false,
+    "sheet": {},
+    "texture_height": 256
+  },
+  "particle/particle_flares/aircraft_white.vmt": {
+    "texture": "portalix:textures/source_particles/particle/particle_flares/aircraft_white.png",
+    "overbright": 1.0,
+    "noz": true,
+    "sheet": {},
+    "texture_height": 256
+  },
+  "particle/electrical_arc/electrical_arc.vmt": {
+    "texture": "portalix:textures/source_particles/particle/electrical_arc/electrical_arc.png",
+    "overbright": 3.0,
+    "noz": false,
+    "sheet": {
+      "0": {
+        "clamp": true,
+        "duration": 1.0,
+        "frames": [
+          {
+            "duration": 1.0,
+            "uv": [
+              0.00048828125,
+              0.00048828125,
+              0.49951171875,
+              0.49951171875
+            ]
+          }
+        ]
+      },
+      "1": {
+        "clamp": true,
+        "duration": 1.0,
+        "frames": [
+          {
+            "duration": 1.0,
+            "uv": [
+              0.50048828125,
+              0.00048828125,
+              0.99951171875,
+              0.49951171875
+            ]
+          }
+        ]
+      },
+      "2": {
+        "clamp": true,
+        "duration": 1.0,
+        "frames": [
+          {
+            "duration": 1.0,
+            "uv": [
+              0.00048828125,
+              0.50048828125,
+              0.49951171875,
+              0.99951171875
+            ]
+          }
+        ]
+      },
+      "3": {
+        "clamp": true,
+        "duration": 1.0,
+        "frames": [
+          {
+            "duration": 1.0,
+            "uv": [
+              0.50048828125,
+              0.50048828125,
+              0.99951171875,
+              0.99951171875
+            ]
+          }
+        ]
+      }
+    },
+    "texture_height": 1024
+  },
+  "particle/beam_generic_5_add.vmt": {
+    "texture": "portalix:textures/source_particles/particle/beam_generic_5.png",
+    "overbright": 1.0,
+    "noz": false,
+    "sheet": {},
+    "texture_height": 256
+  }
+}

@@ -1,0 +1,87 @@
+import net.neoforged.nfrtgradle.NeoFormRuntimeTask
+
+buildscript {
+    dependencies { classpath 'dev.portalix.build:test-infrastructure:1' }
+}
+
+plugins {
+    id 'net.neoforged.moddev'
+}
+
+def neoFormLauncher = javaToolchains.launcherFor(java.toolchain)
+tasks.withType(NeoFormRuntimeTask).configureEach {
+    javaExecutable = neoFormLauncher.map { it.executablePath.asFile.absolutePath }
+}
+
+sourceSets {
+    main {
+        java.srcDir project(':common').file('src/main/java')
+        resources.srcDir project(':common').file('src/main/resources')
+        resources.exclude 'portalix.accesswidener'
+    }
+    client {
+        java.srcDir project(':common').file('src/client/java')
+        resources.srcDir project(':common').file('src/client/resources')
+        if (rootProject.includeRenderCompat) {
+            java.srcDir project(':common').file('src/compat/java')
+            resources.srcDir project(':common').file('src/compat/resources')
+        }
+        compileClasspath += sourceSets.main.output
+        runtimeClasspath += sourceSets.main.output
+    }
+}
+
+configurations {
+    sodiumCompileArtifact
+    clientImplementation.extendsFrom implementation
+    clientCompileOnly.extendsFrom compileOnly
+    clientRuntimeOnly.extendsFrom runtimeOnly
+}
+
+neoForge {
+    version = rootProject.neoforge_version
+    addModdingDependenciesTo(sourceSets.client)
+    accessTransformers.from(file('src/main/resources/META-INF/accesstransformer.cfg'))
+    mods {
+        portalix {
+            sourceSet sourceSets.main
+            sourceSet sourceSets.client
+        }
+    }
+}
+
+dependencies {
+    if (rootProject.includeRenderCompat) {
+        sodiumCompileArtifact "maven.modrinth:sodium:${rootProject.sodium_neoforge_version}"
+        clientCompileOnly "maven.modrinth:iris:${rootProject.iris_neoforge_version}"
+    }
+}
+
+def sodiumCompileJar = tasks.register('extractSodiumCompileJar', Sync) {
+    from {
+        def nested = SodiumCompileArchive.single(configurations.sodiumCompileArtifact.files)
+        zipTree(nested.archive).matching { include nested.path }
+    }
+    eachFile { path = 'sodium.jar' }
+    includeEmptyDirs = false
+    into layout.buildDirectory.dir('compile-libraries/sodium')
+}
+
+dependencies {
+    if (rootProject.includeRenderCompat) {
+        clientCompileOnly files(sodiumCompileJar.map { it.destinationDir.toPath().resolve('sodium.jar').toFile() })
+            .builtBy(sodiumCompileJar)
+    }
+}
+
+tasks.named('jar') {
+    from sourceSets.client.output
+}
+
+apply from: rootProject.file('gradle/testing/client-tests.gradle')
+neoForge.addModdingDependenciesTo(sourceSets.clientTest)
+apply from: rootProject.file('gradle/testing/neoforge-regression.gradle')
+apply from: rootProject.file('gradle/testing/release-contracts.gradle')
+apply from: rootProject.file('gradle/testing/packaged-regression.gradle')
+
+apply from: rootProject.file('gradle/signing.gradle')

@@ -1,0 +1,38 @@
+name: Ошибка / Bug report
+description: Сообщить об ошибке в Portalix / Report a Portalix bug
+body:
+  - type: dropdown
+    id: loader
+    attributes:
+      label: Загрузчик / Mod loader
+      options:
+        - NeoForge
+        - Fabric
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Версия Portalix / Portalix version
+    validations:
+      required: true
+  - type: textarea
+    id: description
+    attributes:
+      label: Описание / Description
+      description: Что произошло и что должно было произойти? / What happened, and what did you expect?
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Как повторить / Steps to reproduce
+      placeholder: |
+        1.
+        2.
+        3.
+  - type: textarea
+    id: attachments
+    attributes:
+      label: Дополнительно / Additional information
+      description: Другие моды, лог, скриншоты или видео, если есть. / Other mods, logs, screenshots or video, if available.

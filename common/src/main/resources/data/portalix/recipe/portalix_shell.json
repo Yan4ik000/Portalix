@@ -1,0 +1,18 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "misc",
+  "pattern": [
+    "IQI",
+    " G ",
+    "IQI"
+  ],
+  "key": {
+    "I": "minecraft:iron_ingot",
+    "Q": "minecraft:quartz_block",
+    "G": "minecraft:glass"
+  },
+  "result": {
+    "id": "portalix:portalix_shell",
+    "count": 1
+  }
+}

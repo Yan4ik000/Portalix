@@ -1,0 +1,18 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "misc",
+  "pattern": [
+    "OEO",
+    "ENE",
+    "OEO"
+  ],
+  "key": {
+    "O": "minecraft:obsidian",
+    "E": "minecraft:ender_pearl",
+    "N": "minecraft:nether_star"
+  },
+  "result": {
+    "id": "portalix:miniature_black_hole",
+    "count": 1
+  }
+}

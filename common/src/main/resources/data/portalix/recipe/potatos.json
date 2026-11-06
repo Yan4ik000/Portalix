@@ -1,0 +1,12 @@
+{
+  "type": "minecraft:crafting_shapeless",
+  "category": "misc",
+  "ingredients": [
+    "portalix:ai_module",
+    "minecraft:potato"
+  ],
+  "result": {
+    "id": "portalix:potatos",
+    "count": 1
+  }
+}

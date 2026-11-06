@@ -1,0 +1,31 @@
+{
+  "required": true,
+  "package": "dev.portalix.test.client.mixin",
+  "plugin": "dev.portalix.test.mixin.RegressionMixinPlugin",
+  "compatibilityLevel": "JAVA_25",
+  "client": [
+    "RegressionInputMixin",
+    "MouseHandlerAccessor",
+    "RegressionFramerateMixin",
+    "RegressionLifecycleMixin",
+    "RegressionFrameCaptureMixin",
+    "RegressionWorldProjectionMixin",
+    "RegressionCourseMixin",
+    "RegressionVisualShotMixin",
+    "PortalServerEventsAccessor",
+    "PortalServerSessionAccessor",
+    "ServerChunkCacheAccessor",
+    "ClientPortalRegistryAccessor",
+    "PortalVisualAccessor",
+    "PortalSceneManagerAccessor",
+    "PortalRenderSceneAccessor",
+    "RegressionTerrainUploadMixin",
+    "RegressionPortalTerrainFrameMixin",
+    "RegressionSodiumTerrainUploadMixin",
+    "SoundManagerAccessor",
+    "SoundEngineAccessor"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}

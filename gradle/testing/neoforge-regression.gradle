@@ -1,0 +1,67 @@
+apply from: rootProject.file('gradle/testing/regression-sources.gradle')
+
+neoForge {
+    addModdingDependenciesTo(sourceSets.test)
+    addModdingDependenciesTo(sourceSets.regression)
+    addModdingDependenciesTo(sourceSets.regressionClient)
+    mods {
+        portalix_regression {
+            sourceSet sourceSets.regression
+            sourceSet sourceSets.regressionClient
+        }
+    }
+    runs {
+        regressionClient {
+            client()
+            sourceSet = sourceSets.regressionClient
+            gameDirectory = regressionRunDirectory
+            systemProperty 'portalix.test.profile', rootProject.regressionProfileId
+            systemProperty 'portalix.test.clientTest', rootProject.regressionClientTestSelection
+            systemProperty 'portalix.test.diagnostics', rootProject.regressionDiagnostics
+            systemProperty 'portalix.test.reportDir', regressionReportDirectory.get().asFile.absolutePath
+            rootProject.regressionEnvironmentProperties.each { name, value -> systemProperty name, value }
+            jvmArgument '-Xmx6G'
+            programArguments.addAll('--width', '1856', '--height', '1044', '--offlineDeveloperMode')
+            taskBefore tasks.named('prepareRegressionClient')
+            disableIdeRun()
+        }
+        benchmarkClient {
+            client()
+            sourceSet = sourceSets.regressionClient
+            gameDirectory = benchmarkRunDirectory
+            systemProperty 'portalix.test.profile', rootProject.regressionProfileId
+            systemProperty 'portalix.test.clientTest', rootProject.regressionBenchmarkSelection
+            systemProperty 'portalix.test.diagnostics', rootProject.regressionDiagnostics
+            systemProperty 'portalix.test.reportDir', benchmarkReportDirectory.get().asFile.absolutePath
+            ['benchmarkRenderDistance', 'pregeneratedRegions'].each { name ->
+                def value = rootProject.providers.gradleProperty(name).orNull
+                if (value != null) systemProperty "portalix.test.${name}", value
+            }
+            rootProject.regressionEnvironmentProperties.each { name, value -> systemProperty name, value }
+            jvmArgument '-Xmx6G'
+            programArguments.addAll('--width', '1856', '--height', '1044', '--offlineDeveloperMode')
+            taskBefore tasks.named('prepareBenchmarkClient')
+            disableIdeRun()
+        }
+    }
+}
+
+if (rootProject.regressionProfile.loader == 'neoforge') {
+    dependencies {
+        if (rootProject.regressionProfile.renderer != 'native')
+            regressionClientRuntimeOnly "maven.modrinth:sodium:${rootProject.sodium_neoforge_version}"
+        if (rootProject.regressionProfile.renderer == 'sodium-iris')
+            regressionClientRuntimeOnly "maven.modrinth:iris:${rootProject.iris_neoforge_version}"
+    }
+}
+
+tasks.named('runRegressionClient') {
+    timeout = java.time.Duration.ofMinutes(45)
+    mustRunAfter 'test', 'clientTest', 'testServer'
+}
+tasks.named('runBenchmarkClient') {
+    timeout = java.time.Duration.ofMinutes(45)
+    mustRunAfter 'runRegressionClient'
+}
+
+apply from: rootProject.file('gradle/testing/neoforge-gametest.gradle')

@@ -1,0 +1,14 @@
+modLoader="javafml"
+loaderVersion="[11,)"
+license="LicenseRef-PolyForm-Perimeter-1.0.1"
+
+[[mods]]
+modId="portalix_regression"
+version="1.0.0"
+displayName="Portalix regression tests"
+
+[[mixins]]
+config="portalix.regression.client.mixins.json"
+
+[[mixins]]
+config="portalix.regression.mixins.json"

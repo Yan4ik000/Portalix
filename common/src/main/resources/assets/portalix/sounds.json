@@ -1,0 +1,216 @@
+{
+  "fire_blue": {
+    "subtitle": "subtitles.portalix.fire_blue",
+    "sounds": [
+      {
+        "name": "portalix:fire_blue_0",
+        "weight": 1,
+        "preload": true
+      },
+      {
+        "name": "portalix:fire_blue_1",
+        "weight": 1,
+        "preload": true
+      },
+      {
+        "name": "portalix:fire_blue_2",
+        "weight": 1,
+        "preload": true
+      }
+    ]
+  },
+  "fire_orange": {
+    "subtitle": "subtitles.portalix.fire_orange",
+    "sounds": [
+      {
+        "name": "portalix:fire_orange_0",
+        "weight": 1,
+        "preload": true
+      },
+      {
+        "name": "portalix:fire_orange_1",
+        "weight": 1,
+        "preload": true
+      },
+      {
+        "name": "portalix:fire_orange_2",
+        "weight": 1,
+        "preload": true
+      }
+    ]
+  },
+  "invalid": {
+    "subtitle": "subtitles.portalix.invalid",
+    "sounds": [
+      {
+        "name": "portalix:invalid_0",
+        "weight": 1,
+        "preload": true
+      }
+    ]
+  },
+  "draw": {
+    "subtitle": "subtitles.portalix.draw",
+    "sounds": [
+      {
+        "name": "portalix:draw_0",
+        "weight": 1,
+        "preload": true
+      }
+    ]
+  },
+  "fizzle": {
+    "subtitle": "subtitles.portalix.fizzle",
+    "sounds": [
+      {
+        "name": "portalix:fizzle_0",
+        "weight": 1,
+        "preload": true
+      }
+    ]
+  },
+  "hold": {
+    "subtitle": "subtitles.portalix.hold",
+    "sounds": [
+      {
+        "name": "portalix:hold_0",
+        "weight": 1,
+        "preload": true
+      }
+    ]
+  },
+  "hold_intro": {
+    "subtitle": "subtitles.portalix.hold",
+    "sounds": [
+      {
+        "name": "portalix:hold_intro_0",
+        "weight": 1,
+        "preload": true
+      }
+    ]
+  },
+  "release": {
+    "subtitle": "subtitles.portalix.release",
+    "sounds": [
+      {
+        "name": "portalix:release_0",
+        "weight": 1,
+        "preload": true
+      }
+    ]
+  },
+  "grab_failed": {
+    "subtitle": "subtitles.portalix.grab_failed",
+    "sounds": [
+      {
+        "name": "portalix:grab_failed_0",
+        "weight": 1,
+        "preload": true
+      }
+    ]
+  },
+  "portal_open_blue": {
+    "sounds": [
+      {
+        "name": "portalix:portal_open_blue_0",
+        "preload": true
+      }
+    ]
+  },
+  "portal_open_orange": {
+    "sounds": [
+      {
+        "name": "portalix:portal_open_orange_0",
+        "preload": true
+      },
+      {
+        "name": "portalix:portal_open_orange_1",
+        "preload": true
+      }
+    ]
+  },
+  "portal_close_blue": {
+    "sounds": [
+      {
+        "name": "portalix:portal_close_blue_0",
+        "preload": true
+      }
+    ]
+  },
+  "portal_close_orange": {
+    "sounds": [
+      {
+        "name": "portalix:portal_close_orange_0",
+        "preload": true
+      }
+    ]
+  },
+  "portal_ambient": {
+    "sounds": [
+      {
+        "name": "portalix:portal_ambient_0",
+        "preload": true
+      }
+    ]
+  },
+  "invalid_surface": {
+    "sounds": [
+      {
+        "name": "portalix:invalid_surface_0",
+        "preload": true
+      },
+      {
+        "name": "portalix:invalid_surface_1",
+        "preload": true
+      },
+      {
+        "name": "portalix:invalid_surface_2",
+        "preload": true
+      },
+      {
+        "name": "portalix:invalid_surface_3",
+        "preload": true
+      },
+      {
+        "name": "portalix:invalid_surface_4",
+        "preload": true
+      },
+      {
+        "name": "portalix:invalid_surface_5",
+        "preload": true
+      },
+      {
+        "name": "portalix:invalid_surface_6",
+        "preload": true
+      },
+      {
+        "name": "portalix:invalid_surface_7",
+        "preload": true
+      }
+    ]
+  },
+  "portal_open_layer": {
+    "sounds": [
+      {
+        "name": "portalix:portal_open_layer_0",
+        "preload": true
+      },
+      {
+        "name": "portalix:portal_open_layer_1",
+        "preload": true
+      }
+    ]
+  },
+  "portal_fizzle": {
+    "sounds": [
+      {
+        "name": "portalix:portal_fizzle_0",
+        "preload": true
+      },
+      {
+        "name": "portalix:portal_fizzle_1",
+        "preload": true
+      }
+    ]
+  }
+}

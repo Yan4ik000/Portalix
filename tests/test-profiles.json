@@ -1,0 +1,7 @@
+{
+  "loaders": ["fabric", "neoforge"],
+  "renderers": ["native", "sodium", "sodium-iris"],
+  "backends": ["opengl", "vulkan"],
+  "unsupported": ["fabric-sodium-iris-vulkan", "neoforge-sodium-iris-vulkan"],
+  "unsupportedIrisVersion": "1.11.4+mc26.2"
+}

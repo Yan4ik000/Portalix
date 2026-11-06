@@ -1,0 +1,10 @@
+{
+  "schemaVersion": 1,
+  "id": "portalix_regression",
+  "version": "1.0.0",
+  "name": "Portalix regression tests",
+  "environment": "*",
+  "entrypoints": {"main": ["dev.portalix.test.fabric.RegressionMod"]},
+  "mixins": ["portalix.regression.mixins.json", {"config": "portalix.regression.client.mixins.json", "environment": "client"}],
+  "depends": {"portalix": "*", "fabricloader": "*"}
+}

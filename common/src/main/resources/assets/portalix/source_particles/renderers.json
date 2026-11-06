@@ -1,0 +1,269 @@
+{
+  "portalix_top_light_firstperson": {
+    "renderers": []
+  },
+  "portalix_top_light_squiggles": {
+    "renderers": [
+      {
+        "name": "render_rope",
+        "attributes": {
+          "functionName": "render_rope",
+          "texture_scroll_rate": 2.0,
+          "texel_size": 0.0010000000474974513,
+          "subdivision_count": 6
+        }
+      }
+    ],
+    "material": "particle/beam_generic_2_add.vmt"
+  },
+  "portalix_top_light_ball": {
+    "renderers": [
+      {
+        "name": "render_animated_sprites",
+        "attributes": {
+          "functionName": "render_animated_sprites",
+          "Visibility Radius Scale minimum": 0.75,
+          "Visibility Proxy Radius": 4.0
+        }
+      }
+    ],
+    "material": "particle/particle_glow_05_add_15ob.vmt"
+  },
+  "portalix_top_light_glow": {
+    "renderers": [
+      {
+        "name": "render_animated_sprites",
+        "attributes": {
+          "functionName": "render_animated_sprites",
+          "Visibility Proxy Radius": 4.0,
+          "Visibility Radius Scale minimum": 0.75
+        }
+      }
+    ],
+    "material": "particle/particle_glow_05_add_15ob_noz.vmt"
+  },
+  "portalix_top_light_ring": {
+    "renderers": [
+      {
+        "name": "render_animated_sprites",
+        "attributes": {
+          "functionName": "render_animated_sprites",
+          "orientation_type": 3,
+          "Visibility Proxy Radius": 4.0,
+          "Visibility Radius Scale minimum": 0.75
+        }
+      }
+    ],
+    "material": "particle/particle_ring_pulled_add_oriented.vmt"
+  },
+  "portalix_core_glow": {
+    "renderers": [
+      {
+        "name": "render_animated_sprites",
+        "attributes": {
+          "functionName": "render_animated_sprites",
+          "Visibility Radius Scale minimum": 0.75,
+          "Visibility Proxy Radius": 4.0
+        }
+      }
+    ],
+    "material": "particle/particle_glow_05_add_15ob.vmt"
+  },
+  "portalix_top_light_thirdperson": {
+    "renderers": []
+  },
+  "portalix_top_light_glow_TP": {
+    "renderers": [
+      {
+        "name": "render_animated_sprites",
+        "attributes": {
+          "functionName": "render_animated_sprites",
+          "orientation control point": 0,
+          "Visibility Radius Scale minimum": 0.75,
+          "Visibility Proxy Radius": 4.0,
+          "Visibility Proxy Input Control Point Number": 0
+        }
+      }
+    ],
+    "material": "particle/particle_glow_05_add_15ob_noz.vmt"
+  },
+  "portalix_holding_arm_light": {
+    "renderers": [
+      {
+        "name": "render_animated_sprites",
+        "attributes": {
+          "functionName": "render_animated_sprites",
+          "Visibility Proxy Radius": 4.0,
+          "Visibility Radius Scale minimum": 0.75
+        }
+      }
+    ],
+    "material": "particle/particle_ring_wave_5_add.vmt"
+  },
+  "portalix_holding_arm_light_b": {
+    "renderers": [
+      {
+        "name": "render_animated_sprites",
+        "attributes": {
+          "functionName": "render_animated_sprites",
+          "Visibility Radius Scale minimum": 0.75,
+          "Visibility Proxy Radius": 4.0
+        }
+      }
+    ],
+    "material": "particle/particle_flares/aircraft_white.vmt"
+  },
+  "portalix_beam_light_core_b_FP": {
+    "renderers": [
+      {
+        "name": "render_animated_sprites",
+        "attributes": {
+          "functionName": "render_animated_sprites",
+          "Visibility Proxy Radius": 4.0,
+          "Visibility Radius Scale minimum": 0.0,
+          "Visibility input maximum": 0.25
+        }
+      }
+    ],
+    "material": "particle/particle_glow_05_add_15ob.vmt"
+  },
+  "portalix_beam_01_b": {
+    "renderers": [
+      {
+        "name": "render_animated_sprites",
+        "attributes": {
+          "functionName": "render_animated_sprites"
+        }
+      }
+    ],
+    "material": "particle/electrical_arc/electrical_arc.vmt"
+  },
+  "portalix_beam_01_c": {
+    "renderers": [
+      {
+        "name": "render_rope",
+        "attributes": {
+          "functionName": "render_rope",
+          "texture_scroll_rate": 10.0,
+          "texel_size": 0.0007239999831654131
+        }
+      }
+    ],
+    "material": "particle/beam_generic_2_add.vmt"
+  },
+  "portalix_beam_light": {
+    "renderers": [
+      {
+        "name": "render_animated_sprites",
+        "attributes": {
+          "functionName": "render_animated_sprites",
+          "Visibility Radius Scale minimum": 0.75,
+          "Visibility Proxy Radius": 4.0
+        }
+      }
+    ],
+    "material": "particle/particle_glow_05_add_15ob.vmt"
+  },
+  "portalix_beam_light_b": {
+    "renderers": [
+      {
+        "name": "render_animated_sprites",
+        "attributes": {
+          "functionName": "render_animated_sprites",
+          "Visibility Proxy Radius": 4.0,
+          "Visibility Radius Scale minimum": 0.75
+        }
+      }
+    ],
+    "material": "particle/particle_glow_05_add_15ob.vmt"
+  },
+  "portalix_beam_holding_FP": {
+    "renderers": []
+  },
+  "portalix_beam_holding_1": {
+    "renderers": [
+      {
+        "name": "render_rope",
+        "attributes": {
+          "functionName": "render_rope",
+          "subdivision_count": 5,
+          "texel_size": 0.007240000180900097,
+          "texture_scroll_rate": 10.0
+        }
+      }
+    ],
+    "material": "particle/beam_generic_5_add.vmt"
+  },
+  "portalix_beam_holding_2": {
+    "renderers": [
+      {
+        "name": "render_rope",
+        "attributes": {
+          "functionName": "render_rope",
+          "texture_scroll_rate": 10.0,
+          "texel_size": 0.007240000180900097,
+          "subdivision_count": 5
+        }
+      }
+    ],
+    "material": "particle/beam_generic_5_add.vmt"
+  },
+  "portalix_beam_holding_3": {
+    "renderers": [
+      {
+        "name": "render_rope",
+        "attributes": {
+          "functionName": "render_rope",
+          "subdivision_count": 5,
+          "texel_size": 0.007240000180900097,
+          "texture_scroll_rate": 10.0
+        }
+      }
+    ],
+    "material": "particle/beam_generic_5_add.vmt"
+  },
+  "portalix_beam_light_core_FP": {
+    "renderers": [
+      {
+        "name": "render_animated_sprites",
+        "attributes": {
+          "functionName": "render_animated_sprites",
+          "Visibility Radius Scale minimum": 0.75,
+          "Visibility Proxy Radius": 4.0
+        }
+      }
+    ],
+    "material": "particle/particle_glow_05_add_15ob.vmt"
+  },
+  "portalix_beam_holding_TP": {
+    "renderers": []
+  },
+  "portalix_beam_light_core": {
+    "renderers": [
+      {
+        "name": "render_animated_sprites",
+        "attributes": {
+          "functionName": "render_animated_sprites",
+          "Visibility Proxy Radius": 4.0,
+          "Visibility Radius Scale minimum": 0.75
+        }
+      }
+    ],
+    "material": "particle/particle_glow_05_add_15ob.vmt"
+  },
+  "portalix_beam_light_core_b": {
+    "renderers": [
+      {
+        "name": "render_animated_sprites",
+        "attributes": {
+          "functionName": "render_animated_sprites",
+          "Visibility input maximum": 0.25,
+          "Visibility Proxy Input Control Point Number": 0,
+          "Visibility Radius Scale minimum": 0.0,
+          "Visibility Proxy Radius": 4.0
+        }
+      }
+    ],
+    "material": "particle/particle_glow_05_add_15ob_noz.vmt"
+  }
+}

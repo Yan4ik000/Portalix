@@ -1,0 +1,51 @@
+def configurationFile = rootProject.file('signing.properties')
+def signing = new Properties()
+if (configurationFile.isFile()) {
+    configurationFile.withInputStream { signing.load(it) }
+}
+def enabled = configurationFile.isFile()
+def processProviders = providers
+def executableName = System.getProperty('os.name').toLowerCase(Locale.ROOT).contains('windows')
+    ? 'jarsigner.exe' : 'jarsigner'
+
+def launcher = javaToolchains.launcherFor(java.toolchain)
+tasks.named('jar', Jar) {
+    inputs.property('signingEnabled', enabled)
+    if (!enabled) return
+
+    ['storeFile', 'passwordFile', 'alias'].each { name ->
+        if (!signing.getProperty(name)?.trim()) {
+            throw new GradleException("Missing '${name}' in signing.properties")
+        }
+    }
+    def storeFile = rootProject.file(signing.getProperty('storeFile'))
+    def passwordFile = rootProject.file(signing.getProperty('passwordFile'))
+    def alias = signing.getProperty('alias')
+    inputs.file(configurationFile).withPropertyName('signingConfiguration')
+        .withPathSensitivity(PathSensitivity.NONE)
+    inputs.file(storeFile).withPropertyName('signingKey')
+        .withPathSensitivity(PathSensitivity.NONE)
+    inputs.file(passwordFile).withPropertyName('signingPassword')
+        .withPathSensitivity(PathSensitivity.NONE)
+    outputs.cacheIf('Signed archives use local signing credentials') { false }
+
+    doLast {
+        def executable = launcher.get().metadata.installationPath.file("bin/${executableName}").asFile
+        def credentials = ['-keystore', storeFile.absolutePath,
+            '-storepass:file', passwordFile.absolutePath]
+        def archive = archiveFile.get().asFile.absolutePath
+        [
+            ['-sigalg', 'SHA256withRSA', '-digestalg', 'SHA-256'],
+            ['-verify', '-strict']
+        ].each { options ->
+            def execution = processProviders.exec {
+                commandLine([executable.absolutePath] + credentials + options + [archive, alias])
+                ignoreExitValue = true
+            }
+            if (execution.result.get().exitValue != 0) {
+                throw new GradleException("Could not sign or verify ${archive}:\n" +
+                    execution.standardOutput.asText.get() + execution.standardError.asText.get())
+            }
+        }
+    }
+}
