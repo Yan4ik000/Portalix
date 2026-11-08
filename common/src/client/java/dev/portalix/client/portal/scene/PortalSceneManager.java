@@ -334,7 +334,7 @@ public final class PortalSceneManager {
     }
     PLANNED_SCENES.clear();
     PLANNED_SCENES.addAll(PortalScenePlanner.plan(
-        level.dimension(), root, root.projectionMatrix, root.viewRotationMatrix, links,
+        level, root, root.projectionMatrix, root.viewRotationMatrix,
         client.options.getEffectiveRenderDistance() * 16.0, entrance -> true));
     Set<List<PortalLink>> used = new HashSet<>();
     for (var plan : PLANNED_SCENES) used.add(plan.path());
@@ -466,7 +466,7 @@ public final class PortalSceneManager {
     var links = PortalTopology.links(level);
     PLANNED_SCENES.clear();
     PLANNED_SCENES.addAll(PortalScenePlanner.plan(
-        level.dimension(), primaryCameraState, parentProjection, modelView, links,
+        level, primaryCameraState, parentProjection, modelView,
         Minecraft.getInstance().options.getEffectiveRenderDistance() * 16.0,
         entrance -> !PortalTerrainBackend.primaryOccludes(primaryCameraState, entrance)));
     Set<PortalLink> liveLinks = new HashSet<>(links);

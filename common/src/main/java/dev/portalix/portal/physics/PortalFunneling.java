@@ -7,13 +7,23 @@ import net.minecraft.world.phys.Vec3;
 public final class PortalFunneling {
   private static final double SOURCE_UNIT = SourceUnits.SOURCE_UNIT_BLOCKS;
   private static final double VELOCITY_UNIT = SourceUnits.SOURCE_SPEED_BLOCKS_PER_TICK;
+  private static final double MIN_NORMAL_Y = .8f;
+  // Projection onto the horizontal plane scales the shortest axis by at least normal.y.
+  static final double SEARCH_RADIUS = 2.25 / MIN_NORMAL_Y;
 
   private PortalFunneling() {}
 
   public static boolean eligible(PortalEndpoint portal, Vec3 center, Vec3 velocity) {
+    return eligible(velocity) && near(portal, center);
+  }
+
+  static boolean eligible(Vec3 velocity) {
     double horizontal = velocity.horizontalDistanceSqr() / (VELOCITY_UNIT * VELOCITY_UNIT);
-    if (Math.abs(velocity.y) < VELOCITY_UNIT || horizontal >= 4096 || portal.normal().y <= .8f)
-      return false;
+    return Math.abs(velocity.y) >= VELOCITY_UNIT && horizontal < 4096;
+  }
+
+  static boolean near(PortalEndpoint portal, Vec3 center) {
+    if (portal.normal().y <= MIN_NORMAL_Y) return false;
     Vec3 delta = portal.center().subtract(center);
     if (delta.y < -1024 * SOURCE_UNIT || delta.y >= 0) return false;
     Vec3 right = horizontal(portal.up().cross(portal.normal()));

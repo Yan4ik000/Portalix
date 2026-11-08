@@ -16,37 +16,33 @@ public final class PortalPenetrationResolver {
   private PortalPenetrationResolver() {}
 
   public static Optional<Vec3> displacement(
-      List<AABB> hulls, Vec3 direction, Function<AABB, List<AABB>> scene) {
+      List<AABB> hulls, Vec3 direction, Function<AABB, List<AABB>> scene,
+      Function<AABB, List<AABB>> boundary) {
     AABB hull = hulls.stream().reduce(AABB::minmax).orElseThrow();
     Vec3 origin = hull.getCenter();
     Vec3 half = new Vec3(hull.getXsize(), hull.getYsize(), hull.getZsize()).scale(.5);
     Vec3 increment = half.scale(CORNER_INSET);
     Vec3 corner = half.subtract(increment);
     Vec3 center = origin.add(0, START_OFFSET, 0);
+    var points = new Vec3[8];
+    var solid = new boolean[8];
+    var score = new double[8];
     for (int iteration = 0; iteration < 100; iteration++) {
       AABB current = AABB.ofSize(center, half.x * 2, half.y * 2, half.z * 2);
-      List<AABB> obstacles = scene.apply(current.minmax(hull));
+      AABB query = current.minmax(hull);
+      List<AABB> obstacles = scene.apply(query);
+      List<AABB> borders = boundary.apply(query);
       Vec3 shift = center.subtract(origin);
-      if (hulls.stream()
-          .noneMatch(part -> obstacles.stream().anyMatch(part.move(shift)::intersects))) {
+      if (hulls.stream().map(part -> part.move(shift)).noneMatch(
+          part -> obstacles.stream().anyMatch(part::intersects)
+              || borders.stream().anyMatch(part::intersects))) {
         double fraction = 1;
-        for (AABB part : hulls)
-          for (AABB obstacle : obstacles) {
-            Vec3 partStart = part.getCenter().add(shift);
-            fraction =
-                Math.min(
-                    fraction,
-                    traceFraction(
-                        obstacle.inflate(
-                            part.getXsize() / 2, part.getYsize() / 2, part.getZsize() / 2),
-                        partStart,
-                        part.getCenter()));
-          }
+        for (AABB part : hulls) {
+          fraction = Math.min(fraction, releaseFraction(part, shift, obstacles));
+          fraction = Math.min(fraction, releaseFraction(part, shift, borders));
+        }
         return Optional.of(center.lerp(origin, fraction).subtract(origin));
       }
-      Vec3[] points = new Vec3[8];
-      boolean[] solid = new boolean[8];
-      double[] score = new double[8];
       for (int i = 0; i < 8; i++) {
         points[i] =
             center.add(
@@ -54,14 +50,20 @@ public final class PortalPenetrationResolver {
                 (i & 2) == 0 ? -corner.y : corner.y,
                 (i & 4) == 0 ? -corner.z : corner.z);
         Vec3 point = points[i];
-        solid[i] =
-            scene.apply(AABB.ofSize(point, 1e-8, 1e-8, 1e-8)).stream()
-                .anyMatch(box -> box.contains(point));
+        solid[i] = obstacles.stream().anyMatch(box -> box.contains(point))
+            || !borders.isEmpty()
+                && boundary.apply(AABB.ofSize(point, 1e-8, 1e-8, 1e-8)).stream()
+                    .anyMatch(box -> box.contains(point));
+        score[i] = 0;
       }
       for (int i = 0; i < 8; i++)
         for (int j = i + 1; j < 8; j++) {
-          score[i] += solid[i] ? -100 * SOURCE_UNIT : clearDistance(points[i], points[j], scene);
-          score[j] += solid[j] ? -100 * SOURCE_UNIT : clearDistance(points[j], points[i], scene);
+          var pairBorders = borders.isEmpty() || solid[i] && solid[j] ? List.<AABB>of()
+              : boundary.apply(new AABB(points[i], points[j]).inflate(1e-8));
+          score[i] += solid[i] ? -100 * SOURCE_UNIT
+              : clearDistance(points[i], points[j], obstacles, pairBorders);
+          score[j] += solid[j] ? -100 * SOURCE_UNIT
+              : clearDistance(points[j], points[i], obstacles, pairBorders);
         }
       Vec3 step = Vec3.ZERO;
       double weight = 0;
@@ -82,12 +84,21 @@ public final class PortalPenetrationResolver {
     return Optional.empty();
   }
 
-  private static double clearDistance(Vec3 from, Vec3 to, Function<AABB, List<AABB>> scene) {
-    double distance = from.distanceTo(to);
-    for (AABB obstacle : scene.apply(new AABB(from, to).inflate(1e-8))) {
-      distance = Math.min(distance, from.distanceTo(to) * traceFraction(obstacle, from, to));
-    }
-    return distance;
+  private static double releaseFraction(AABB part, Vec3 shift, List<AABB> obstacles) {
+    Vec3 end = part.getCenter(), start = end.add(shift);
+    double fraction = 1;
+    for (AABB obstacle : obstacles)
+      fraction = Math.min(fraction, traceFraction(
+          obstacle.inflate(part.getXsize() / 2, part.getYsize() / 2, part.getZsize() / 2), start, end));
+    return fraction;
+  }
+
+  private static double clearDistance(
+      Vec3 from, Vec3 to, List<AABB> obstacles, List<AABB> borders) {
+    double fraction = 1;
+    for (AABB obstacle : obstacles) fraction = Math.min(fraction, traceFraction(obstacle, from, to));
+    for (AABB border : borders) fraction = Math.min(fraction, traceFraction(border, from, to));
+    return from.distanceTo(to) * fraction;
   }
 
   private static double traceFraction(AABB box, Vec3 from, Vec3 to) {

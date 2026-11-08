@@ -26,6 +26,7 @@ abstract class ServerPlayerPortalObservationMixin
     var player = (ServerPlayer) (Object) this;
     if (player.level() != level) {
       portalix$transit.resetForWorld();
+      portalix$observation.clearReady();
       EntityPortalState.of(player).resetForWorld();
     }
   }

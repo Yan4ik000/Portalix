@@ -2,6 +2,7 @@ package dev.portalix.mixin.traversal;
 
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
+import dev.portalix.portal.PortalTopology;
 import dev.portalix.portal.traversal.EntityPortalState;
 import dev.portalix.portal.traversal.PortalCollisionWorld;
 import dev.portalix.portal.traversal.PortalEntityCollisions;
@@ -55,6 +56,7 @@ public abstract class PlayerPortalPoseMixin {
       callback.setReturnValue(movement);
       return;
     }
+    if (PortalTopology.links(player.level()).isEmpty()) return;
     var access = (PlayerAccessor) player;
     float depth = player.maxUpStep();
     if (player.getAbilities().flying
@@ -78,6 +80,7 @@ public abstract class PlayerPortalPoseMixin {
   private void portalix$support(
       double x, double z, double depth, CallbackInfoReturnable<Boolean> callback) {
     Player player = (Player) (Object) this;
+    if (PortalTopology.links(player.level()).isEmpty()) return;
     var body = player.getBoundingBox();
     var query = body.expandTowards(x, -depth - 1e-7, z);
     var link = PortalEntityCollisions.intersectingPortal(player, query, Vec3.ZERO);

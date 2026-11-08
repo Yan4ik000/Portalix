@@ -84,18 +84,15 @@ public final class PlayerPortalMovement {
               .reduce(AABB::minmax)
               .orElseThrow()
               .move(input.before().subtract(subject.position()));
+      var sweep = predictedHull.expandTowards(input.movement()).inflate(PortalAperture.RIM_THICKNESS);
       if (Math.pow(state.travelled + distance, 2) > budget
           || input.velocity().lengthSqr() > budget
           || !PortalPassagePose.compact(player)
-              && PortalTopology.links(player.level()).stream()
+              && PortalTopology.intersecting(player.level(), sweep).stream()
                   .noneMatch(
                       link ->
-                          PortalEntityMovement.canTraverse(player, link)
-                              && PortalAperture.touches(
-                                  link.entrance().endpoint(),
-                                  predictedHull
-                                      .expandTowards(input.movement())
-                                      .inflate(PortalAperture.RIM_THICKNESS)))) {
+                          PortalAperture.touches(link.entrance().endpoint(), sweep)
+                              && PortalEntityMovement.canTraverse(player, link))) {
         acknowledge(player, input.sequence(), false);
         return;
       }

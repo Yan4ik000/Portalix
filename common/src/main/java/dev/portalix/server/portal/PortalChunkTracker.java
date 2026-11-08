@@ -22,6 +22,7 @@ import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -76,24 +77,25 @@ public final class PortalChunkTracker implements AutoCloseable {
   }
 
   public boolean acknowledgeView(ServerPlayer player, PortalViewReadyPayload payload) {
-    update(player, player.level().getServer().getPlayerList().getViewDistance());
+    var level = player.level();
+    var link = PortalTopology.find(level, payload.entrance(), payload.generation());
+    if (link == null) return false;
     var visibility = PlayerPortalVisibility.of(player);
-    for (var link : PortalTopology.links(player.level())) {
-      if (link.entrance().identity() != payload.entrance()
-          || link.generation() != payload.generation()) continue;
-      var exit = link.exit().endpoint().center();
-      int x = (int) Math.floor(exit.x) >> 4, z = (int) Math.floor(exit.z) >> 4;
-      var chunks = player.level().getChunkSource();
-      if (!player.getChunkTrackingView().contains(x, z) && !visibility.contains(x, z)) return false;
+    if (visibility.isReady(link)) return false;
+    long exit = chunkPosition(link.exit().endpoint().center());
+    int x = ChunkPos.getX(exit), z = ChunkPos.getZ(exit);
+    var present = ((ChunkDeliveryAccess) player.connection.chunkSender).portalix$presentColumns(level);
+    for (int dx = -1; dx <= 1; dx++)
+      for (int dz = -1; dz <= 1; dz++)
+        if (!present.contains(ChunkPos.pack(x + dx, z + dz))) return false;
 
-      visibility.ready(link);
-      chunks.move(player);
-      return true;
-    }
-    return false;
+    visibility.ready(link);
+    return true;
   }
 
   public void tick(MinecraftServer server) {
+    int viewDistance = server.getPlayerList().getViewDistance();
+    int loadingRadius = Math.clamp(viewDistance, 2, 32);
     var active = new HashSet<UUID>();
     boolean changed = false;
     for (var player : server.getPlayerList().getPlayers()) {
@@ -101,21 +103,17 @@ public final class PortalChunkTracker implements AutoCloseable {
       var waiting = pending.get(player.getUUID());
       if (waiting != null && waiting.level != player.level()) retainedTerrain.release(player.getUUID());
       retainedTerrain.observe(player.getUUID(), portals.unlinkedEndpoint(player), player.getChunkTrackingView(),
-          viewRadius(player, server.getPlayerList().getViewDistance()),
+          viewRadius(player, loadingRadius),
           position -> player.level().getChunkSource().getChunkNow(ChunkPos.getX(position), ChunkPos.getZ(position)) != null);
     }
     retainedTerrain.retainPlayers(active);
     for (var player : server.getPlayerList().getPlayers()) {
-      update(player, server.getPlayerList().getViewDistance());
-      var chunks = PlayerPortalVisibility.of(player).chunks();
-      var observed =
-          new Observed(
-              player.level(), chunks, PlayerPortalVisibility.of(player).simulationChunks());
+      update(player, loadingRadius, false);
+      var observed = new Observed(player.level(), PlayerPortalVisibility.of(player).simulationChunks());
       var previous = observedChunks.put(player.getUUID(), observed);
       changed |=
           previous == null
               || previous.level != observed.level
-              || previous.chunks != chunks
               || previous.simulation != observed.simulation;
     }
     changed |= observedChunks.keySet().retainAll(active);
@@ -124,13 +122,15 @@ public final class PortalChunkTracker implements AutoCloseable {
     var desiredPreparation = new HashMap<ServerLevel, LongOpenHashSet>();
     for (var player : server.getPlayerList().getPlayers()) {
       var waiting = pending.get(player.getUUID());
-      for (long center : waiting.centers) addLoadingSource(desiredLoading, player.level(), center, 0);
+      int sourceWeight = loadingRadius - PlayerPortalVisibility.of(player).viewRadius();
+      for (long center : waiting.centers)
+        addLoadingSource(desiredLoading, player.level(), center, sourceWeight);
       if (waiting.retained != null)
         addLoadingSource(desiredLoading, player.level(), waiting.retained.center().pack(),
-            server.getPlayerList().getViewDistance() - waiting.retained.radius());
-      if (!waiting.preparationCenters.isEmpty())
+            loadingRadius - waiting.retained.radius());
+      if (waiting.preparation != null)
         desiredPreparation.computeIfAbsent(player.level(), ignored -> new LongOpenHashSet())
-            .addAll(waiting.preparationCenters);
+            .add(waiting.preparation.longValue());
     }
     var loadingPriorities = new HashMap<ServerLevel, List<PortalChunkObservers>>();
     for (var player : server.getPlayerList().getPlayers())
@@ -151,26 +151,18 @@ public final class PortalChunkTracker implements AutoCloseable {
       }
       updateTickets(simulationTickets, desiredSimulation, SIMULATION.get(), 2);
     }
-    for (var player : server.getPlayerList().getPlayers()) queuePendingChunks(player);
   }
 
-  private void queuePendingChunks(ServerPlayer player) {
-    var waiting = pending.get(player.getUUID()).chunks;
+  private static void requestChunk(ServerPlayer player, long key) {
+    var level = player.level();
     var sender = player.connection.chunkSender;
     var delivery = (ChunkDeliveryAccess) sender;
-    var iterator = waiting.iterator();
-    while (iterator.hasNext()) {
-      long key = iterator.nextLong();
-      if (sender.isPending(key) || delivery.portalix$retain(player.level(), key)) {
-        iterator.remove();
-        continue;
-      }
-      var chunk = player.level().getChunkSource().chunkMap.getChunkToSend(key);
-      if (chunk != null) {
-        ChunkMapAccessor.portalix$markChunkPendingToSend(player, chunk);
-        iterator.remove();
-      }
-    }
+    if (delivery.portalix$watching(level, key) || delivery.portalix$retain(level, key)) return;
+    var map = level.getChunkSource().chunkMap;
+    var holder = ((ChunkMapAccessor) map).portalix$getVisibleChunk(key);
+    // The ready-to-send callback covers chunks that have yet to reach the ticking state.
+    var chunk = holder == null ? null : holder.getTickingChunk();
+    if (chunk != null) ChunkMapAccessor.portalix$markChunkPendingToSend(player, chunk);
   }
 
   private static void updateTickets(
@@ -219,102 +211,116 @@ public final class PortalChunkTracker implements AutoCloseable {
     positions.put(center, Math.min(distance, positions.getOrDefault(center, Integer.MAX_VALUE)));
   }
 
-  void update(ServerPlayer player, int viewDistance) {
+  private void update(ServerPlayer player, int viewDistance, boolean capture) {
     int radius = viewRadius(player, viewDistance);
     var state = PlayerPortalVisibility.of(player);
-    var previous = state.chunks();
     Pending waiting = pending.get(player.getUUID());
     if (waiting == null || waiting.level != player.level()) {
-      retainedTerrain.release(player.getUUID());
+      if (capture) retainedTerrain.release(player.getUUID());
       waiting = new Pending(player.level());
       pending.put(player.getUUID(), waiting);
-      previous = new LongOpenHashSet();
-      state.observe(previous, List.of(), new LongOpenHashSet(), 0);
+      state.replace(new LongOpenHashSet(), List.of());
     }
-    var centers = new LongOpenHashSet();
-    var simulationCenters = new LongOpenHashSet();
-    var preparationCenters = new LongOpenHashSet();
     var endpoint = portals.unlinkedEndpoint(player);
-    if (endpoint != null) preparationCenters.add(chunkPosition(endpoint));
-    retainedTerrain.observe(player.getUUID(), endpoint, player.getChunkTrackingView(), radius,
-        position -> player.level().getChunkSource().getChunkNow(ChunkPos.getX(position), ChunkPos.getZ(position)) != null);
+    if (capture)
+      retainedTerrain.observe(player.getUUID(), endpoint, player.getChunkTrackingView(), radius,
+          position -> player.level().getChunkSource().getChunkNow(ChunkPos.getX(position), ChunkPos.getZ(position)) != null);
     var retained = retainedTerrain.claim(player.getUUID(),
-        player.level().getServer().getPlayerList().getViewDistance());
-    var observers = new ArrayList<PlayerPortalVisibility.Observer>();
-    List<Observer> frontier = List.of(
-        new Observer(player.getEyePosition(), player.getDeltaMovement(), null));
-    Set<Vec3> positions = new HashSet<>();
-    for (int depth = 0; depth < 2; depth++) {
-      var next = new ArrayList<Observer>();
-      for (var observer : frontier) {
-        var eye = observer.eye;
-        for (var link : PortalTopology.links(player.level())) {
-          if (observer.last != null && observer.last.inverse().equals(link)) continue;
-          var entrance = link.entrance().endpoint();
-          if (entrance.center().distanceToSqr(eye) > Math.pow((radius + 1) * 16.0, 2)) continue;
-          arrivalCentres(centers, entrance);
-          arrivalCentres(centers, link.exit().endpoint());
-          var exit = link.exit().endpoint().center();
-          simulationCenters.add(
-              ChunkPos.pack((int) Math.floor(exit.x) >> 4, (int) Math.floor(exit.z) >> 4));
-
-          var transform = link.transform();
-          var virtualEye = transform.point(eye);
-          observers.add(new PlayerPortalVisibility.Observer(
-              virtualEye, link.exit().endpoint(), arriving(entrance, eye, observer.velocity)));
-          if (!positions.add(virtualEye)) continue;
-          next.add(new Observer(virtualEye, transform.vector(observer.velocity), link));
-          var center =
-              new ChunkPos(
-                  (int) Math.floor(virtualEye.x) >> 4, (int) Math.floor(virtualEye.z) >> 4);
-          centers.add(center.pack());
-        }
+        Math.clamp(player.level().getServer().getPlayerList().getViewDistance(), 2, 32));
+    Long preparation = endpoint == null ? null : chunkPosition(endpoint.center());
+    var links = PortalTopology.links(player.level());
+    var eye = links.isEmpty() ? Vec3.ZERO : player.getEyePosition();
+    var velocity = links.isEmpty() ? Vec3.ZERO : player.getDeltaMovement();
+    boolean topologyChanged = links != waiting.links;
+    if (topologyChanged) state.retainLinks(links);
+    boolean geometryChanged = topologyChanged || state.viewRadius() != radius
+        || !eye.equals(waiting.eye) || !velocity.equals(waiting.velocity);
+    boolean viewsChanged = state.viewRadius() != radius || !Objects.equals(waiting.preparation, preparation)
+        || !Objects.equals(waiting.retained, retained);
+    var observers = state.observers();
+    var simulation = state.simulationChunks();
+    if (geometryChanged) {
+      var geometry = observe(player.level(), eye, velocity, radius);
+      viewsChanged |= !waiting.centers.equals(geometry.centers);
+      if (!waiting.simulationCenters.equals(geometry.simulationCenters)) {
+        simulation = new LongOpenHashSet();
+        for (long center : geometry.simulationCenters) addCore(simulation, center);
+        viewsChanged = true;
       }
-      frontier = next;
+      waiting.links = links;
+      waiting.eye = eye;
+      waiting.velocity = velocity;
+      waiting.centers = geometry.centers;
+      waiting.simulationCenters = geometry.simulationCenters;
+      observers = geometry.observers;
     }
-    state.retainLinks(PortalTopology.links(player.level()));
-    boolean viewsChanged = state.viewRadius() != radius || !waiting.centers.equals(centers)
-        || !waiting.preparationCenters.equals(preparationCenters) || !Objects.equals(waiting.retained, retained);
-    boolean simulationChanged = !waiting.simulationCenters.equals(simulationCenters);
-    if (!viewsChanged && !simulationChanged) {
-      state.observe(previous, observers, state.simulationChunks(), radius);
-      return;
-    }
-    waiting.centers = centers;
-    waiting.simulationCenters = simulationCenters;
-    waiting.preparationCenters = preparationCenters;
+    if (!viewsChanged && !geometryChanged) return;
+    waiting.preparation = preparation;
     waiting.retained = retained;
+    var previous = state.chunks();
     var chunks = previous;
     if (viewsChanged) {
-      chunks = ChunkViewUnion.collect(centers, radius);
+      chunks = ChunkViewUnion.collect(waiting.centers, radius);
       if (retained != null) retained.addChunks(chunks);
-      for (long center : preparationCenters) addCore(chunks, center);
-      for (long center : simulationCenters) addCore(chunks, center);
-    }
-    var simulation = state.simulationChunks();
-    if (simulationChanged) {
-      simulation = new LongOpenHashSet();
-      for (long center : simulationCenters) addCore(simulation, center);
+      if (preparation != null) addCore(chunks, preparation);
+      chunks.addAll(simulation);
     }
     state.observe(chunks, observers, simulation, radius);
-    if (!viewsChanged) return;
-    waiting.chunks.retainAll(chunks);
-    for (long key : previous) {
-      var pos = ChunkPos.unpack(key);
-      if (!handoffs.containsKey(player.getUUID())
-          && !chunks.contains(key)
-          && !player.getChunkTrackingView().contains(pos))
-        ChunkMapAccessor.portalix$dropChunk(player, pos);
-    }
-    for (long key : chunks) {
-      if (!((ChunkDeliveryAccess) player.connection.chunkSender)
-              .portalix$retain(player.level(), key)
-          && !player.connection.chunkSender.isPending(key)) waiting.chunks.add(key);
-    }
+    if (viewsChanged && !handoffs.containsKey(player.getUUID())) reconcile(player, previous, chunks);
   }
 
-  private static long chunkPosition(PortalEndpoint portal) {
-    var point = portal.center();
+  private static void reconcile(ServerPlayer player, LongOpenHashSet previous, LongOpenHashSet current) {
+    if (previous == current) return;
+    var primary = player.getChunkTrackingView();
+    for (long key : previous)
+      if (!current.contains(key) && !primary.contains(ChunkPos.getX(key), ChunkPos.getZ(key)))
+        ChunkMapAccessor.portalix$dropChunk(player, ChunkPos.unpack(key));
+    for (long key : current) if (!previous.contains(key)) requestChunk(player, key);
+  }
+
+  private static Geometry observe(ServerLevel level, Vec3 eye, Vec3 velocity, int radius) {
+    if (PortalTopology.links(level).isEmpty())
+      return new Geometry(new LongOpenHashSet(), new LongOpenHashSet(), List.of());
+    double reach = (radius + 1) * 16.0;
+    var centers = new LongOpenHashSet();
+    var simulationCenters = new LongOpenHashSet();
+    var arrivals = new HashSet<PortalEndpoint>();
+    var observations = new LinkedHashMap<ObserverView, Boolean>();
+    var frontier = new LinkedHashMap<Vec3, Observer>();
+    for (int depth = 0; depth < 2; depth++) {
+      var origins = depth == 0 ? List.of(new Observer(eye, velocity, null)) : frontier.values();
+      for (var observer : origins) {
+        var point = observer.eye;
+        for (var link : PortalTopology.entrances(
+            level, point.x - reach, point.z - reach, point.x + reach, point.z + reach)) {
+          var entrance = link.entrance().endpoint();
+          if (entrance.center().distanceToSqr(point) > reach * reach) continue;
+          var last = observer.last;
+          if (last != null && last.generation() == link.generation() && last.gun().equals(link.gun())
+              && last.exit().equals(link.entrance()) && last.entrance().equals(link.exit())) continue;
+          var exit = link.exit().endpoint();
+          if (arrivals.add(entrance)) arrivalCentres(centers, entrance);
+          if (arrivals.add(exit)) arrivalCentres(centers, exit);
+          simulationCenters.add(chunkPosition(exit.center()));
+          var transform = link.transform();
+          var virtualEye = transform.point(point);
+          centers.add(chunkPosition(virtualEye));
+          var view = new ObserverView(virtualEye, exit);
+          if (observations.get(view) != Boolean.TRUE)
+            observations.put(view, arriving(entrance, point, observer.velocity));
+          if (depth == 0)
+            frontier.computeIfAbsent(virtualEye,
+                key -> new Observer(key, transform.vector(observer.velocity), link));
+        }
+      }
+    }
+    var observers = new ArrayList<PlayerPortalVisibility.Observer>(observations.size());
+    observations.forEach((view, arrival) ->
+        observers.add(new PlayerPortalVisibility.Observer(view.eye, view.exit, arrival)));
+    return new Geometry(centers, simulationCenters, observers);
+  }
+
+  private static long chunkPosition(Vec3 point) {
     int x = (int) Math.floor(point.x) >> 4, z = (int) Math.floor(point.z) >> 4;
     return ChunkPos.pack(x, z);
   }
@@ -355,13 +361,13 @@ public final class PortalChunkTracker implements AutoCloseable {
     var handoff = handoffs.get(player.getUUID());
     if (handoff != null) {
       handoff.depth++;
-      update(player, radius);
+      update(player, radius, true);
       return;
     }
     if (player.getChunkTrackingView() instanceof ChunkTrackingView.Positioned current
         && current.center().equals(player.chunkPosition())
         && current.viewDistance() == viewRadius(player, radius)) {
-      update(player, radius);
+      update(player, radius, true);
       return;
     }
     var waiting = pending.get(player.getUUID());
@@ -370,19 +376,16 @@ public final class PortalChunkTracker implements AutoCloseable {
             ? PlayerPortalVisibility.of(player).chunks()
             : new LongOpenHashSet();
     handoffs.put(player.getUUID(), new Handoff(previous));
-    update(player, radius);
+    update(player, radius, true);
   }
 
-  public void moveFinished(ServerPlayer player) {
+  public boolean moveFinished(ServerPlayer player) {
     var handoff = handoffs.get(player.getUUID());
-    if (handoff == null || --handoff.depth != 0) return;
+    if (handoff == null) return true;
+    if (--handoff.depth != 0) return false;
     handoffs.remove(player.getUUID());
-    var remote = PlayerPortalVisibility.of(player).chunks();
-    for (long key : handoff.previous) {
-      var pos = ChunkPos.unpack(key);
-      if (!remote.contains(key) && !player.getChunkTrackingView().contains(pos))
-        ChunkMapAccessor.portalix$dropChunk(player, pos);
-    }
+    reconcile(player, handoff.previous, PlayerPortalVisibility.of(player).chunks());
+    return true;
   }
 
   public boolean retainedDuringMove(ServerPlayer player, long chunk) {
@@ -397,7 +400,9 @@ public final class PortalChunkTracker implements AutoCloseable {
     retainedTerrain.release(player.getUUID());
     pending.remove(player.getUUID());
     handoffs.remove(player.getUUID());
-    PlayerPortalVisibility.of(player).replace(new LongOpenHashSet(), List.of());
+    var visibility = PlayerPortalVisibility.of(player);
+    visibility.replace(new LongOpenHashSet(), List.of());
+    visibility.clearReady();
   }
 
   @Override
@@ -413,11 +418,13 @@ public final class PortalChunkTracker implements AutoCloseable {
 
   private static final class Pending {
     final ServerLevel level;
-    final LongOpenHashSet chunks = new LongOpenHashSet();
     LongOpenHashSet centers = new LongOpenHashSet();
     LongOpenHashSet simulationCenters = new LongOpenHashSet();
-    LongOpenHashSet preparationCenters = new LongOpenHashSet();
+    @Nullable Long preparation;
     @Nullable Claim retained;
+    List<PortalLink> links = List.of();
+    Vec3 eye = Vec3.ZERO;
+    Vec3 velocity = Vec3.ZERO;
 
     Pending(ServerLevel level) {
       this.level = level;
@@ -433,12 +440,17 @@ public final class PortalChunkTracker implements AutoCloseable {
     }
   }
 
-  private record Observed(ServerLevel level, LongOpenHashSet chunks, LongOpenHashSet simulation) {}
+  private record Observed(ServerLevel level, LongOpenHashSet simulation) {}
 
   private static int viewRadius(ServerPlayer player, int serverRadius) {
     int requested = player.requestedViewDistance();
-    return Math.max(2, requested > 0 ? Math.min(serverRadius, requested) : serverRadius);
+    return Math.clamp(requested > 0 ? Math.min(serverRadius, requested) : serverRadius, 2, 32);
   }
 
   private record Observer(Vec3 eye, Vec3 velocity, PortalLink last) {}
+
+  private record ObserverView(Vec3 eye, PortalEndpoint exit) {}
+
+  private record Geometry(LongOpenHashSet centers, LongOpenHashSet simulationCenters,
+      List<PlayerPortalVisibility.Observer> observers) {}
 }

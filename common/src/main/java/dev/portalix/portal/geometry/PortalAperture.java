@@ -12,6 +12,7 @@ public final class PortalAperture {
   public static final double PLANE_EPSILON = 1e-5;
   public static final double CAVITY_DEPTH = 2.0;
   public static final double RIM_THICKNESS = 1.0 / 16.0;
+  public static final double MAX_APERTURE_EXTENT = 1.5 + 1e-9;
   public static final float SURFACE_UV_SCALE = 1.075F;
   private static final double FLOOR_PASSAGE_SCALE = .9;
   private static final Vec3[] WORLD_AXES = {
@@ -31,18 +32,32 @@ public final class PortalAperture {
       Vec3 anchor,
       PortalLink preferred,
       Predicate<PortalLink> eligible) {
+    return selectPortal(links, hull, anchor, preferred, eligible, true);
+  }
+
+  public static PortalLink selectTouchingPortal(
+      List<PortalLink> links, AABB hull, Vec3 anchor, PortalLink preferred,
+      Predicate<PortalLink> eligible) {
+    return selectPortal(links, hull, anchor, preferred, eligible, false);
+  }
+
+  private static PortalLink selectPortal(
+      List<PortalLink> links, AABB hull, Vec3 anchor, PortalLink preferred,
+      Predicate<PortalLink> eligible, boolean includeRim) {
+    if (links.isEmpty()) return null;
+    AABB expanded = includeRim ? hull.inflate(RIM_THICKNESS) : hull;
     PortalLink selected = null;
     int bestRank = Integer.MAX_VALUE;
     double bestDistance = Double.POSITIVE_INFINITY;
     for (PortalLink link : links) {
       var entrance = link.entrance().endpoint();
       // The center belongs to the entrance space until movement transfers it across the plane.
-      if (signedDistance(entrance, anchor) < -PLANE_EPSILON
-          || !touches(entrance, hull.inflate(RIM_THICKNESS))
-          || !eligible.test(link)) continue;
-      int rank = (touches(entrance, hull) ? 0 : 4)
+      double distance = signedDistance(entrance, anchor);
+      if (distance < -PLANE_EPSILON || !touches(entrance, expanded) || !eligible.test(link))
+        continue;
+      int rank = (!includeRim || touches(entrance, hull) ? 0 : 4)
           + (contains(entrance, anchor) ? 0 : 2) + (link.equals(preferred) ? 0 : 1);
-      double distance = Math.abs(signedDistance(entrance, anchor));
+      distance = Math.abs(distance);
       if (rank < bestRank || rank == bestRank && Double.compare(distance, bestDistance) < 0) {
         selected = link;
         bestRank = rank;

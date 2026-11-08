@@ -9,6 +9,7 @@ import dev.portalix.network.carry.CarryInputPayload;
 import dev.portalix.portal.PortalLink;
 import dev.portalix.portal.PortalRoutes;
 import dev.portalix.portal.PortalTopology;
+import dev.portalix.portal.camera.PortalEyePose;
 import dev.portalix.portal.geometry.PortalAperture;
 import dev.portalix.portal.traversal.PortalEntityMovement;
 import java.util.ArrayList;
@@ -26,14 +27,18 @@ final class CarryMovement {
     Vec3 previous = entity.getBoundingBox().getCenter();
     double distance = 0;
     var route = new ArrayList<>(CarryBindings.route(entity));
-    var links = PortalTopology.links(entity.level());
+    var eye = PortalEyePose.sample(player);
+    var distanceRoute = CarryAnchor.distanceRoute(player, eye, route);
+    if (distanceRoute == null
+        || !(PortalRoutes.distance(eye.position(), previous, distanceRoute) <= maxHolderDistance))
+      return null;
     var nodes = new ArrayList<CarryMotionPath.Node>(input.nodes().size());
     for (var node : input.nodes()) {
       Vec3 point = node.point();
       if (!finite(point)) return null;
       PortalLink link = null;
       if (node.crossing() != null) {
-        link = node.crossing().resolve(links);
+        link = PortalTopology.resolve(entity.level(), node.crossing());
         if (link == null
             || !PortalEntityMovement.canTraverse(player, link)
             || Math.abs(PortalAperture.signedDistance(link.entrance().endpoint(), previous)) > 1e-5
@@ -41,9 +46,12 @@ final class CarryMovement {
             || link.transform().point(previous).distanceToSqr(point) > 1e-10) return null;
         route.add(node.crossing());
         route = new ArrayList<>(PortalRoutes.simplifyIds(route));
+        distanceRoute = CarryAnchor.distanceRoute(player, eye, route);
+        if (distanceRoute == null) return null;
       } else distance += previous.distanceTo(point);
       if (distance > diameter
-          || CarryAnchor.routeDistance(player, point, route) > maxHolderDistance) return null;
+          || PortalRoutes.distance(eye.position(), point, distanceRoute) > maxHolderDistance)
+        return null;
       nodes.add(new CarryMotionPath.Node(point, link));
       previous = point;
     }

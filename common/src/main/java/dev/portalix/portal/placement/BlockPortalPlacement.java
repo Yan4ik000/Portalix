@@ -4,6 +4,7 @@ import dev.portalix.PortalixMod;
 import dev.portalix.api.PortalEndpoint;
 import dev.portalix.platform.PortalPlatform;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Optional;
 import net.minecraft.core.BlockPos;
@@ -62,8 +63,9 @@ public final class BlockPortalPlacement {
             PortalSurface.up(face, yaw),
             PortalSurface.WIDTH,
             PortalSurface.HEIGHT);
-    return PortalPlacementSolver.findPlacement(
-        desired, occupied, pos -> availableFor(owner, pos, face));
+    var availability = new HashMap<BlockPos, Boolean>();
+    return PortalPlacementSolver.findPlacement(desired, occupied,
+        pos -> availability.computeIfAbsent(pos.immutable(), cell -> availableFor(owner, cell, face)));
   }
 
   private static boolean support(ServerLevel level, BlockPos pos) {
@@ -144,13 +146,17 @@ public final class BlockPortalPlacement {
   }
 
   public static boolean isValid(MinecraftServer server, PortalEndpoint endpoint) {
+    return isValid(server, endpoint, PortalSurface.placementFootprint(endpoint));
+  }
+
+  public static boolean isValid(
+      MinecraftServer server, PortalEndpoint endpoint, PortalSurface.Footprint footprint) {
     ServerLevel level = server.getLevel(endpoint.dimension());
     if (level == null) return false;
-    var footprint = PortalSurface.placementFootprint(endpoint);
     for (BlockPos pos : footprint.blocks()) {
       BlockPos front = pos.relative(footprint.face());
       if (!loaded(level, pos) || !loaded(level, front)) return true;
-      if (!available(level, pos, footprint.face())
+      if (!support(level, pos)
           || !canRemain(level.getBlockState(front), footprint.face()))
         return false;
     }
@@ -158,9 +164,13 @@ public final class BlockPortalPlacement {
   }
 
   public static boolean prepare(ServerPlayer owner, PortalEndpoint endpoint) {
+    return prepare(owner, endpoint, PortalSurface.placementFootprint(endpoint));
+  }
+
+  public static boolean prepare(
+      ServerPlayer owner, PortalEndpoint endpoint, PortalSurface.Footprint footprint) {
     ServerLevel level = owner.level().getServer().getLevel(endpoint.dimension());
     if (level == null || level != owner.level()) return false;
-    var footprint = PortalSurface.placementFootprint(endpoint);
     var clearing = new ArrayList<BlockPos>();
     for (BlockPos pos : footprint.blocks()) {
       BlockPos front = pos.relative(footprint.face());

@@ -1,13 +1,36 @@
 package dev.portalix.server;
 
 import dev.portalix.mixin.world.tracking.ChunkMapAccessor;
+import dev.portalix.mixin.world.tracking.LevelEntityGetterAccessor;
+import dev.portalix.mixin.world.tracking.ServerLevelEntityGetterAccessor;
+import dev.portalix.portal.query.PlayerPortalVisibility;
+import java.util.List;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.projectile.FishingHook;
+import net.minecraft.world.level.chunk.LevelChunk;
 
 public final class PortalEntityTracking {
   private PortalEntityTracking() {}
+
+  public static void refreshDeliveredColumns(ServerPlayer observer, List<LevelChunk> delivered) {
+    var visible = PlayerPortalVisibility.of(observer).chunks();
+    if (visible.isEmpty() || delivered.isEmpty()) return;
+    var level = observer.level();
+    var entities = ((ServerLevelEntityGetterAccessor) level).portalix$getEntities();
+    var sections = ((LevelEntityGetterAccessor) entities).portalix$sections();
+    var trackers = ((ChunkMapAccessor) level.getChunkSource().chunkMap).portalix$entityTrackers();
+    for (var chunk : delivered) {
+      long column = chunk.getPos().pack();
+      if (chunk.getLevel() != level || !visible.contains(column)) continue;
+      sections.getExistingSectionsInChunk(column).forEach(section ->
+          section.getEntities().forEach(entity -> {
+            var tracker = (Tracker) trackers.get(entity.getId());
+            if (tracker != null) tracker.updatePlayer(observer);
+          }));
+    }
+  }
 
   public static boolean ownerAvailable(Entity entity, ServerPlayer observer) {
     if (!(entity instanceof FishingHook hook)) return true;

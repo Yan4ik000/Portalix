@@ -2,9 +2,12 @@ package dev.portalix.client.portal.scene;
 
 import dev.portalix.api.PortalEndpoint;
 import dev.portalix.portal.PortalLink;
+import dev.portalix.portal.PortalTopology;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.function.Function;
 import java.util.function.Predicate;
+import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.renderer.state.level.CameraRenderState;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.world.level.Level;
@@ -14,7 +17,8 @@ import org.joml.Matrix4fc;
 import org.joml.Quaternionf;
 
 final class PortalScenePlanner {
-  private final List<PortalLink> links;
+  private final ResourceKey<Level> dimension;
+  private final Function<Vec3, List<PortalLink>> links;
   private final Matrix4fc projection;
   private final Matrix4f viewEffects;
   private final double rangeSquared;
@@ -25,11 +29,10 @@ final class PortalScenePlanner {
 
   private PortalScenePlanner(
       ResourceKey<Level> dimension, CameraRenderState root, Matrix4fc projection,
-      Matrix4fc modelView, List<PortalLink> links, double range,
+      Matrix4fc modelView, Function<Vec3, List<PortalLink>> links, double range,
       Predicate<PortalEndpoint> primaryVisible) {
-    this.links = links.stream().filter(link ->
-        link.entrance().endpoint().dimension().equals(dimension)
-            && link.exit().endpoint().dimension().equals(dimension)).toList();
+    this.dimension = dimension;
+    this.links = links;
     this.projection = projection;
     viewEffects = new Matrix4f(modelView).rotate(root.orientation);
     rangeSquared = range * range;
@@ -40,8 +43,23 @@ final class PortalScenePlanner {
       ResourceKey<Level> dimension, CameraRenderState root, Matrix4fc projection,
       Matrix4fc modelView, List<PortalLink> links, double range,
       Predicate<PortalEndpoint> primaryVisible) {
-    var planner = new PortalScenePlanner(
-        dimension, root, projection, modelView, links, range, primaryVisible);
+    return plan(dimension, root, projection, modelView, position -> links, range, primaryVisible);
+  }
+
+  static List<View> plan(
+      ClientLevel level, CameraRenderState root, Matrix4fc projection, Matrix4fc modelView,
+      double range, Predicate<PortalEndpoint> primaryVisible) {
+    return plan(level.dimension(), root, projection, modelView, position -> PortalTopology.entrances(
+        level, position.x - range, position.z - range, position.x + range, position.z + range),
+        range, primaryVisible);
+  }
+
+  private static List<View> plan(
+      ResourceKey<Level> dimension, CameraRenderState root, Matrix4fc projection,
+      Matrix4fc modelView, Function<Vec3, List<PortalLink>> links, double range,
+      Predicate<PortalEndpoint> primaryVisible) {
+    var planner = new PortalScenePlanner(dimension, root, projection, modelView, links, range,
+        primaryVisible);
     planner.append(List.of(), root, modelView, PortalScreenVisibility.SCREEN);
     return planner.views;
   }
@@ -49,12 +67,17 @@ final class PortalScenePlanner {
   private void append(
       List<PortalLink> path, CameraRenderState parent, Matrix4fc modelView,
       PortalScreenVisibility.Bounds parentBounds) {
-    for (var link : links) {
+    var candidates = links.apply(parent.pos);
+    if (candidates.isEmpty()) return;
+    var viewProjection = new Matrix4f(projection).mul(modelView);
+    for (var link : candidates) {
       var entrance = link.entrance().endpoint();
+      if (!entrance.dimension().equals(dimension)
+          || !link.exit().endpoint().dimension().equals(dimension)) continue;
       if (!path.isEmpty() && path.getLast().exit().equals(link.entrance())) continue;
       if (parent.pos.distanceToSqr(entrance.center()) > rangeSquared) continue;
       var bounds = PortalScreenVisibility.project(
-          entrance, parent, projection, modelView, parentBounds);
+          entrance, parent, viewProjection, parentBounds);
       if (bounds != null && path.isEmpty() && !primaryVisible.test(entrance)) bounds = null;
       if (!path.isEmpty() && bounds == null) continue;
       var child = new ArrayList<>(path);

@@ -13,6 +13,7 @@ import net.minecraft.network.protocol.Packet;
 import net.minecraft.network.protocol.game.ClientGamePacketListener;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.Entity;
+import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 
 public final class EntityPortalState {
@@ -25,6 +26,7 @@ public final class EntityPortalState {
   boolean fallImmune;
   PortalLink collisionLink;
   PortalCollisionWorld collisionScene;
+  AABB collisionQuery;
   long sequence;
   private PortalEntityMovement.Crossing lastCrossing;
   PortalEntityMovement.MoveResult lastMove;
@@ -120,6 +122,7 @@ public final class EntityPortalState {
     lastMove = null;
     resetPredictions(0);
     collisionScene = null;
+    collisionQuery = null;
     outgoingCrossings.clear();
     crossingObservers.clear();
     outgoingUpdates.clear();

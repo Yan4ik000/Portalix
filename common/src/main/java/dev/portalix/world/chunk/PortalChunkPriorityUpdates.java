@@ -20,8 +20,12 @@ public final class PortalChunkPriorityUpdates {
   public void update(List<PortalChunkObservers> priorities) {
     if (priorities.size() == current.size()) {
       boolean same = true;
-      for (int i = 0; i < priorities.size(); i++)
-        same &= priorities.get(i).samePriority(current.get(i));
+      for (int i = 0; i < priorities.size(); i++) {
+        if (!priorities.get(i).samePriority(current.get(i))) {
+          same = false;
+          break;
+        }
+      }
       if (same) return;
     }
     current = List.copyOf(priorities);

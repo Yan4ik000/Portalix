@@ -5,6 +5,7 @@ import dev.portalix.client.compat.iris.IrisShaders;
 import dev.portalix.client.mixin.scene.GameRendererAccessor;
 import dev.portalix.portal.PortalLink;
 import dev.portalix.portal.PortalRoutes;
+import dev.portalix.portal.PortalTopology;
 import dev.portalix.portal.camera.PortalCameraCollision;
 import dev.portalix.portal.camera.PortalCameraOrbit;
 import dev.portalix.portal.camera.PortalCameraReorientation;
@@ -315,15 +316,14 @@ public final class PortalCameraController {
       rotation.premul(link.transform().rotation());
       PortalRoutes.append(path, link);
     }
-    var ready = readyLinks(player);
-    var eyePath = PortalEyePose.eyePath(center, position, ready);
+    var eyePath = PortalEyePose.eyePath(player, center, position);
     for (var eyeLink : eyePath) {
       position = eyeLink.transform().point(position);
       rotation.premul(eyeLink.transform().rotation());
       PortalRoutes.append(path, eyeLink);
     }
     return new View(
-        clearance(position, ready),
+        clearance(player, position),
         new Quaternionf(rotation),
         vector(rotation.transform(new Vector3f(0, 0, -1))),
         vector(rotation.transform(new Vector3f(0, 1, 0))),
@@ -331,14 +331,15 @@ public final class PortalCameraController {
         List.copyOf(path));
   }
 
-  private static Vec3 clearance(Vec3 position, List<PortalLink> ready) {
-    for (var link : ready) {
+  private static Vec3 clearance(LocalPlayer player, Vec3 position) {
+    for (var link : links.get()) {
       var portal = link.entrance().endpoint();
       Vec3 relative = position.subtract(portal.center());
       double distance = relative.dot(portal.normal());
       if (distance >= -PortalAperture.PLANE_EPSILON
           && distance < MIN_CAMERA_CLEARANCE
-          && PortalAperture.containsPassage(portal, position)) {
+          && PortalAperture.containsPassage(portal, position)
+          && PortalEntityMovement.canTraverse(player, link)) {
         position = position.add(portal.normal().scale(MIN_CAMERA_CLEARANCE - distance));
       }
     }
@@ -391,7 +392,8 @@ public final class PortalCameraController {
 
   public static float nearPlane(
       Camera camera, float ordinary, float far, float fov, float aspect) {
-    if (view == null || camera.entity() != Minecraft.getInstance().player) return ordinary;
+    var player = Minecraft.getInstance().player;
+    if (view == null || player == null || camera.entity() != player) return ordinary;
     double tangent = Math.tan(Math.toRadians(fov) / 2);
     // Fit the current frame's near plane inside the volume checked for camera collisions.
     float near =
@@ -402,9 +404,13 @@ public final class PortalCameraController {
                     (PortalCameraCollision.RADIUS
                         / Math.sqrt(1 + tangent * tangent * (1 + aspect * aspect))))
             : ordinary;
-    for (var link : readyLinks(Minecraft.getInstance().player)) {
+    Vec3 position = camera.position();
+    double reach = PortalAperture.MAX_APERTURE_EXTENT
+        + 4 * ordinary * (1 + Math.abs(tangent) * (1 + Math.abs(aspect)));
+    for (var link : PortalTopology.entrances(
+        player.level(), position.x - reach, position.z - reach, position.x + reach, position.z + reach)) {
       var portal = link.entrance().endpoint();
-      Vec3 relative = camera.position().subtract(portal.center());
+      Vec3 relative = position.subtract(portal.center());
       if (Math.abs(relative.dot(portal.right()))
               <= portal.width() / 2
                   + ordinary * projectionExtent(camera, portal.right(), tangent, aspect)
@@ -414,7 +420,8 @@ public final class PortalCameraController {
         double extent = projectionExtent(camera, portal.normal(), tangent, aspect);
         double distance =
             Math.max(PortalAperture.PLANE_EPSILON, Math.abs(relative.dot(portal.normal())));
-        near = Math.min(near, (float) (distance / (2 * extent)));
+        float clipped = (float) (distance / (2 * extent));
+        if (clipped < near && PortalEntityMovement.canTraverse(player, link)) near = clipped;
       }
     }
     // Iris converts reversed depth to a legacy projection; keep its far plane representable.

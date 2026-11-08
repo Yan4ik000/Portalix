@@ -16,25 +16,31 @@ final class PortalScreenVisibility {
   static Bounds project(
       PortalEndpoint portal, CameraRenderState camera, Matrix4fc projection, Matrix4fc modelView,
       Bounds parent) {
-    if (parent == null || camera.pos.subtract(portal.center()).dot(portal.normal()) < -.15)
-      return null;
+    return project(portal, camera, new Matrix4f(projection).mul(modelView), parent);
+  }
+
+  static Bounds project(
+      PortalEndpoint portal, CameraRenderState camera, Matrix4fc viewProjection, Bounds parent) {
+    if (parent == null) return null;
     var relative = camera.pos.subtract(portal.center());
-    if (Math.abs(relative.dot(portal.normal())) < .15
-        && Math.abs(relative.dot(portal.right())) <= portal.width() / 2
+    double distance = relative.dot(portal.normal());
+    if (distance < -.15) return null;
+    var portalRight = portal.right();
+    if (Math.abs(distance) < .15
+        && Math.abs(relative.dot(portalRight)) <= portal.width() / 2
         && Math.abs(relative.dot(portal.up())) <= portal.height() / 2) return parent;
-    Matrix4f matrix = new Matrix4f(projection).mul(modelView);
-    List<Vector4f> polygon = new ArrayList<>();
-    int[] xs = {-1, 1, 1, -1};
-    int[] ys = {-1, -1, 1, 1};
+    List<Vector4f> polygon = new ArrayList<>(4);
+    var rightAxis = portalRight.scale(portal.width() / 2);
+    var upAxis = portal.up().scale(portal.height() / 2);
     for (int i = 0; i < 4; i++) {
       var corner =
           portal
               .center()
-              .add(portal.right().scale(xs[i] * portal.width() / 2))
-              .add(portal.up().scale(ys[i] * portal.height() / 2))
+              .add(i == 0 || i == 3 ? rightAxis.reverse() : rightAxis)
+              .add(i < 2 ? upAxis.reverse() : upAxis)
               .subtract(camera.pos);
       polygon.add(
-          matrix.transform(new Vector4f((float) corner.x, (float) corner.y, (float) corner.z, 1)));
+          viewProjection.transform(new Vector4f((float) corner.x, (float) corner.y, (float) corner.z, 1)));
     }
 
     polygon = clip(polygon, new Vector4f(0, 0, 0, 1), 1.0e-5F);

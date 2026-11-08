@@ -30,11 +30,14 @@ public final class PortalEntityMovement {
   private PortalEntityMovement() {}
 
   public static boolean canTraverse(Entity entity, PortalLink link) {
-    return entity
-            .getRootVehicle()
-            .getSelfAndPassengers()
-            .noneMatch(member -> member instanceof Animal && member.countPlayerPassengers() > 0)
-        && PortalTraversalReadiness.ready(entity, link);
+    return vehicleAllowed(entity) && PortalTraversalReadiness.ready(entity, link);
+  }
+
+  static boolean vehicleAllowed(Entity entity) {
+    var root = entity.getRootVehicle();
+    return root.getPassengers().isEmpty()
+        || root.getSelfAndPassengers()
+            .noneMatch(member -> member instanceof Animal && member.countPlayerPassengers() > 0);
   }
 
   public static MoveResult moveAuthoritatively(
@@ -95,7 +98,10 @@ public final class PortalEntityMovement {
         Vec3 center = entity.getBoundingBox().getCenter();
         var hulls = PortalPassengerGroup.hulls(entity);
         var query = PortalPassengerGroup.bounds(hulls).expandTowards(remaining);
-        var selected = PortalEntityCollisions.firstCrossing(entity, hulls, remaining, query);
+        var search = PortalEntityCollisions.firstCrossing(entity, hulls, remaining, query, link);
+        var selected = search.crossing();
+        state.collisionScene = search.scene();
+        state.collisionQuery = search.scene() == null ? null : query;
         var crossing = selected.map(value -> value.passage().crossing());
         if (selected.isPresent()) {
           link = selected.orElseThrow().link();
@@ -139,6 +145,8 @@ public final class PortalEntityMovement {
         if (at.fraction() > 1e-9) zeroProgress.clear();
         else if (!zeroProgress.add(link)) return true;
         moveSegment(entity, type, segment);
+        state.collisionScene = null;
+        state.collisionQuery = null;
         Vec3 reached = entity.getBoundingBox().getCenter();
         double dist = PortalAperture.signedDistance(link.entrance().endpoint(), reached);
         Vec3 onPlane = reached.subtract(link.entrance().endpoint().normal().scale(dist));
@@ -197,6 +205,7 @@ public final class PortalEntityMovement {
     } finally {
       state.collisionLink = null;
       state.collisionScene = null;
+      state.collisionQuery = null;
       state.moving = false;
       state.lastMove =
           new MoveResult(
@@ -258,6 +267,7 @@ public final class PortalEntityMovement {
     } finally {
       state.collisionLink = null;
       state.collisionScene = null;
+      state.collisionQuery = null;
       state.moving = false;
     }
   }

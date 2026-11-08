@@ -29,17 +29,20 @@ public final class CarryAnchor {
   }
 
   public static Vec3 playerHoldPosition(Player player) {
-    var eye = PortalEyePose.sample(player);
+    return playerHoldPosition(PortalEyePose.sample(player));
+  }
+
+  private static Vec3 playerHoldPosition(PortalEyePose.Pose eye) {
     Vec3 target = holdPosition(eye.position(), eye.forward());
     for (var link : eye.eyePath().reversed()) target = link.transform().inverse().point(target);
     return target;
   }
 
   public static List<PortalLink> resolveRoute(Entity entity, List<PortalLinkId> references) {
-    var available = PortalTopology.links(entity.level());
+    if (references.isEmpty()) return List.of();
     var links = new ArrayList<PortalLink>(references.size());
     for (var reference : references) {
-      var link = reference.resolve(available);
+      var link = PortalTopology.resolve(entity.level(), reference);
       if (link == null) return null;
       links.add(link);
     }
@@ -53,14 +56,13 @@ public final class CarryAnchor {
   }
 
   public static Vec3 routeHoldPosition(Player player, List<PortalLink> route, AABB hull) {
-    Vec3 desired = routeHoldPosition(player, route);
     var eye = PortalEyePose.sample(player);
+    Vec3 desired = playerHoldPosition(eye);
+    for (var link : route) desired = link.transform().point(desired);
+    if (PortalTopology.links(player.level()).isEmpty()) return desired;
     var aim =
         PortalRaycast.cast(
-            eye.position(),
-            eye.forward().scale(DISTANCE),
-            PortalTopology.links(player.level()),
-            link -> PortalEntityMovement.canTraverse(player, link),
+            player, eye.position(), eye.forward().scale(DISTANCE),
             (from, to) -> BlockHitResult.miss(to, Direction.NORTH, BlockPos.containing(to)));
     var travel = new ArrayList<PortalLinkId>();
     for (var link : route.reversed()) travel.add(PortalLinkId.fromLink(link.inverse()));
@@ -69,7 +71,7 @@ public final class CarryAnchor {
     var path = PortalRoutes.simplifyIds(travel);
     if (path.isEmpty()) return desired;
     var entrance =
-        path.getFirst().resolve(PortalTopology.links(player.level())).entrance().endpoint();
+        PortalTopology.resolve(player.level(), path.getFirst()).entrance().endpoint();
     Vec3 seam = PortalAperture.shortestPathPoint(entrance, hull.getCenter(), desired);
     var fitted = PortalAperture.fitHull(entrance, hull, seam);
     return fitted.isEmpty()
@@ -87,12 +89,19 @@ public final class CarryAnchor {
 
   public static double routeDistance(Player holder, Vec3 target, List<PortalLinkId> references) {
     var eye = PortalEyePose.sample(holder);
+    var route = distanceRoute(holder, eye, references);
+    return route == null ? Double.POSITIVE_INFINITY : PortalRoutes.distance(eye.position(), target, route);
+  }
+
+  public static List<PortalLink> distanceRoute(
+      Player holder, PortalEyePose.Pose eye, List<PortalLinkId> references) {
+    if (eye.eyePath().isEmpty() && references.isEmpty()) return List.of();
     var eyeRoute = new ArrayList<>(references);
     for (var link : eye.eyePath()) eyeRoute.addFirst(PortalLinkId.fromLink(link.inverse()));
     List<PortalLink> route = resolveRoute(holder, PortalRoutes.simplifyIds(eyeRoute));
-    if (route == null) return Double.POSITIVE_INFINITY;
-    if (route.stream().anyMatch(link -> !PortalEntityMovement.canTraverse(holder, link)))
-      return Double.POSITIVE_INFINITY;
-    return PortalRoutes.distance(eye.position(), target, route);
+    if (route != null)
+      for (var link : route)
+        if (!PortalEntityMovement.canTraverse(holder, link)) return null;
+    return route;
   }
 }

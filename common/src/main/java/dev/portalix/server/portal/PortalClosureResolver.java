@@ -53,7 +53,8 @@ public final class PortalClosureResolver {
           PortalPenetrationResolver.displacement(
               PortalPassengerGroup.hulls(entity),
               direction,
-              query -> WorldCollisionShapes.boxes(entity, query));
+              query -> WorldCollisionShapes.solidBoxes(entity, query),
+              WorldCollisionShapes.borderBoxes(entity));
       if (displacement.isEmpty()) {
         entity
             .getSelfAndPassengers()

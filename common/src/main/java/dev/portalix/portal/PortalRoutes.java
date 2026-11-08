@@ -1,6 +1,7 @@
 package dev.portalix.portal;
 
 import dev.portalix.portal.geometry.PortalAperture;
+import dev.portalix.portal.geometry.PortalTransform;
 import java.util.ArrayList;
 import java.util.List;
 import net.minecraft.world.phys.Vec3;
@@ -51,26 +52,31 @@ public final class PortalRoutes {
 
   public static double distance(Vec3 source, Vec3 target, List<PortalLink> route) {
     if (route.isEmpty()) return source.distanceTo(target);
-    var points = new ArrayList<Vec3>();
-    for (var link : route) points.add(link.entrance().endpoint().center());
+    int count = route.size();
+    if (count == 1) {
+      var transform = route.getFirst().transform();
+      Vec3 crossing = PortalAperture.shortestPathPoint(
+          transform.entrance(), source, transform.inversePoint(target));
+      return source.distanceTo(crossing) + transform.point(crossing).distanceTo(target);
+    }
+    var points = new Vec3[count];
+    var transforms = new PortalTransform[count];
+    for (int i = 0; i < count; i++) {
+      transforms[i] = route.get(i).transform();
+      points[i] = transforms[i].entrance().center();
+    }
     double previousLength = Double.POSITIVE_INFINITY;
     for (int pass = 0; pass < 16; pass++) {
-      for (int i = 0; i < route.size(); i++) {
-        Vec3 before = i == 0 ? source : route.get(i - 1).transform().point(points.get(i - 1));
-        Vec3 after =
-            route
-                .get(i)
-                .transform()
-                .inverse()
-                .point(i + 1 == route.size() ? target : points.get(i + 1));
-        points.set(
-            i, PortalAperture.shortestPathPoint(route.get(i).entrance().endpoint(), before, after));
+      for (int i = 0; i < count; i++) {
+        Vec3 before = i == 0 ? source : transforms[i - 1].point(points[i - 1]);
+        Vec3 after = transforms[i].inversePoint(i + 1 == count ? target : points[i + 1]);
+        points[i] = PortalAperture.shortestPathPoint(transforms[i].entrance(), before, after);
       }
       double length = 0;
       Vec3 from = source;
-      for (int i = 0; i < route.size(); i++) {
-        length += from.distanceTo(points.get(i));
-        from = route.get(i).transform().point(points.get(i));
+      for (int i = 0; i < count; i++) {
+        length += from.distanceTo(points[i]);
+        from = transforms[i].point(points[i]);
       }
       length += from.distanceTo(target);
       if (previousLength - length < 1e-8) return length;

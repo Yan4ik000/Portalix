@@ -17,7 +17,6 @@ import net.minecraft.core.Direction;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.entity.projectile.FishingHook;
-import net.minecraft.world.entity.projectile.ProjectileUtil;
 import net.minecraft.world.entity.projectile.arrow.AbstractArrow;
 import net.minecraft.world.level.ClipContext;
 import net.minecraft.world.phys.BlockHitResult;
@@ -92,16 +91,9 @@ public final class ProjectilePortalMovement {
     state.input = projectile.getDeltaMovement();
     state.output = null;
     var trace =
-        PortalRaycast.cast(
-            projectile,
-            projectile.position(),
-            state.input,
-            targets,
-            ClipContext.Block.COLLIDER,
-            ClipContext.Fluid.NONE,
-            ProjectileUtil.computeMargin(projectile));
-    state.distance = trace.links().isEmpty() ? null : trace.distance();
-    return trace.links().isEmpty() ? original.get() : trace.hit();
+        PortalRaycast.castProjectile(projectile, state.input, targets, ClipContext.Block.COLLIDER);
+    state.distance = trace == null ? null : trace.distance();
+    return trace == null ? original.get() : trace.hit();
   }
 
   public static void move(Entity projectile, Runnable original) {
@@ -126,15 +118,8 @@ public final class ProjectilePortalMovement {
     state.input = projectile.getDeltaMovement();
     state.output = null;
     var trace =
-        PortalRaycast.cast(
-            projectile,
-            projectile.position(),
-            state.input,
-            targets,
-            blocks,
-            ClipContext.Fluid.NONE,
-            ProjectileUtil.computeMargin(projectile));
-    if (trace.links().isEmpty()) return original.get();
+        PortalRaycast.castProjectile(projectile, state.input, targets, blocks);
+    if (trace == null) return original.get();
     double distance = 0;
     for (int i = 0; i < trace.links().size(); i++) {
       var segment = trace.segments().get(i);

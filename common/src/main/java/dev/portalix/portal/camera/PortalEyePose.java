@@ -4,7 +4,6 @@ import dev.portalix.portal.PortalLink;
 import dev.portalix.portal.PortalTopology;
 import dev.portalix.portal.query.PortalRaycast;
 import dev.portalix.portal.traversal.EntityPortalState;
-import dev.portalix.portal.traversal.PortalEntityMovement;
 import java.util.List;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
@@ -62,13 +61,7 @@ public final class PortalEyePose {
       eye = link.transform().point(eye);
       forward = link.transform().vector(forward);
     }
-    var eyePath =
-        eyePath(
-            center,
-            eye,
-            PortalTopology.links(entity.level()).stream()
-                .filter(candidate -> PortalEntityMovement.canTraverse(entity, candidate))
-                .toList());
+    var eyePath = eyePath(entity, center, eye);
     for (var link : eyePath) {
       eye = link.transform().point(eye);
       forward = link.transform().vector(forward);
@@ -76,14 +69,13 @@ public final class PortalEyePose {
     return new Pose(eye, forward, eyePath);
   }
 
-  public static List<PortalLink> eyePath(Vec3 bodyCenter, Vec3 eye, List<PortalLink> candidates) {
-    return PortalRaycast.cast(
-            bodyCenter,
-            eye.subtract(bodyCenter),
-            candidates,
-            link -> true,
-            (from, to) -> BlockHitResult.miss(to, Direction.NORTH, BlockPos.containing(to)))
-        .links();
+  public static List<PortalLink> eyePath(Entity entity, Vec3 bodyCenter, Vec3 eye) {
+    if (PortalTopology.links(entity.level()).isEmpty()) return List.of();
+    return PortalRaycast.cast(entity, bodyCenter, eye.subtract(bodyCenter), PortalEyePose::miss).links();
+  }
+
+  private static BlockHitResult miss(Vec3 from, Vec3 to) {
+    return BlockHitResult.miss(to, Direction.NORTH, BlockPos.containing(to));
   }
 
   public record Pose(Vec3 position, Vec3 forward, List<PortalLink> eyePath) {}

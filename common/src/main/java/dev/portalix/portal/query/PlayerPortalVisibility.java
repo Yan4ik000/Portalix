@@ -1,11 +1,15 @@
 package dev.portalix.portal.query;
 
-import dev.portalix.portal.PortalLink;
 import dev.portalix.api.PortalEndpoint;
+import dev.portalix.portal.PortalLink;
+import dev.portalix.world.chunk.PortalChunkObservers;
+import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
 import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
-import java.util.HashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
-import java.util.Map;
+import net.minecraft.core.SectionPos;
+import net.minecraft.server.level.ChunkTrackingView;
+import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.phys.Vec3;
@@ -16,26 +20,38 @@ public final class PlayerPortalVisibility {
   private List<Observer> observers = List.of();
   private int viewRadius;
   private LongOpenHashSet simulationChunks = new LongOpenHashSet();
-  private final Map<Long, Long> ready = new HashMap<>();
+  private PortalChunkObservers priorities;
+  private ChunkTrackingView priorityView;
+  private ChunkPos priorityCenter;
+  private ServerLevel priorityLevel;
+  private final Long2ObjectOpenHashMap<Ready> ready = new Long2ObjectOpenHashMap<>();
 
   public void ready(PortalLink link) {
-    ready.put(link.entrance().identity(), link.generation());
+    var exit = link.exit().endpoint().center();
+    ready.put(link.entrance().identity(),
+        new Ready(link.generation(), SectionPos.posToSectionCoord(exit.x), SectionPos.posToSectionCoord(exit.z)));
   }
 
   public boolean isReady(PortalLink link) {
-    return ready.getOrDefault(link.entrance().identity(), -1L) == link.generation();
+    var known = ready.get(link.entrance().identity());
+    return known != null && known.generation == link.generation();
   }
 
   public void retainLinks(List<PortalLink> links) {
-    ready
-        .entrySet()
-        .removeIf(
-            entry ->
-                links.stream()
-                    .noneMatch(
-                        link ->
-                            link.entrance().identity() == entry.getKey()
-                                && link.generation() == entry.getValue()));
+    if (ready.isEmpty()) return;
+    var live = new LongOpenHashSet();
+    for (var link : links) if (isReady(link)) live.add(link.entrance().identity());
+    ready.keySet().retainAll(live);
+  }
+
+  public void forgetColumn(long position) {
+    if (ready.isEmpty()) return;
+    int x = ChunkPos.getX(position), z = ChunkPos.getZ(position);
+    ready.values().removeIf(known -> Math.abs(known.x - x) <= 1 && Math.abs(known.z - z) <= 1);
+  }
+
+  public void clearReady() {
+    ready.clear();
   }
 
   public static PlayerPortalVisibility of(ServerPlayer player) {
@@ -43,7 +59,11 @@ public final class PlayerPortalVisibility {
   }
 
   public boolean contains(int x, int z) {
-    return chunks.contains(ChunkPos.pack(x, z));
+    return contains(ChunkPos.pack(x, z));
+  }
+
+  public boolean contains(long chunk) {
+    return chunks.contains(chunk);
   }
 
   public LongOpenHashSet chunks() {
@@ -62,6 +82,20 @@ public final class PlayerPortalVisibility {
     return viewRadius;
   }
 
+  public PortalChunkObservers chunkPriorities(ServerPlayer player) {
+    var view = player.getChunkTrackingView();
+    var center = player.chunkPosition();
+    var level = player.level();
+    if (priorities == null || priorityLevel != level || !view.equals(priorityView)
+        || !center.equals(priorityCenter)) {
+      priorities = PortalChunkObservers.create(player, this);
+      priorityView = view;
+      priorityCenter = center;
+      priorityLevel = level;
+    }
+    return priorities;
+  }
+
   public LongOpenHashSet simulationChunks() {
     return simulationChunks;
   }
@@ -76,30 +110,35 @@ public final class PlayerPortalVisibility {
     this.observers = List.of();
     this.simulationChunks = simulationChunks;
     this.viewRadius = 0;
+    this.priorities = null;
   }
 
   public void observe(
       LongOpenHashSet chunks, List<Observer> observers,
       LongOpenHashSet simulationChunks, int viewRadius) {
     this.chunks = chunks;
-    this.observers = List.copyOf(observers);
-    this.eyes = observers.stream().map(Observer::eye).distinct().toList();
+    if (this.observers != observers) {
+      this.observers = List.copyOf(observers);
+      if (observers.isEmpty()) {
+        this.eyes = List.of();
+      } else {
+        var positions = new LinkedHashSet<Vec3>();
+        for (var observer : observers) positions.add(observer.eye);
+        this.eyes = List.copyOf(positions);
+      }
+      this.priorities = null;
+    }
+    if (this.viewRadius != viewRadius) this.priorities = null;
     this.simulationChunks = simulationChunks;
     this.viewRadius = viewRadius;
   }
 
-  public Vec3 nearestDelta(Vec3 source, Vec3 direct) {
-    var result = direct;
-    double distance = direct.x * direct.x + direct.z * direct.z;
+  public boolean eyeWithinHorizontalRange(Vec3 source, double rangeSquared) {
     for (var eye : eyes) {
-      var delta = eye.subtract(source);
-      double candidate = delta.x * delta.x + delta.z * delta.z;
-      if (candidate < distance) {
-        result = delta;
-        distance = candidate;
-      }
+      double x = eye.x - source.x, z = eye.z - source.z;
+      if (x * x + z * z <= rangeSquared) return true;
     }
-    return result;
+    return false;
   }
 
   public interface Access {
@@ -107,4 +146,6 @@ public final class PlayerPortalVisibility {
   }
 
   public record Observer(Vec3 eye, PortalEndpoint exit, boolean arrival) {}
+
+  private record Ready(long generation, int x, int z) {}
 }

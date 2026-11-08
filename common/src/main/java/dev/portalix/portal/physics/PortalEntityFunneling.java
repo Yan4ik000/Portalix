@@ -18,15 +18,18 @@ public final class PortalEntityFunneling {
   public static void tick(Entity entity) {
     if (!entity.typeHolder().is(PHYSICS_PROPS)
         || (entity.level().isClientSide() && !entity.isLocalInstanceAuthoritative())) return;
-    var center = entity.getBoundingBox().getCenter();
+    if (PortalTopology.links(entity.level()).isEmpty()) return;
     var velocity = entity.getDeltaMovement();
+    if (!PortalFunneling.eligible(velocity)) return;
+    var center = entity.getBoundingBox().getCenter();
     PortalLink nearest = null;
     double distance = Double.POSITIVE_INFINITY;
-    for (var link : PortalTopology.links(entity.level())) {
-      if (!PortalEntityMovement.canTraverse(entity, link)
-          || !PortalFunneling.eligible(link.entrance().endpoint(), center, velocity)) continue;
+    double radius = PortalFunneling.SEARCH_RADIUS;
+    for (var link : PortalTopology.entrances(
+        entity.level(), center.x - radius, center.z - radius, center.x + radius, center.z + radius)) {
+      if (!PortalFunneling.near(link.entrance().endpoint(), center)) continue;
       double candidate = link.entrance().endpoint().center().distanceToSqr(center);
-      if (candidate < distance) {
+      if (candidate < distance && PortalEntityMovement.canTraverse(entity, link)) {
         distance = candidate;
         nearest = link;
       }

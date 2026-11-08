@@ -49,18 +49,22 @@ public final class ClientPortalRegistry {
 
   public void applySnapshot(PortalStatePayload state) {
     if (client.level == null || state.revision() <= revision) return;
+    var previous = states.get(state.gun());
+    boolean wasLinked = previous != null && previous.blue() != null && previous.orange() != null;
+    boolean linked = state.blue() != null && state.orange() != null;
     if (state.blue() == null && state.orange() == null) states.remove(state.gun());
     else states.put(state.gun(), state);
-    PortalTopology.updateLinks(
-        client.level,
-        states.values().stream()
-            .flatMap(
-                pair -> PortalTopology.linkPair(pair.gun(), pair.blue(), pair.orange()).stream())
-            .filter(link -> link.entrance().endpoint().dimension().equals(client.level.dimension()))
-            .toList());
+    if (wasLinked != linked || linked
+        && (!state.blue().equals(previous.blue()) || !state.orange().equals(previous.orange()))) {
+      PortalTopology.updateLinks(
+          client.level,
+          states.values().stream()
+              .flatMap(pair -> PortalTopology.linkPair(pair.gun(), pair.blue(), pair.orange()).stream())
+              .filter(link -> link.entrance().endpoint().dimension().equals(client.level.dimension()))
+              .toList());
+    }
     revision = state.revision();
     double now = time();
-    boolean linked = state.blue() != null && state.orange() != null;
     update(
         new Key(state.gun(), false),
         state.blue(),

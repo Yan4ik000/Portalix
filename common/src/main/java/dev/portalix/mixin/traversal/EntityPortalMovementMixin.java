@@ -3,6 +3,7 @@ package dev.portalix.mixin.traversal;
 import com.llamalad7.mixinextras.expression.Expression;
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
+import dev.portalix.portal.PortalTopology;
 import dev.portalix.portal.traversal.EntityPortalState;
 import dev.portalix.portal.traversal.PortalCollisionWorld;
 import dev.portalix.portal.traversal.PortalEntityCollisions;
@@ -88,6 +89,7 @@ public abstract class EntityPortalMovementMixin implements EntityPortalState.Acc
   @Inject(method = "moveTowardsClosestSpace", at = @At("HEAD"), cancellable = true)
   private void portalix$pushOut(double x, double y, double z, CallbackInfo callback) {
     Entity entity = (Entity) (Object) this;
+    if (PortalTopology.links(entity.level()).isEmpty()) return;
     var hull = entity.getBoundingBox().deflate(1e-7);
     var link = PortalEntityCollisions.intersectingPortal(entity, hull, Vec3.ZERO);
     if (link != null && !PortalCollisionWorld.query(entity, link, hull).intersects(hull))

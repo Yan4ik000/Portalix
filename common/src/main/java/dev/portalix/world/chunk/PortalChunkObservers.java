@@ -5,6 +5,7 @@ import dev.portalix.portal.geometry.PortalAperture;
 import dev.portalix.portal.query.PlayerPortalVisibility;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.function.LongToIntFunction;
 import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
@@ -22,6 +23,7 @@ public final class PortalChunkObservers {
   private static final long DISTANCE_MASK = (1L << TIER_SHIFT) - 1;
   private final List<ChunkPos> positions;
   private final List<ChunkPos> critical;
+  private final LongOpenHashSet core;
   private final List<Demand> demands;
   private final ChunkTrackingView primaryView;
   private final int radius;
@@ -33,6 +35,10 @@ public final class PortalChunkObservers {
       ChunkTrackingView primaryView, int radius, int minY, int maxY) {
     this.positions = positions;
     this.critical = critical;
+    this.core = new LongOpenHashSet();
+    for (var center : critical)
+      for (int dx = -1; dx <= 1; dx++)
+        for (int dz = -1; dz <= 1; dz++) core.add(ChunkPos.pack(center.x() + dx, center.z() + dz));
     this.demands = demands;
     this.primaryView = primaryView;
     this.radius = radius;
@@ -41,27 +47,49 @@ public final class PortalChunkObservers {
   }
 
   public static PortalChunkObservers of(ServerPlayer player) {
-    var visibility = PlayerPortalVisibility.of(player);
+    return PlayerPortalVisibility.of(player).chunkPriorities(player);
+  }
+
+  public static PortalChunkObservers create(ServerPlayer player, PlayerPortalVisibility visibility) {
     var eyes = visibility.eyes();
-    var positions = new ArrayList<ChunkPos>(eyes.size() + 1);
+    var positions = new LinkedHashSet<ChunkPos>();
     positions.add(player.chunkPosition());
-    var critical = new ArrayList<ChunkPos>();
+    var critical = new LinkedHashSet<ChunkPos>();
     critical.add(player.chunkPosition());
     for (var eye : eyes) positions.add(new ChunkPos(Mth.floor(eye.x) >> 4, Mth.floor(eye.z) >> 4));
     var demands = new ArrayList<Demand>(visibility.observers().size());
     for (var observer : visibility.observers()) {
       var exit = observer.exit();
       var center = chunk(exit.center());
-      if (!positions.contains(center)) positions.add(center);
-      if (!critical.contains(center)) critical.add(center);
+      positions.add(center);
+      critical.add(center);
       demands.add(new Demand(chunk(observer.eye()), center, observer.arrival(),
           cone(observer.eye(), exit)));
     }
-    return new PortalChunkObservers(positions, critical, demands, player.getChunkTrackingView(),
+    return new PortalChunkObservers(List.copyOf(positions), List.copyOf(critical), demands, player.getChunkTrackingView(),
         visibility.viewRadius(), player.level().getMinY(), player.level().getMaxY());
   }
 
   public static LongToIntFunction loadingPriorities(List<PortalChunkObservers> observers) {
+    return new LongToIntFunction() {
+      private Long2ObjectOpenHashMap<List<PortalChunkObservers>> regions;
+
+      @Override
+      public int applyAsInt(long position) {
+        if (regions == null) regions = loadingRegions(observers);
+        var nearby = regions.get(region(ChunkPos.getX(position), ChunkPos.getZ(position)));
+        int tier = 4;
+        if (nearby != null) for (var observer : nearby) {
+          tier = Math.min(tier, observer.loadingTier(position));
+          if (tier == 0) break;
+        }
+        return tier;
+      }
+    };
+  }
+
+  private static Long2ObjectOpenHashMap<List<PortalChunkObservers>> loadingRegions(
+      List<PortalChunkObservers> observers) {
     var regions = new Long2ObjectOpenHashMap<List<PortalChunkObservers>>();
     for (var observer : observers) {
       var occupied = new LongOpenHashSet();
@@ -76,15 +104,7 @@ public final class PortalChunkObservers {
       for (long region : occupied)
         regions.computeIfAbsent(region, ignored -> new ArrayList<>()).add(observer);
     }
-    return position -> {
-      var nearby = regions.get(region(ChunkPos.getX(position), ChunkPos.getZ(position)));
-      int tier = 4;
-      if (nearby != null) for (var observer : nearby) {
-        tier = Math.min(tier, observer.loadingTier(position));
-        if (tier == 0) break;
-      }
-      return tier;
-    };
+    return regions;
   }
 
   private static void addRegions(LongOpenHashSet regions, ChunkPos center, int radius) {
@@ -111,9 +131,13 @@ public final class PortalChunkObservers {
   }
 
   public int tier(long chunk) {
-    if (distanceSquared(chunk, critical) <= 2) return 0;
+    if (core.contains(chunk)) return 0;
     int x = ChunkPos.getX(chunk), z = ChunkPos.getZ(chunk);
     if (primaryView.contains(x, z)) return 1;
+    return portalTier(x, z);
+  }
+
+  private int portalTier(int x, int z) {
     int tier = 3;
     for (var demand : demands) {
       if (demand.cone != null && within(demand.eye, x, z)
@@ -124,13 +148,14 @@ public final class PortalChunkObservers {
   }
 
   public int loadingTier(long chunk) {
-    int tier = tier(chunk);
-    if (tier == 0) return 0;
-    if (tier != 1) return tier + 1;
-    return primaryView.contains(ChunkPos.getX(chunk), ChunkPos.getZ(chunk)) ? 1 : 2;
+    if (core.contains(chunk)) return 0;
+    int x = ChunkPos.getX(chunk), z = ChunkPos.getZ(chunk);
+    if (primaryView.contains(x, z)) return 1;
+    return portalTier(x, z) + 1;
   }
 
   public boolean samePriority(PortalChunkObservers other) {
+    if (this == other) return true;
     if (radius != other.radius || minY != other.minY || maxY != other.maxY
         || !positions.equals(other.positions) || !critical.equals(other.critical)
         || !primaryView.equals(other.primaryView) || demands.size() != other.demands.size())

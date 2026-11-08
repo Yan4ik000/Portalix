@@ -35,13 +35,13 @@ public final class PortalCollisionWorld {
   }
 
   public static PortalCollisionWorld query(Entity entity, PortalLink link, AABB query) {
+    var opening = PortalTopology.collisionOpening(entity.level(), link.entrance().endpoint());
     var local = WorldCollisionShapes.boxes(entity, query);
     var remote = WorldCollisionShapes.boxes(entity, link.transform().bounds(query));
     return create(
         link,
         local,
-        remote,
-        PortalTopology.collisionBoundary(entity.level(), link.entrance().endpoint()));
+        remote, opening.boundary(), opening.planes());
   }
 
   public static PortalGroundSupport queryGroundSupport(
@@ -68,7 +68,11 @@ public final class PortalCollisionWorld {
 
   public static PortalCollisionWorld material(
       PortalLink link, List<AABB> local, List<AABB> remote) {
-    return create(link, local, remote, List.of());
+    var entrance = link.entrance().endpoint();
+    var planes = !remote.isEmpty() || entrance.normal().y != 1 && !local.isEmpty()
+        ? PortalCollisionOpening.planes(entrance)
+        : List.<ConvexPolyhedron.Plane>of();
+    return create(link, local, remote, List.of(), planes);
   }
 
   public static PortalCollisionWorld solid(List<AABB> boxes) {
@@ -77,15 +81,12 @@ public final class PortalCollisionWorld {
   }
 
   private static PortalCollisionWorld create(
-      PortalLink link, List<AABB> local, List<AABB> remote, List<ConvexPolyhedron> boundary) {
+      PortalLink link, List<AABB> local, List<AABB> remote, List<ConvexPolyhedron> boundary,
+      List<ConvexPolyhedron.Plane> openingPlanes) {
     var entrance = link.entrance().endpoint();
     boolean floor = entrance.normal().y == 1;
     var obstacles = new ArrayList<ConvexPolyhedron>();
     var floorMaterial = new ArrayList<ConvexPolyhedron>();
-    var openingPlanes =
-        !remote.isEmpty() || !floor && !local.isEmpty()
-            ? PortalCollisionOpening.planes(entrance)
-            : List.<ConvexPolyhedron.Plane>of();
     if (!floor) obstacles.addAll(boundary);
     for (AABB box : local) {
       if (floor) {

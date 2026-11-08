@@ -30,12 +30,13 @@ final class LoadedBlockRaycast implements BlockGetter {
         end,
         context,
         (ray, pos) -> {
-          if (world.level.getChunkSource().getChunkNow(pos.getX() >> 4, pos.getZ() >> 4) == null) {
+          var chunk = world.level.getChunkSource().getChunkNow(pos.getX() >> 4, pos.getZ() >> 4);
+          if (chunk == null) {
             AABB cell = new AABB(pos);
             Vec3 boundary = cell.contains(start) ? start : cell.clip(start, end).orElse(end);
             return miss(start, boundary);
           }
-          BlockState state = world.getBlockState(pos);
+          BlockState state = chunk.getBlockState(pos);
           if (state.isAir()
               || BlockPortalPlacement.isRail(state)
               || BlockPortalPlacement.clearable(state, world, pos)) return null;

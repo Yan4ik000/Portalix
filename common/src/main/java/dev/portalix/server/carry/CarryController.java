@@ -185,9 +185,6 @@ public final class CarryController {
     return GunPermissions.canCarry(player)
         && entity.isAlive()
         && entity.level() == player.level()
-        && CarryAnchor.routeDistance(
-                player, entity.getBoundingBox().getCenter(), CarryBindings.route(entity))
-            <= MAX_HOLDER_DISTANCE
         && !entity.isPassenger()
         && !entity.isVehicle();
   }
@@ -217,7 +214,10 @@ public final class CarryController {
     for (Hold hold : this.heldByOwner.values()) {
       ServerPlayer player = server.getPlayerList().getPlayer(hold.owner);
       Entity entity = hold.entity;
-      if (validHolder(player, entity)) {
+      if (validHolder(player, entity)
+          && CarryAnchor.routeDistance(
+                  player, entity.getBoundingBox().getCenter(), CarryBindings.route(entity))
+              <= MAX_HOLDER_DISTANCE) {
         ++hold.age;
         if (entity.level().getGameTime() > hold.movementTick + 1) hold.releaseVelocity = Vec3.ZERO;
         Vec3 look = CarryAnchor.routeLookDirection(player, CarryBindings.resolve(entity));

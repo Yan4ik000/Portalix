@@ -5,12 +5,17 @@ import dev.portalix.network.portal.PortalViewReadyPayload;
 import dev.portalix.portal.PortalLink;
 import dev.portalix.portal.PortalTopology;
 import dev.portalix.portal.traversal.PortalTraversalReadiness;
-import it.unimi.dsi.fastutil.longs.Long2LongOpenHashMap;
+import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
+import java.util.List;
 import net.minecraft.client.Minecraft;
+import net.minecraft.core.SectionPos;
+import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.chunk.status.ChunkStatus;
 
 public final class PortalViewReadiness {
-  private static final Long2LongOpenHashMap notified = new Long2LongOpenHashMap();
+  private static final Long2ObjectOpenHashMap<Ready> notified = new Long2ObjectOpenHashMap<>();
+  private static List<PortalLink> checkedLinks = List.of();
+  private static boolean chunksChanged;
 
   private PortalViewReadiness() {}
 
@@ -28,29 +33,41 @@ public final class PortalViewReadiness {
   public static void tick(Minecraft client) {
     if (client.level == null) return;
     var links = PortalTopology.links(client.level);
-    var entries = notified.long2LongEntrySet().fastIterator();
-    while (entries.hasNext()) {
-      var entry = entries.next();
-      boolean present = false;
-      for (var link : links) {
-        if (link.entrance().identity() == entry.getLongKey()
-            && link.generation() == entry.getLongValue()) {
-          present = true;
-          break;
-        }
+    if (links != checkedLinks) {
+      var entries = notified.long2ObjectEntrySet().fastIterator();
+      while (entries.hasNext()) {
+        var entry = entries.next();
+        if (PortalTopology.find(client.level, entry.getLongKey(), entry.getValue().generation) == null)
+          entries.remove();
       }
-      if (!present) entries.remove();
+      checkedLinks = links;
+    } else if (!chunksChanged) {
+      return;
     }
+    chunksChanged = false;
     for (var link : links) {
-      if (exitLoaded(client, link)) notifyServer(link);
-      else notified.remove(link.entrance().identity(), link.generation());
+      var known = notified.get(link.entrance().identity());
+      if ((known == null || known.generation != link.generation()) && exitLoaded(client, link))
+        notifyServer(link);
     }
+  }
+
+  public static void chunkLoaded() {
+    chunksChanged = true;
+  }
+
+  public static void chunkForgotten(ChunkPos position) {
+    notified.values().removeIf(ready ->
+        Math.abs(ready.x - position.x()) <= 1 && Math.abs(ready.z - position.z()) <= 1);
   }
 
   private static void notifyServer(PortalLink link) {
     long entrance = link.entrance().identity(), generation = link.generation();
-    if (notified.containsKey(entrance) && notified.get(entrance) == generation) return;
-    notified.put(entrance, generation);
+    var known = notified.get(entrance);
+    if (known != null && known.generation == generation) return;
+    var center = link.exit().endpoint().center();
+    notified.put(entrance, new Ready(generation,
+        SectionPos.posToSectionCoord(center.x), SectionPos.posToSectionCoord(center.z)));
     ClientNetworking.sendToServer(new PortalViewReadyPayload(entrance, generation));
   }
 
@@ -66,5 +83,9 @@ public final class PortalViewReadiness {
 
   public static void clear() {
     notified.clear();
+    checkedLinks = List.of();
+    chunksChanged = false;
   }
+
+  private record Ready(long generation, int x, int z) {}
 }

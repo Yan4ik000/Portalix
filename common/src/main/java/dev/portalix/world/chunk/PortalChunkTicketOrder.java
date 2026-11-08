@@ -64,7 +64,7 @@ public final class PortalChunkTicketOrder {
     dirty = false;
     for (int level = 0; level < queues.size(); level++) {
       var iterator = queues.get(level).keySet().iterator();
-      while (iterator.hasNext()) submitted(level, iterator.nextLong());
+      while (iterator.hasNext()) index(positions[level], iterator.nextLong());
     }
   }
 
@@ -72,6 +72,10 @@ public final class PortalChunkTicketOrder {
     if (dirty) return;
     var priorities = positions[level];
     for (var queue : priorities) if (queue != null && queue.contains(position)) return;
+    index(priorities, position);
+  }
+
+  private void index(LongLinkedOpenHashSet[] priorities, long position) {
     int tier = priority.applyAsInt(position);
     if (priorities[tier] == null) priorities[tier] = new LongLinkedOpenHashSet();
     priorities[tier].add(position);

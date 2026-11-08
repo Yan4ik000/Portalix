@@ -153,6 +153,7 @@ public final class PortalPassagePose {
   }
 
   public static Boolean fitsThroughPortal(Entity entity, AABB body) {
+    if (PortalTopology.links(entity.level()).isEmpty()) return null;
     var link =
         PortalEntityCollisions.intersectingPortal(
             entity,

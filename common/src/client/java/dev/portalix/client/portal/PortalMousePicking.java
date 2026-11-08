@@ -5,7 +5,6 @@ import dev.portalix.portal.PortalLink;
 import dev.portalix.portal.PortalRoutes;
 import dev.portalix.portal.PortalTopology;
 import dev.portalix.portal.geometry.PortalAperture;
-import dev.portalix.portal.traversal.PortalEntityMovement;
 import dev.portalix.portal.query.PortalRaycast;
 import java.util.ArrayList;
 import java.util.List;
@@ -64,8 +63,7 @@ public final class PortalMousePicking {
 
   private static PortalRaycast.Result blockTrace(
       Entity source, PortalCameraController.View pose, double reach) {
-    return PortalRaycast.cast(pose.position(), pose.forward().scale(reach),
-        PortalTopology.links(source.level()), link -> PortalEntityMovement.canTraverse(source, link),
+    return PortalRaycast.cast(source, pose.position(), pose.forward().scale(reach),
         (from, to) -> source.level().clipIncludingBorder(
             new ClipContext(from, to, ClipContext.Block.OUTLINE, ClipContext.Fluid.NONE, source)));
   }
@@ -141,16 +139,15 @@ public final class PortalMousePicking {
 
   public static boolean affects(Entity source, PortalCameraController.View pose, double reach) {
     if (pose == null) return false;
+    if (PortalCameraController.active() || !pose.spacePath().isEmpty()) return true;
+    if (PortalTopology.links(source.level()).isEmpty()) return false;
     var displacement = pose.forward().scale(reach);
-    if (!PortalCameraController.active()
-        && pose.spacePath().isEmpty()
-        && PortalTopology.links(source.level()).stream()
-            .noneMatch(
-                link ->
-                    PortalAperture.crossing(
-                            link.entrance().endpoint(), pose.position(), displacement)
-                        .isPresent())) return false;
-    return true;
+    var bounds = new AABB(pose.position(), pose.position().add(displacement))
+        .inflate(PortalAperture.CAVITY_DEPTH);
+    for (var link : PortalTopology.intersecting(source.level(), bounds))
+      if (PortalAperture.crossing(link.entrance().endpoint(), pose.position(), displacement).isPresent())
+        return true;
+    return false;
   }
 
   public static void select(PortalRaycast.Result ray) {

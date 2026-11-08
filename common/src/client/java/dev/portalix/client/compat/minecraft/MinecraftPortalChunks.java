@@ -2,6 +2,7 @@ package dev.portalix.client.compat.minecraft;
 
 import dev.portalix.client.compat.PortalTerrainBackend;
 import dev.portalix.client.platform.ClientPlatform;
+import dev.portalix.client.portal.PortalViewReadiness;
 import dev.portalix.client.portal.terrain.PortalTerrainColumns;
 import dev.portalix.client.world.RetainedChunkStorage;
 import java.util.List;
@@ -59,7 +60,10 @@ public final class MinecraftPortalChunks {
     chunk.replaceWithPacketData(buffer, heightmaps, blockEntities);
     chunks.put(pos.pack(), chunk);
     cache.removedLoadedChunks().remove(pos.pack());
-    if (added) cache.addedLoadedChunks().add(pos.pack());
+    if (added) {
+      cache.addedLoadedChunks().add(pos.pack());
+      PortalViewReadiness.chunkLoaded();
+    }
     sections(chunk, false);
     level.onChunkLoaded(pos);
     PortalTerrainBackend.chunkLoaded(level, x, z);
@@ -77,6 +81,7 @@ public final class MinecraftPortalChunks {
     if (chunk != null) {
       ClientPlatform.INSTANCE.chunkUnloaded(level, chunk);
       chunks.remove(pos.pack());
+      PortalViewReadiness.chunkForgotten(pos);
       cache.addedLoadedChunks().remove(pos.pack());
       cache.removedLoadedChunks().add(pos.pack());
       sections(chunk, true);

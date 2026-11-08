@@ -94,6 +94,10 @@ public final class PortalServerEvents {
     if (session != null) session.observerMoveFinished(player);
   }
 
+  public static void chunkDeliveryChanged(ServerPlayer player, long chunk) {
+    if (session != null) session.chunkDeliveryChanged(player, chunk);
+  }
+
   public static boolean retainedDuringMove(ServerPlayer player, long chunk) {
     return session != null && session.retainedDuringMove(player, chunk);
   }

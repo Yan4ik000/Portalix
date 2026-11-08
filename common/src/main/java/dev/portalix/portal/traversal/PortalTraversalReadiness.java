@@ -17,8 +17,26 @@ public final class PortalTraversalReadiness {
 
   public static boolean ready(Entity entity, PortalLink link) {
     if (entity.level().isClientSide()) return client.test(entity, link);
-    if (entity instanceof ServerPlayer player && !PlayerPortalVisibility.of(player).isReady(link))
-      return false;
+    return playerReady(entity, link) && exitLoaded(entity, link);
+  }
+
+  static boolean convoyReady(Entity root, PortalLink link) {
+    boolean clientSide = root.level().isClientSide();
+    return membersReady(root, link, clientSide) && (clientSide || exitLoaded(root, link));
+  }
+
+  private static boolean membersReady(Entity entity, PortalLink link, boolean clientSide) {
+    if (!(clientSide ? client.test(entity, link) : playerReady(entity, link))) return false;
+    for (var passenger : entity.getPassengers())
+      if (!membersReady(passenger, link, clientSide)) return false;
+    return true;
+  }
+
+  private static boolean playerReady(Entity entity, PortalLink link) {
+    return !(entity instanceof ServerPlayer player) || PlayerPortalVisibility.of(player).isReady(link);
+  }
+
+  private static boolean exitLoaded(Entity entity, PortalLink link) {
     var point = link.exit().endpoint().center();
     int cx = (int) Math.floor(point.x) >> 4;
     int cz = (int) Math.floor(point.z) >> 4;

@@ -3,10 +3,13 @@ package dev.portalix.world.chunk;
 import it.unimi.dsi.fastutil.longs.LongArrayList;
 import it.unimi.dsi.fastutil.longs.LongLinkedOpenHashSet;
 import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
+import it.unimi.dsi.fastutil.longs.LongSet;
+import it.unimi.dsi.fastutil.longs.LongSets;
 import java.util.function.LongUnaryOperator;
 
 public final class ChunkDeliveryQueue {
   private final LongOpenHashSet delivered = new LongOpenHashSet();
+  private final LongSet present = LongSets.unmodifiable(delivered);
   private final LongOpenHashSet invalidated = new LongOpenHashSet();
   private final LongLinkedOpenHashSet retiring = new LongLinkedOpenHashSet();
   private boolean retirementTurn = true;
@@ -20,8 +23,8 @@ public final class ChunkDeliveryQueue {
 
   public void sent(long chunk) {
     delivered.add(chunk);
-    invalidated.remove(chunk);
     retiring.remove(chunk);
+    invalidated.remove(chunk);
   }
 
   public boolean requested(long chunk) {
@@ -31,6 +34,14 @@ public final class ChunkDeliveryQueue {
 
   public boolean delivered(long chunk) {
     return delivered.contains(chunk) && !invalidated.contains(chunk);
+  }
+
+  public boolean watching(long chunk) {
+    return delivered(chunk) && !retiring.contains(chunk);
+  }
+
+  public LongSet presentColumns() {
+    return present;
   }
 
   public void invalidate(long chunk) {

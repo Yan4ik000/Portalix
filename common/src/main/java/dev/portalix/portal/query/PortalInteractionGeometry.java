@@ -13,6 +13,10 @@ public final class PortalInteractionGeometry {
   public static Optional<Vec3> closest(Vec3 eye, AABB target, List<PortalLink> route) {
     Vec3 virtualEye = eye;
     for (var link : route) virtualEye = link.transform().point(virtualEye);
+    return closestFrom(virtualEye, target, route);
+  }
+
+  static Optional<Vec3> closestFrom(Vec3 virtualEye, AABB target, List<PortalLink> route) {
     var visible = ConvexPolyhedron.box(target);
     Vec3 previousNormal = null;
     double previousDistance = 0;
@@ -41,6 +45,7 @@ public final class PortalInteractionGeometry {
       previousNormal = normal;
       previousDistance = distance;
       visible = visible.clip(new ConvexPolyhedron.Plane(normal, normal.dot(center)));
+      if (visible.vertices().isEmpty()) return Optional.empty();
       var corners =
           List.of(
               center.add(right).add(up),
@@ -56,6 +61,7 @@ public final class PortalInteractionGeometry {
                 .normalize();
         if (side.dot(center.subtract(virtualEye)) > 0) side = side.scale(-1);
         visible = visible.clip(new ConvexPolyhedron.Plane(side, side.dot(virtualEye)));
+        if (visible.vertices().isEmpty()) return Optional.empty();
       }
     }
     return visible.closestPoint(virtualEye);

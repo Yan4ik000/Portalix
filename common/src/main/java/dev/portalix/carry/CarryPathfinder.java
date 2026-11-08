@@ -68,12 +68,19 @@ final class CarryPathfinder {
       planner = null;
       route.clear();
     }
+    var direct = obstacles(collisions, new AABB(current, desired));
+    if (direct != null && free(desired, direct) && hasClearPath(current, desired, direct)) {
+      route.clear();
+      planner = null;
+      return desired;
+    }
     List<AABB> obstacles = obstacles(collisions, region);
     if (obstacles == null) {
       planner = null;
       route.clear();
       return desired;
     }
+    obstacles.sort(BOX_ORDER);
     Vec3 goal = nearestFreeGoal(desired, obstacles);
     if (goal == null) {
       planner = null;
@@ -129,7 +136,6 @@ final class CarryPathfinder {
     if (boxes == null) return null;
     List<AABB> result = new ArrayList<>(boxes.size());
     for (AABB box : boxes) result.add(box.inflate(x, y, z));
-    result.sort(BOX_ORDER);
     return result;
   }
 

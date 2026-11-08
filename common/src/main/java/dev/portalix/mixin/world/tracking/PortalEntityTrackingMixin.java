@@ -2,6 +2,7 @@ package dev.portalix.mixin.world.tracking;
 
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
+import com.llamalad7.mixinextras.sugar.Local;
 import dev.portalix.portal.query.PlayerPortalVisibility;
 import dev.portalix.server.PortalEntityTracking;
 import java.util.Set;
@@ -10,12 +11,12 @@ import net.minecraft.server.level.ServerEntity;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.server.network.ServerPlayerConnection;
 import net.minecraft.world.entity.Entity;
-import net.minecraft.world.phys.Vec3;
 import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
+import org.spongepowered.asm.mixin.injection.ModifyVariable;
 
 @Mixin(targets = "net.minecraft.server.level.ChunkMap$TrackedEntity")
 abstract class PortalEntityTrackingMixin implements PortalEntityTracking.Tracker {
@@ -30,16 +31,20 @@ abstract class PortalEntityTrackingMixin implements PortalEntityTracking.Tracker
     return seenBy.contains(observer.connection);
   }
 
-  @WrapOperation(
+  @ModifyVariable(
       method = "updatePlayer(Lnet/minecraft/server/level/ServerPlayer;)V",
-      at = @At(value = "INVOKE",
-          target = "Lnet/minecraft/server/level/ServerPlayer;position()Lnet/minecraft/world/phys/Vec3;"),
-      require = 1, allow = 1)
-  private Vec3 portalix$observer(ServerPlayer player, Operation<Vec3> original) {
-    Vec3 source = entity.position();
-    Vec3 position = original.call(player);
-    if (PortalEntityTracking.requiredOwner(entity, player)) return source;
-    return source.add(PlayerPortalVisibility.of(player).nearestDelta(source, position.subtract(source)));
+      at = @At("STORE"), ordinal = 2, require = 1, allow = 1)
+  private double portalix$observer(double rangeSquared, ServerPlayer player,
+      @Local(ordinal = 1) double directSquared) {
+    if (directSquared <= rangeSquared) return rangeSquared;
+    if (PortalEntityTracking.requiredOwner(entity, player)) return directSquared;
+    var visibility = PlayerPortalVisibility.of(player);
+    if (visibility.eyes().isEmpty()) return rangeSquared;
+    var pos = entity.chunkPosition();
+    var map = player.level().getChunkSource().chunkMap;
+    return map.isChunkTracked(player, pos.x(), pos.z())
+        && visibility.eyeWithinHorizontalRange(entity.position(), rangeSquared)
+        ? directSquared : rangeSquared;
   }
 
   @WrapOperation(

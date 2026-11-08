@@ -25,58 +25,78 @@ public final class PortalEntityCollisions {
     AABB query = box.expandTowards(displacement).expandTowards(0, entity.maxUpStep(), 0);
     var scene =
         state.collisionScene != null
+            && (state.collisionQuery == null || state.collisionQuery.equals(query))
             ? state.collisionScene
             : PortalCollisionWorld.query(entity, link, query);
     return scene.collide(hulls, displacement, entity.maxUpStep(), entity.onGround());
   }
 
   static PortalLink movementPortal(Entity entity, Vec3 movement) {
+    if (PortalTopology.links(entity.level()).isEmpty()) return null;
     return intersectingPortal(
         entity, PortalPassengerGroup.bounds(entity), movement, entity.getBoundingBox().getCenter());
   }
 
   public static PortalLink intersectingPortal(Entity entity, AABB hull, Vec3 movement) {
+    if (PortalTopology.links(entity.level()).isEmpty()) return null;
     return intersectingPortal(entity, hull, movement, hull.getCenter());
   }
 
   static PortalLink intersectingPortal(Entity entity, AABB hull, Vec3 movement, Vec3 anchor) {
-    var last = EntityPortalState.of(entity).lastCrossing();
     var sweep = hull.expandTowards(movement);
-    return PortalAperture.selectIntersectingPortal(
-        PortalTopology.links(entity.level()),
+    var links = PortalTopology.intersecting(entity.level(), sweep);
+    if (links.isEmpty()) return null;
+    var last = EntityPortalState.of(entity).lastCrossing();
+    return PortalAperture.selectTouchingPortal(
+        links,
         sweep,
         anchor,
         last == null ? null : last.link().inverse(),
-        link -> PortalAperture.touches(link.entrance().endpoint(), sweep) && convoyReady(entity, link));
+        link -> convoyReady(entity, link));
   }
 
   private static boolean convoyReady(Entity entity, PortalLink link) {
-    if (!PortalEntityMovement.canTraverse(entity, link)) return false;
-    for (var passenger : entity.getPassengers()) if (!convoyReady(passenger, link)) return false;
-    return true;
+    return PortalEntityMovement.vehicleAllowed(entity) && PortalTraversalReadiness.convoyReady(entity, link);
   }
 
   record LinkCrossing(PortalLink link, PortalCollisionWorld.Passage passage) {}
 
-  static Optional<LinkCrossing> firstCrossing(
-      Entity entity, List<AABB> hulls, Vec3 movement, AABB query) {
+  record CrossingSearch(Optional<LinkCrossing> crossing, PortalCollisionWorld scene) {}
+
+  static CrossingSearch firstCrossing(
+      Entity entity, List<AABB> hulls, Vec3 movement, AABB query, PortalLink active) {
     LinkCrossing selected = null;
+    PortalCollisionWorld selectedScene = null;
+    PortalCollisionWorld activeScene = null;
     double progress = Double.POSITIVE_INFINITY;
     Vec3 anchor = entity.getBoundingBox().getCenter();
-    for (var link : PortalTopology.links(entity.level())) {
-      if (PortalAperture.selectIntersectingPortal(List.of(link), query, anchor, null) == null
+    Vec3 hullCenter = hulls.getFirst().getCenter();
+    AABB search = query.inflate(PortalAperture.RIM_THICKNESS);
+    for (var link : PortalTopology.intersecting(entity.level(), search)) {
+      var entrance = link.entrance().endpoint();
+      Vec3 normal = entrance.normal();
+      double distanceToPlane = PortalAperture.signedDistance(entrance, anchor);
+      // Axis sliding can discard outward components even when the full displacement points out.
+      double inward = Math.min(0, movement.x * normal.x)
+          + Math.min(0, movement.y * normal.y) + Math.min(0, movement.z * normal.z);
+      if (inward == 0
+          || PortalAperture.signedDistance(entrance, hullCenter) + inward > PortalAperture.PLANE_EPSILON
+          || distanceToPlane < -PortalAperture.PLANE_EPSILON
+          || !PortalAperture.touches(entrance, search)
           || !convoyReady(entity, link)) continue;
       var scene = PortalCollisionWorld.query(entity, link, query);
-      var crossing = scene.crossing(hulls, movement, link.entrance().endpoint());
+      if (link.equals(active)) activeScene = scene;
+      var crossing = scene.crossing(hulls, movement, entrance);
       if (crossing.isEmpty()) continue;
       var at = crossing.orElseThrow().crossing();
       double distance = movement.subtract(at.remaining()).lengthSqr();
       if (distance < progress) {
         progress = distance;
         selected = new LinkCrossing(link, crossing.orElseThrow());
+        selectedScene = scene;
       }
     }
-    return Optional.ofNullable(selected);
+    return new CrossingSearch(Optional.ofNullable(selected), selected == null ? activeScene : selectedScene);
   }
 
   public static PortalLink intersectingPortal(Entity entity) {
@@ -87,6 +107,8 @@ public final class PortalEntityCollisions {
   }
 
   public static Boolean isInWall(Entity entity) {
+    var link = intersectingPortal(entity);
+    if (link == null) return null;
     double width = entity.getBbWidth() * .8;
     AABB eye =
         AABB.ofSize(
@@ -94,12 +116,15 @@ public final class PortalEntityCollisions {
             width,
             1e-6,
             width);
-    return suffocates(entity, eye);
+    return suffocates(entity, eye, link);
   }
 
   public static Boolean suffocates(Entity entity, AABB hull) {
     var link = intersectingPortal(entity);
-    if (link == null) return null;
+    return link == null ? null : suffocates(entity, hull, link);
+  }
+
+  private static boolean suffocates(Entity entity, AABB hull, PortalLink link) {
     var local = suffocating(entity, hull);
     var remote = suffocating(entity, link.transform().bounds(hull));
     return PortalCollisionWorld.material(link, local, remote).intersects(hull);

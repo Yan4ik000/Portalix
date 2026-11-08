@@ -20,6 +20,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.function.Consumer;
+import java.util.function.Predicate;
 import net.minecraft.client.DeltaTracker;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientLevel;
@@ -63,17 +64,17 @@ public final class PortalEntityScenes {
     SLICES_BY_ENTITY.clear();
     VIEW_ENTITIES.clear();
     PortalEntityClipping.clear();
-    var links = PortalTopology.links(level);
+    boolean linked = !PortalTopology.links(level).isEmpty();
     var client = Minecraft.getInstance();
     var dispatcher = client.levelRenderer.entityRenderDispatcher();
     var camera = client.getCameraEntity();
     boolean cameraIncluded = false;
     for (var entity : level.entitiesForRendering()) {
-      collectFrame(entity, level, delta, dispatcher, links);
+      collectFrame(entity, level, delta, dispatcher, linked);
       cameraIncluded |= entity == camera;
     }
     if (!cameraIncluded && camera != null && camera.level() == level)
-      collectFrame(camera, level, delta, dispatcher, links);
+      collectFrame(camera, level, delta, dispatcher, linked);
   }
 
   private static void collectFrame(
@@ -81,9 +82,9 @@ public final class PortalEntityScenes {
       ClientLevel level,
       DeltaTracker delta,
       EntityRenderDispatcher dispatcher,
-      List<PortalLink> links) {
+      boolean linked) {
     var motion = EntityPortalState.of(entity);
-    if (links.isEmpty() && !motion.cameraHistory().hasRenderPosition(entity.tickCount)) return;
+    if (!linked && !motion.cameraHistory().hasRenderPosition(entity.tickCount)) return;
     float partial =
         delta.getGameTimeDeltaPartialTick(!level.tickRateManager().isEntityFrozen(entity));
     var position = entity.position();
@@ -106,7 +107,7 @@ public final class PortalEntityScenes {
         carried == null
             ? motion.cameraHistory().rewind(entity.tickCount - 1 + partial)
             : List.<PortalLink>of();
-    if (history.isEmpty() && !nearPortal(links, body, bounds, dx, dy, dz, padding + .5)) return;
+    if (history.isEmpty() && !nearPortal(level, body, bounds, dx, dy, dz, padding + .5)) return;
     bounds =
         bounds.minmax(PortalPassagePose.interactionBounds(entity)).inflate(padding).move(dx, dy, dz);
     var interpolatedBounds = bounds;
@@ -122,26 +123,23 @@ public final class PortalEntityScenes {
       body = link.transform().bounds(body);
     }
     var anchor = body.getCenter();
-    links =
-        links.stream()
-            .filter(link -> PortalAperture.signedDistance(link.entrance().endpoint(), anchor) >= 0)
-            .toList();
-    var selected = PortalAperture.selectIntersectingPortal(links, body, anchor, preferred);
+    var candidates = PortalTopology.intersecting(
+        level, bounds.minmax(body).inflate(PortalAperture.RIM_THICKNESS));
+    Predicate<PortalLink> facesAnchor =
+        link -> PortalAperture.signedDistance(link.entrance().endpoint(), anchor) >= 0;
+    var selected = PortalAperture.selectIntersectingPortal(
+        candidates, body, anchor, preferred, facesAnchor);
     if (selected == null)
-      selected = PortalAperture.selectIntersectingPortal(links, bounds, anchor, preferred);
+      selected = PortalAperture.selectIntersectingPortal(
+          candidates, bounds, anchor, preferred, facesAnchor);
     if (selected != null || !history.isEmpty())
       SLICES_BY_ENTITY.put(
           entity,
           PortalEntitySlice.split(history, selected, interpolatedBounds, interpolatedAnchor));
   }
 
-  static boolean nearPortal(
-      List<PortalLink> links, AABB body, AABB bounds, double dx, double dy, double dz) {
-    return nearPortal(links, body, bounds, dx, dy, dz, .5);
-  }
-
-  static boolean nearPortal(
-      List<PortalLink> links,
+  private static boolean nearPortal(
+      ClientLevel level,
       AABB body,
       AABB bounds,
       double dx,
@@ -154,8 +152,10 @@ public final class PortalEntityScenes {
     double maxX = Math.max(body.maxX, bounds.maxX) + padding + dx;
     double maxY = Math.max(body.maxY, bounds.maxY) + padding + dy;
     double maxZ = Math.max(body.maxZ, bounds.maxZ) + padding + dz;
-    for (int i = 0; i < links.size(); i++) {
-      var portal = links.get(i).entrance().endpoint();
+    double margin = PortalAperture.MAX_APERTURE_EXTENT + PortalAperture.PLANE_EPSILON;
+    for (var link : PortalTopology.entrances(
+        level, minX - margin, minZ - margin, maxX + margin, maxZ + margin)) {
+      var portal = link.entrance().endpoint();
       var center = portal.center();
       double extent = (portal.width() + portal.height()) / 2 + PortalAperture.PLANE_EPSILON;
       if (maxX >= center.x - extent

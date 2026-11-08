@@ -3,6 +3,7 @@ package dev.portalix.portal.traversal;
 import com.google.common.collect.Iterables;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.function.Function;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.shapes.Shapes;
@@ -12,6 +13,14 @@ public final class WorldCollisionShapes {
   private WorldCollisionShapes() {}
 
   public static List<AABB> boxes(Entity entity, AABB query) {
+    return boxes(entity, query, true);
+  }
+
+  public static List<AABB> solidBoxes(Entity entity, AABB query) {
+    return boxes(entity, query, false);
+  }
+
+  private static List<AABB> boxes(Entity entity, AABB query, boolean includeBorder) {
     var boxes = new ArrayList<AABB>();
     var level = entity.level();
     var expanded = query.inflate(1e-7);
@@ -19,13 +28,20 @@ public final class WorldCollisionShapes {
     var entities = level.getEntityCollisions(entity, expanded);
     var border = level.getWorldBorder();
     var borderShape =
-        border.isInsideCloseToBorder(entity, expanded) ? border.getCollisionShape() : null;
+        includeBorder && border.isInsideCloseToBorder(entity, expanded)
+            ? border.getCollisionShape() : null;
     Shapes.DoubleLineConsumer collect =
         (x0, y0, z0, x1, y1, z1) -> boxes.add(new AABB(x0, y0, z0, x1, y1, z1));
     for (var shape : blocks) shape.forAllBoxes(collect);
     for (var shape : entities) shape.forAllBoxes(collect);
     if (borderShape != null) borderShape.forAllBoxes(collect);
     return boxes;
+  }
+
+  public static Function<AABB, List<AABB>> borderBoxes(Entity entity) {
+    var border = entity.level().getWorldBorder();
+    var boxes = border.getCollisionShape().toAabbs();
+    return query -> border.isInsideCloseToBorder(entity, query.inflate(1e-7)) ? boxes : List.of();
   }
 
   public static Iterable<VoxelShape> shapes(Entity entity, AABB query) {

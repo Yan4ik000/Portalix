@@ -3,15 +3,21 @@ package dev.portalix.mixin.world.tracking;
 import com.llamalad7.mixinextras.injector.wrapmethod.WrapMethod;
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
+import com.llamalad7.mixinextras.sugar.Local;
+import dev.portalix.portal.query.PlayerPortalVisibility;
+import dev.portalix.server.PortalEntityTracking;
+import dev.portalix.server.PortalServerEvents;
 import dev.portalix.world.chunk.PortalChunkObservers;
 import dev.portalix.world.chunk.ChunkDeliveryAccess;
 import dev.portalix.world.chunk.ChunkDeliveryQueue;
 import dev.portalix.world.chunk.ChunkSendQueue;
 import dev.portalix.world.snapshot.LocalChunkPalettes;
 import it.unimi.dsi.fastutil.longs.LongSet;
+import it.unimi.dsi.fastutil.longs.LongSets;
 import java.util.ArrayList;
 import java.util.List;
 import net.minecraft.network.protocol.Packet;
+import net.minecraft.network.protocol.game.ClientboundChunkBatchFinishedPacket;
 import net.minecraft.network.protocol.game.ClientboundChunkBatchStartPacket;
 import net.minecraft.network.protocol.game.ClientboundForgetLevelChunkPacket;
 import net.minecraft.server.level.ChunkMap;
@@ -65,7 +71,9 @@ abstract class PortalChunkSenderMixin implements ChunkDeliveryAccess {
       LevelChunk chunk,
       CallbackInfo ci) {
     var sender = (PortalChunkSenderMixin) (Object) connection.chunkSender;
-    sender.portalix$delivery.sent(chunk.getPos().pack());
+    long key = chunk.getPos().pack();
+    sender.portalix$delivery.sent(key);
+    PortalServerEvents.chunkDeliveryChanged(connection.player, key);
   }
 
   @Inject(method = "dropChunk", at = @At("HEAD"), cancellable = true)
@@ -77,10 +85,21 @@ abstract class PortalChunkSenderMixin implements ChunkDeliveryAccess {
   }
 
   @Override
+  public boolean portalix$watching(ServerLevel level, long chunk) {
+    return portalix$level == level
+        && (pendingChunks.contains(chunk) || portalix$delivery.watching(chunk));
+  }
+
+  @Override
   public boolean portalix$delivered(ServerLevel level, long chunk) {
     return portalix$level == level
         && portalix$delivery.delivered(chunk)
         && !pendingChunks.contains(chunk);
+  }
+
+  @Override
+  public LongSet portalix$presentColumns(ServerLevel level) {
+    return portalix$level == level ? portalix$delivery.presentColumns() : LongSets.EMPTY_SET;
   }
 
   @Override
@@ -101,13 +120,22 @@ abstract class PortalChunkSenderMixin implements ChunkDeliveryAccess {
       original.call(player);
       return;
     }
-    portalix$observers = PortalChunkObservers.of(player);
     try {
-      LocalChunkPalettes.send(memoryConnection, () -> original.call(player));
+      if (memoryConnection) LocalChunkPalettes.send(true, () -> original.call(player));
+      else original.call(player);
     } finally {
       portalix$batch = null;
       portalix$observers = PortalChunkObservers.EMPTY;
     }
+  }
+
+  @WrapOperation(method = "sendNextChunks", at = @At(value = "INVOKE",
+      target = "Lnet/minecraft/server/network/PlayerChunkSender;collectChunksToSend(Lnet/minecraft/server/level/ChunkMap;Lnet/minecraft/world/level/ChunkPos;)Ljava/util/List;"),
+      require = 1, allow = 1)
+  private List<LevelChunk> portalix$prioritizeBatch(PlayerChunkSender sender, ChunkMap map,
+      ChunkPos center, Operation<List<LevelChunk>> original, @Local(argsOnly = true) ServerPlayer player) {
+    portalix$observers = PortalChunkObservers.of(player);
+    return original.call(sender, map, center);
   }
 
   @WrapOperation(
@@ -139,12 +167,20 @@ abstract class PortalChunkSenderMixin implements ChunkDeliveryAccess {
       at = @At(value = "INVOKE", target =
           "Lnet/minecraft/server/network/ServerGamePacketListenerImpl;send(Lnet/minecraft/network/protocol/Packet;)V"),
       require = 2, allow = 2)
-  private void portalix$retireInBatch(
-      ServerGamePacketListenerImpl connection, Packet<?> packet, Operation<Void> original) {
+  private void portalix$trackBatch(
+      ServerGamePacketListenerImpl connection, Packet<?> packet, Operation<Void> original,
+      @Local List<LevelChunk> loaded) {
     original.call(connection, packet);
-    if (packet instanceof ClientboundChunkBatchStartPacket && portalix$batch != null)
-      for (long chunk : portalix$batch.forgotten())
+    if (packet instanceof ClientboundChunkBatchFinishedPacket)
+      PortalEntityTracking.refreshDeliveredColumns(connection.player, loaded);
+    if (packet instanceof ClientboundChunkBatchStartPacket && portalix$batch != null) {
+      var visibility = PlayerPortalVisibility.of(connection.player);
+      for (long chunk : portalix$batch.forgotten()) {
+        visibility.forgetColumn(chunk);
         connection.send(new ClientboundForgetLevelChunkPacket(ChunkPos.unpack(chunk)));
+        PortalServerEvents.chunkDeliveryChanged(connection.player, chunk);
+      }
+    }
   }
 
   @Inject(method = "collectChunksToSend", at = @At("HEAD"), cancellable = true)
