@@ -9,6 +9,7 @@ import java.util.concurrent.atomic.AtomicReferenceArray;
 public final class RetainedChunkStorage<T> {
   private volatile AtomicReferenceArray<Entry<T>> buckets = new AtomicReferenceArray<>(16);
   private volatile int size;
+  private List<T> snapshot;
 
   private static final class Entry<T> {
     final long key;
@@ -39,7 +40,10 @@ public final class RetainedChunkStorage<T> {
     int index = bucket(key, table.length());
     for (var entry = table.get(index); entry != null; entry = entry.next) {
       if (entry.key == key) {
-        entry.value = value;
+        if (entry.value != value) {
+          entry.value = value;
+          snapshot = null;
+        }
         return;
       }
     }
@@ -57,6 +61,7 @@ public final class RetainedChunkStorage<T> {
     }
     table.set(index, new Entry<>(key, value, table.get(index)));
     size++;
+    snapshot = null;
   }
 
   public synchronized T remove(long key) {
@@ -75,6 +80,7 @@ public final class RetainedChunkStorage<T> {
       if (entry.key != key) retained = new Entry<>(entry.key, entry.value, retained);
     table.set(index, retained);
     size--;
+    snapshot = null;
     return removed;
   }
 
@@ -83,10 +89,13 @@ public final class RetainedChunkStorage<T> {
   }
 
   public synchronized List<T> values() {
-    var result = new ArrayList<T>(size);
-    var table = buckets;
-    for (int i = 0; i < table.length(); i++)
-      for (var entry = table.get(i); entry != null; entry = entry.next) result.add(entry.value);
-    return List.copyOf(result);
+    if (snapshot == null) {
+      var result = new ArrayList<T>(size);
+      var table = buckets;
+      for (int i = 0; i < table.length(); i++)
+        for (var entry = table.get(i); entry != null; entry = entry.next) result.add(entry.value);
+      snapshot = List.copyOf(result);
+    }
+    return snapshot;
   }
 }

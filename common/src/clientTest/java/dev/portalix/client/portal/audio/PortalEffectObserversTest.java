@@ -8,6 +8,7 @@ import dev.portalix.portal.geometry.PortalAperture;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
+import java.util.function.BiPredicate;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.world.phys.Vec3;
@@ -32,15 +33,16 @@ class PortalEffectObserversTest {
         new Observer(List.of(), new Vec3(-1000.4, -8.8, 2000.6), endpoint(new Vec3(-1000, -5, 2000), Direction.DOWN)));
     for (var observers : List.of(List.of(local), List.copyOf(overlap), islands)) {
       // Animation uses nextInt(r)-nextInt(r); weather uses nextInt(2r+1)-r.
-      verify(observers, primary, 31, 31, 31, 31);
-      verify(observers, primary, 31, 31, 15, 15);
-      verify(observers, primary, 4, 10, 4, 10);
+      var animation = new PortalEffectObservers.Sampling(observers, primary, 31, 31);
+      verify(observers, primary, 31, 31, (observer, sample) -> animation.ownsAnimation(observer, sample, 32));
+      verify(observers, primary, 15, 15, (observer, sample) -> animation.ownsAnimation(observer, sample, 16));
+      var weather = new PortalEffectObservers.Sampling(observers, primary, 4, 10);
+      verify(observers, primary, 4, 10, weather::owns);
     }
   }
 
   private static void verify(List<Observer> observers, BlockPos primary,
-      int maxHorizontal, int maxVertical, int horizontal, int vertical) {
-    var sampling = new PortalEffectObservers.Sampling(observers, primary, maxHorizontal, maxVertical);
+      int horizontal, int vertical, BiPredicate<Observer, BlockPos> owns) {
     var samples = new HashSet<BlockPos>();
     for (var observer : observers) {
       var origin = observer.exit() == null ? primary : BlockPos.containing(observer.position());
@@ -68,9 +70,9 @@ class PortalEffectObserversTest {
       }
       int owners = 0;
       for (var observer : observers) {
-        boolean owns = sampling.owns(observer, sample, horizontal, vertical);
-        assertEquals(owner == observer, owns, "sampling ownership at " + sample);
-        if (owns) owners++;
+        boolean owned = owns.test(observer, sample);
+        assertEquals(owner == observer, owned, "sampling ownership at " + sample);
+        if (owned) owners++;
       }
       assertEquals(owner == null ? 0 : 1, owners);
     }

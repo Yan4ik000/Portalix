@@ -16,25 +16,31 @@ public final class PortalSoundPropagation {
   private PortalSoundPropagation() {}
 
   public static Routes prepare(List<PortalLink> links) {
+    var openings = new ArrayList<AcousticLink>(links.size());
+    for (var link : links) openings.add(new AcousticLink(link, Opening.aperture(link), link.transform()));
     var routes = new ArrayList<Route>();
-    for (var first : links) {
-      var firstOpening = Opening.aperture(first);
-      var transform = first.transform();
-      routes.add(new Route(List.of(first), firstOpening, null, transform, null));
-      for (var second : links) {
-        if (PortalRoutes.sameIdentity(first, second)
-            || PortalRoutes.sameIdentity(first, second.inverse())) continue;
-        var entrance = second.entrance().endpoint();
-        var exit = first.exit().endpoint();
-        var outgoing = firstOpening.clip(
-            transform.inversePoint(entrance.center()), transform.inverse().vector(entrance.normal()));
-        var incoming = Opening.aperture(second).clip(exit.center(), exit.normal());
-        if (outgoing != null && incoming != null)
-          routes.add(new Route(List.of(first, second), outgoing, incoming, transform, second.transform()));
+    for (var first : openings) {
+      var inverse = first.link.inverse();
+      var inverseTransform = first.transform.inverse();
+      var exit = first.link.exit().endpoint();
+      routes.add(new Route(List.of(first.link), first.opening, null, first.transform, null));
+      for (var second : openings) {
+        if (PortalRoutes.sameIdentity(first.link, second.link)
+            || PortalRoutes.sameIdentity(inverse, second.link)) continue;
+        var entrance = second.link.entrance().endpoint();
+        var outgoing = first.opening.clip(
+            inverseTransform.point(entrance.center()), inverseTransform.vector(entrance.normal()));
+        if (outgoing == null) continue;
+        var incoming = second.opening.clip(exit.center(), exit.normal());
+        if (incoming != null)
+          routes.add(new Route(
+              List.of(first.link, second.link), outgoing, incoming, first.transform, second.transform));
       }
     }
     return new Routes(List.copyOf(routes));
   }
+
+  private record AcousticLink(PortalLink link, Opening opening, PortalTransform transform) {}
 
   public static final class Routes {
     private final List<Route> routes;
@@ -53,13 +59,46 @@ public final class PortalSoundPropagation {
         double radius = Math.hypot(opening.halfWidth, opening.halfHeight);
         Vec3 image = route.image(emitter);
         if (listener.distanceTo(image) - radius > range) continue;
-        var path = route.path(listener, emitter, image, distance -> 1, 0, (start, end, sourceRadius) -> 1);
-        if (path.distance - radius > range) continue;
+        if (route.bends(listener, emitter, image).distance - radius > range) continue;
         Vec3 position = route.firstTransform.point(listener);
         if (route.secondTransform != null) position = route.secondTransform.point(position);
         observers.add(new Observer(route.links, position, exit));
       }
       return List.copyOf(observers);
+    }
+
+    public double delayDistanceSquared(Vec3 listener, Vec3 emitter) {
+      return distanceSquared(listener, emitter, Double.NEGATIVE_INFINITY);
+    }
+
+    public boolean withinDistance(Vec3 listener, Vec3 emitter, double range) {
+      double limit = range * range;
+      return distanceSquared(listener, emitter, limit) <= limit;
+    }
+
+    private double distanceSquared(Vec3 listener, Vec3 emitter, double stopAtSquared) {
+      double distance = listener.distanceTo(emitter);
+      double squared = distance * distance;
+      if (squared <= stopAtSquared) return squared;
+      // Keep the same tie-breaking as the gain-based delay search.
+      double bestGain = delayGain(distance);
+      for (var route : routes) {
+        if (!route.frontFacing(listener, emitter)) continue;
+        Vec3 image = route.image(emitter);
+        if (delayGain(listener.distanceTo(image)) <= bestGain) continue;
+        double candidate = route.bends(listener, emitter, image).distance;
+        double gain = delayGain(candidate);
+        if (gain > bestGain) {
+          bestGain = gain;
+          squared = candidate * candidate;
+          if (squared <= stopAtSquared) return squared;
+        }
+      }
+      return squared;
+    }
+
+    private static double delayGain(double distance) {
+      return 1 / (1 + distance);
     }
 
     public Path findPath(Vec3 listener, Vec3 emitter, DoubleUnaryOperator distanceGain) {
@@ -107,6 +146,36 @@ public final class PortalSoundPropagation {
           secondTransform == null ? emitter : secondTransform.inversePoint(emitter));
     }
 
+    Bends bends(Vec3 listener, Vec3 emitter, Vec3 image) {
+      Vec3 firstPoint = first.shortestPoint(listener, image);
+      Vec3 firstExit = firstTransform.point(firstPoint);
+      Vec3 secondPoint = null;
+      if (second != null) {
+        Vec3 lastImage = secondTransform.inversePoint(emitter);
+        secondPoint = second.shortestPoint(firstExit, lastImage);
+        double previousLength = Double.POSITIVE_INFINITY;
+        // Each update minimizes one bend of the convex path through the two openings.
+        for (int pass = 0; pass < 32; pass++) {
+          firstPoint = first.shortestPoint(listener, firstTransform.inversePoint(secondPoint));
+          firstExit = firstTransform.point(firstPoint);
+          secondPoint = second.shortestPoint(firstExit, lastImage);
+          double length = listener.distanceTo(firstPoint)
+              + firstExit.distanceTo(secondPoint)
+              + secondPoint.distanceTo(lastImage);
+          if (previousLength - length <= 1e-8) break;
+          previousLength = length;
+        }
+      }
+      double distance = listener.distanceTo(firstPoint);
+      Vec3 lastExit = firstExit;
+      if (secondPoint != null) {
+        distance += firstExit.distanceTo(secondPoint);
+        lastExit = secondTransform.point(secondPoint);
+      }
+      distance += lastExit.distanceTo(emitter);
+      return new Bends(firstPoint, firstExit, secondPoint, lastExit, distance);
+    }
+
     Path path(
         Vec3 listener,
         Vec3 emitter,
@@ -114,44 +183,27 @@ public final class PortalSoundPropagation {
         DoubleUnaryOperator distanceGain,
         double sourceRadius,
         Transmission transmission) {
-      Vec3 firstPoint = first.shortestPoint(listener, image);
-      Vec3 secondPoint = null;
-      if (second != null) {
-        Vec3 lastImage = secondTransform.inversePoint(emitter);
-        secondPoint = second.shortestPoint(firstTransform.point(firstPoint), lastImage);
-        double previousLength = Double.POSITIVE_INFINITY;
-        // Each update minimizes one bend of the convex path through the two openings.
-        for (int pass = 0; pass < 32; pass++) {
-          firstPoint = first.shortestPoint(listener, firstTransform.inversePoint(secondPoint));
-          secondPoint = second.shortestPoint(firstTransform.point(firstPoint), lastImage);
-          double length = listener.distanceTo(firstPoint)
-              + firstTransform.point(firstPoint).distanceTo(secondPoint)
-              + secondPoint.distanceTo(lastImage);
-          if (previousLength - length <= 1e-8) break;
-          previousLength = length;
-        }
-      }
-      Vec3 exitPoint = firstTransform.point(firstPoint);
-      double distance = listener.distanceTo(firstPoint);
-      double gain = transmission.gain(listener, outward(first.portal, firstPoint), 0);
-      if (secondPoint != null) {
+      var bends = bends(listener, emitter, image);
+      double gain = transmission.gain(listener, outward(first.portal, bends.firstPoint), 0);
+      if (bends.secondPoint != null) {
         gain *= transmission.gain(
-            outward(links.getFirst().exit().endpoint(), exitPoint),
-            outward(second.portal, secondPoint), 0);
-        distance += exitPoint.distanceTo(secondPoint);
-        exitPoint = secondTransform.point(secondPoint);
+            outward(links.getFirst().exit().endpoint(), bends.firstExit),
+            outward(second.portal, bends.secondPoint), 0);
       }
       gain *= transmission.gain(
-          outward(links.getLast().exit().endpoint(), exitPoint), emitter, sourceRadius);
-      distance += exitPoint.distanceTo(emitter);
-      Vec3 direction = firstPoint.subtract(listener);
+          outward(links.getLast().exit().endpoint(), bends.lastExit), emitter, sourceRadius);
+      Vec3 direction = bends.firstPoint.subtract(listener);
       if (direction.lengthSqr() < 1e-12)
-        direction = (secondPoint == null ? image : firstTransform.inversePoint(secondPoint)).subtract(listener);
+        direction = (bends.secondPoint == null ? image : firstTransform.inversePoint(bends.secondPoint))
+            .subtract(listener);
       if (direction.lengthSqr() < 1e-12) direction = first.portal.normal().scale(-1);
-      Vec3 position = listener.add(direction.normalize().scale(distance));
-      return new Path(links, position, Math.max(0, distanceGain.applyAsDouble(distance)), gain, distance);
+      Vec3 position = listener.add(direction.normalize().scale(bends.distance));
+      return new Path(
+          links, position, Math.max(0, distanceGain.applyAsDouble(bends.distance)), gain, bends.distance);
     }
   }
+
+  private record Bends(Vec3 firstPoint, Vec3 firstExit, Vec3 secondPoint, Vec3 lastExit, double distance) {}
 
   private record Opening(
       PortalEndpoint portal, List<Vec3> vertices, BoundaryClip clipping, double halfWidth, double halfHeight) {

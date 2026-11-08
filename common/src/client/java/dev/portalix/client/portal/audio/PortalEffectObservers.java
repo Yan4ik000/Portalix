@@ -1,6 +1,7 @@
 package dev.portalix.client.portal.audio;
 
 import dev.portalix.api.PortalEndpoint;
+import dev.portalix.portal.PortalTopology;
 import dev.portalix.portal.audio.PortalSoundPropagation.Observer;
 import dev.portalix.portal.geometry.PortalAperture;
 import java.util.ArrayList;
@@ -13,21 +14,25 @@ import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
+import org.jspecify.annotations.Nullable;
 
 public final class PortalEffectObservers {
   private record Center(BlockPos position, PortalEndpoint exit) {}
 
   private PortalEffectObservers() {}
 
-  public static Sampling sample(
+  public static @Nullable Sampling sample(
       ClientLevel level, Vec3 listener, BlockPos primary, int horizontalRadius, int verticalRadius) {
+    if (PortalTopology.links(level).isEmpty()) return null;
     double horizontal = horizontalRadius + 1.0;
     double vertical = verticalRadius + 1.0;
     double range = Math.sqrt(2 * horizontal * horizontal + vertical * vertical);
+    var remote = PortalAudioRouter.observers(listener, range);
+    if (remote.isEmpty()) return null;
     var observers = new ArrayList<Observer>();
     observers.add(new Observer(List.of(), listener, null));
     var centers = new HashSet<Center>();
-    for (var observer : PortalAudioRouter.observers(listener, range)) {
+    for (var observer : remote) {
       var exit = BlockPos.containing(observer.exit().center());
       var position = BlockPos.containing(observer.position());
       if (!position.equals(primary)
@@ -35,7 +40,8 @@ public final class PortalEffectObservers {
           && centers.add(new Center(position, observer.exit())))
         observers.add(observer);
     }
-    return new Sampling(observers, primary, horizontalRadius, verticalRadius);
+    return observers.size() == 1 ? null
+        : new Sampling(observers, primary, horizontalRadius, verticalRadius);
   }
 
   public static final class Sampling {
@@ -68,7 +74,13 @@ public final class PortalEffectObservers {
       return owns(observer, sample, horizontalRadius, verticalRadius);
     }
 
-    public boolean owns(Observer observer, BlockPos sample, int horizontalRadius, int verticalRadius) {
+    public boolean ownsAnimation(Observer observer, BlockPos sample, int randomRadius) {
+      // Vanilla subtracts two nextInt(randomRadius) draws for each axis.
+      int reach = randomRadius - 1;
+      return owns(observer, sample, reach, reach);
+    }
+
+    private boolean owns(Observer observer, BlockPos sample, int horizontalRadius, int verticalRadius) {
       var region = regions.get(observer);
       if (!region.contains(sample, horizontalRadius, verticalRadius)) return false;
       if (index.region != null)

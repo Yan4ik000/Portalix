@@ -36,8 +36,11 @@ public final class PortalAudioRouter {
   }
 
   public static double delayDistanceSquared(Vec3 listener, Vec3 emitter) {
-    double distance = routes().findPath(listener, emitter, d -> 1 / (1 + d)).distance();
-    return distance * distance;
+    return routes().delayDistanceSquared(listener, emitter);
+  }
+
+  public static boolean withinDistance(Vec3 listener, Vec3 emitter, double range) {
+    return routes().withinDistance(listener, emitter, range);
   }
 
   public static Playback playback(SoundInstance sound) {

@@ -75,8 +75,7 @@ final class PortalVisual {
   void tick(double now, boolean ready, Vec3 camera) {
     particles.advance(now);
     animation.link(ready, now);
-    if (PortalAudioRouter.delayDistanceSquared(camera, endpoint.center())
-        <= AMBIENT_DISTANCE * AMBIENT_DISTANCE) {
+    if (PortalAudioRouter.withinDistance(camera, endpoint.center(), AMBIENT_DISTANCE)) {
       if (ambient == null || !client.getSoundManager().isActive(ambient)) {
         ambient =
             new SourcePositionalSound(

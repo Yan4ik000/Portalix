@@ -78,11 +78,16 @@ abstract class PortalClientWorldEffectsMixin {
   @WrapMethod(method = "animateTick")
   private void portalix$animate(int x, int y, int z, Operation<Void> original) {
     var client = Minecraft.getInstance();
-    portalix$sampling = PortalEffectObservers.sample(
+    var sampling = PortalEffectObservers.sample(
         (ClientLevel) (Object) this, client.gameRenderer.mainCamera().position(),
         new BlockPos(x, y, z), 31, 31);
+    if (sampling == null) {
+      original.call(x, y, z);
+      return;
+    }
+    portalix$sampling = sampling;
     try {
-      for (var observer : portalix$sampling.observers()) {
+      for (var observer : sampling.observers()) {
         portalix$observer = observer;
         if (observer.exit() == null) {
           original.call(x, y, z);
@@ -114,7 +119,7 @@ abstract class PortalClientWorldEffectsMixin {
       Block marker,
       BlockPos.MutableBlockPos pos,
       CallbackInfo callback) {
-    if (portalix$sampling != null && !portalix$sampling.owns(portalix$observer, pos, radius - 1, radius - 1))
+    if (portalix$sampling != null && !portalix$sampling.ownsAnimation(portalix$observer, pos, radius))
       callback.cancel();
   }
 
@@ -144,16 +149,28 @@ abstract class PortalClientWorldEffectsMixin {
 
   @WrapMethod(method = "tickWeatherEffects")
   private void portalix$weather(Operation<Void> original) {
+    var level = (ClientLevel) (Object) this;
+    if (level.getRainLevel(1.0F) <= 0) {
+      portalix$rainTimes.clear();
+      original.call();
+      return;
+    }
     var client = Minecraft.getInstance();
     int radius = client.options.weatherRadius().get();
     var listener = client.gameRenderer.mainCamera().position();
-    portalix$sampling = PortalEffectObservers.sample(
-        (ClientLevel) (Object) this, listener, BlockPos.containing(listener), radius, 10);
+    var sampling = PortalEffectObservers.sample(
+        level, listener, BlockPos.containing(listener), radius, 10);
+    if (sampling == null) {
+      portalix$rainTimes.clear();
+      original.call();
+      return;
+    }
+    portalix$sampling = sampling;
     portalix$rainTimes.keySet().retainAll(
-        portalix$sampling.observers().stream().map(Observer::links).toList());
+        sampling.observers().stream().map(Observer::links).toList());
     int primaryRainTime = rainSoundTime;
     try {
-      for (var observer : portalix$sampling.observers()) {
+      for (var observer : sampling.observers()) {
         portalix$observer = observer;
         rainSoundTime = observer.exit() == null
             ? primaryRainTime : portalix$rainTimes.getOrDefault(observer.links(), 0);
