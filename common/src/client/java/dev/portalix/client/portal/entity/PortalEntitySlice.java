@@ -74,11 +74,6 @@ public record PortalEntitySlice(
   }
 
   public static List<PortalEntitySlice> split(
-      List<PortalLink> history, PortalLink crossing, AABB bounds) {
-    return split(history, crossing, bounds, bounds.getCenter());
-  }
-
-  public static List<PortalEntitySlice> split(
       List<PortalLink> history, PortalLink crossing, AABB bounds, Vec3 anchor) {
     var frame = new ArrayList<PortalLink>();
     for (var link : history) {
@@ -114,5 +109,4 @@ public record PortalEntitySlice(
             null,
             oval));
   }
-
 }

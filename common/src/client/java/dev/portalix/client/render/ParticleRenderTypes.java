@@ -70,10 +70,6 @@ public final class ParticleRenderTypes {
     return source(texture, overbright, ignoreDepth, SourceMode.SPRITECARD, true);
   }
 
-  public static RenderType tintedParticle(Identifier texture, int overbright, boolean ignoreDepth) {
-    return source(texture, overbright, ignoreDepth, SourceMode.TINTED, false);
-  }
-
   public static RenderType linearTintedParticle(
       Identifier texture, int overbright, boolean ignoreDepth) {
     return source(texture, overbright, ignoreDepth, SourceMode.TINTED, true);

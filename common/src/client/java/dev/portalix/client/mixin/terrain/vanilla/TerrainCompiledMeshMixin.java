@@ -8,7 +8,6 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import net.minecraft.client.renderer.chunk.ChunkSectionLayer;
 import net.minecraft.client.renderer.chunk.CompiledSectionMesh;
 import net.minecraft.client.renderer.chunk.SectionRenderDispatcher.RenderSectionBufferSlice;
-import net.minecraft.core.BlockPos;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
@@ -24,8 +23,6 @@ abstract class TerrainCompiledMeshMixin implements SectionMeshTaskAccess, Sectio
   private final RenderSectionBufferSlice[] portalix$slices =
       new RenderSectionBufferSlice[PORTALIX_LAYERS];
 
-  @Unique private BlockPos portalix$origin;
-
   @Override
   public RenderSectionBufferSlice portalix$slice(ChunkSectionLayer layer) {
     return portalix$slices[layer.ordinal()];
@@ -36,21 +33,10 @@ abstract class TerrainCompiledMeshMixin implements SectionMeshTaskAccess, Sectio
     portalix$slices[layer.ordinal()] = slice;
   }
 
-  @Override
-  public BlockPos portalix$origin() {
-    return portalix$origin;
-  }
-
-  @Override
-  public void portalix$origin(BlockPos origin) {
-    portalix$origin = origin;
-  }
-
   @Inject(method = "close", at = @At("HEAD"))
   private void portalix$releaseBuffers(CallbackInfo ci) {
     PortalSceneManager.terrainMeshReleased((CompiledSectionMesh) (Object) this);
     Arrays.fill(portalix$slices, null);
-    portalix$origin = null;
   }
 
   @Override

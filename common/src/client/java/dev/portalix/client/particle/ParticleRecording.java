@@ -109,8 +109,6 @@ final class ParticleRecording {
   }
 
   interface Attributes {
-    long id();
-
     float radius();
 
     float red();
@@ -150,8 +148,7 @@ final class ParticleRecording {
       float alpha,
       float rotation,
       int sequence,
-      float age)
-      implements Attributes {
+      float age) {
     public Particle {
       if (weights.length != 4) {
         throw new IllegalArgumentException("Four control-point weights required");
@@ -162,17 +159,6 @@ final class ParticleRecording {
 
     public float[] weights() {
       return this.weights.clone();
-    }
-
-    @Override
-    public Vector3f position(Vector3f[] points, Vector3f destination) {
-      destination.zero();
-
-      for (int i = 0; i < 4; i++) {
-        destination.fma(this.weights[i], points[i]);
-      }
-
-      return destination;
     }
   }
 

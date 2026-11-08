@@ -78,13 +78,8 @@ public final class FrameCapture {
   static CameraSnapshot worldCamera() { return worldCamera; }
   static Presentation presentation() { return presentation; }
 
-  /** Captures the uploaded projection; Iris moves bobbing into the later model-view matrix. */
   public static void worldProjection(Matrix4fc projection, CameraRenderState camera) {
     worldCamera = cameraSnapshot(projection, camera);
-  }
-
-  public static void worldModelView(Matrix4fc modelView) {
-    if (worldCamera != null) worldCamera.viewRotation.set(modelView);
   }
 
   /** Called exactly once immediately before Minecraft blits its completed image into the window. */

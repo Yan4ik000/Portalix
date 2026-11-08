@@ -78,10 +78,6 @@ public final class CarriedEntityPrediction {
     return ownerUuid;
   }
 
-  public Vec3 velocity() {
-    return phase == Phase.VANILLA ? actualMovement() : visual.velocity();
-  }
-
   public Quaternionf rotation() {
     return visual.rotation();
   }

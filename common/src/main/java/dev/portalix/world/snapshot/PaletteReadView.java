@@ -20,10 +20,6 @@ public final class PaletteReadView<T> implements PalettedContainerRO<T> {
     this.strategy = strategy;
   }
 
-  public Strategy<T> strategy() {
-    return strategy;
-  }
-
   public boolean isViewOf(PalettedContainer.Data<T> candidate) {
     return data == candidate;
   }

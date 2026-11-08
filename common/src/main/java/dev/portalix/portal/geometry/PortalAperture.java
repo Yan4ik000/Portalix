@@ -22,11 +22,6 @@ public final class PortalAperture {
   private PortalAperture() {}
 
   public static PortalLink selectIntersectingPortal(
-      List<PortalLink> links, AABB hull, Vec3 anchor, PortalLink preferred) {
-    return selectIntersectingPortal(links, hull, anchor, preferred, link -> true);
-  }
-
-  public static PortalLink selectIntersectingPortal(
       List<PortalLink> links,
       AABB hull,
       Vec3 anchor,

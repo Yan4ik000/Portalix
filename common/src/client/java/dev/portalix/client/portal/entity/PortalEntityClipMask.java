@@ -7,10 +7,6 @@ import org.joml.Vector4f;
 
 public record PortalEntityClipMask(
     PortalEndpoint portal, Vec3 anchor, boolean replica, boolean oval, boolean shadow) {
-  public PortalEntityClipMask(PortalEndpoint portal, Vec3 anchor, boolean replica) {
-    this(portal, anchor, replica, portal.normal().y > .999, false);
-  }
-
   public float bias() {
     return shadow ? (float) PortalAperture.PLANE_EPSILON : 0;
   }

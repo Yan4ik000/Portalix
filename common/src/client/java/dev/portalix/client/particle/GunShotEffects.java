@@ -44,6 +44,10 @@ public final class GunShotEffects {
     this.missResponse = missResponse;
   }
 
+  public static void loadResources() {
+    ParticleRenderTypes.linearTintedParticle(TEX_MUZZLE, 15, false);
+  }
+
   private static long elapsedTicks(long fired, long received) {
     return fired < 0 || received < fired ? 0 : received - fired;
   }

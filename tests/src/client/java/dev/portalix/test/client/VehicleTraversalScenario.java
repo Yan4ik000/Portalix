@@ -63,10 +63,6 @@ final class VehicleTraversalScenario {
         "Vehicle traversal must begin in the normal first-person camera");
   }
 
-  String title() {
-    return "Passenger transport: " + step.name().toLowerCase(java.util.Locale.ROOT).replace('_', ' ');
-  }
-
   List<String> passed() { return List.copyOf(passed); }
 
   boolean tick() {

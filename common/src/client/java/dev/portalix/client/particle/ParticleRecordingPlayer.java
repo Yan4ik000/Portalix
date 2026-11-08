@@ -17,7 +17,6 @@ final class ParticleRecordingPlayer {
   private final float loopEnd;
   private final float period;
   private final float tail;
-  private final long identities;
 
   public ParticleRecordingPlayer(ParticleRecording source, Set<String> ropes, float loopStart) {
     if (!(Float.isFinite(loopStart) && loopStart >= 0.0F && loopStart < source.duration())) {
@@ -115,11 +114,10 @@ final class ParticleRecordingPlayer {
     }
 
     this.systems = Set.copyOf(names);
-    this.identities = identity;
     this.tail = longest + 0.1F;
     this.loopEnd = source.duration() - this.tail;
     this.period = this.loopEnd - loopStart;
-    if (this.identities == 0L || this.period <= this.tail) {
+    if (identity == 0L || this.period <= this.tail) {
       throw new IllegalArgumentException(
           "Source recording needs a complete steady section and lifetime tail");
     }
@@ -146,7 +144,6 @@ final class ParticleRecordingPlayer {
         this.sampler.sample(
             local,
             system,
-            cycle * this.identities,
             offset,
             cycle == 0 ? Float.NEGATIVE_INFINITY : this.loopStart,
             Math.min(age, stop) + 1.0E-5F,

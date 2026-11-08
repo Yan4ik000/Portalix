@@ -28,10 +28,6 @@ public final class CarryAnchor {
     return eye.add(look.scale(DISTANCE));
   }
 
-  public static Vec3 playerHoldPosition(Player player) {
-    return playerHoldPosition(PortalEyePose.sample(player));
-  }
-
   private static Vec3 playerHoldPosition(PortalEyePose.Pose eye) {
     Vec3 target = holdPosition(eye.position(), eye.forward());
     for (var link : eye.eyePath().reversed()) target = link.transform().inverse().point(target);
@@ -47,12 +43,6 @@ public final class CarryAnchor {
       links.add(link);
     }
     return links;
-  }
-
-  public static Vec3 routeHoldPosition(Player player, List<PortalLink> route) {
-    Vec3 target = playerHoldPosition(player);
-    for (var link : route) target = link.transform().point(target);
-    return target;
   }
 
   public static Vec3 routeHoldPosition(Player player, List<PortalLink> route, AABB hull) {

@@ -90,8 +90,6 @@ public final class SodiumViewCullingState {
       SectionTree source, SectionTree visibility, SortedRenderLists lists, DeferredTaskList tasks,
       SodiumCullRequest.Footprint footprint) {}
 
-  public boolean discarding() { return pending != null && pending.discarded; }
-
   public Queued schedule(LevelRenderer view, SodiumCullRequest request, CullTask task) {
     if (closed) return null;
     if (!dispatching) requests.put(view, request);

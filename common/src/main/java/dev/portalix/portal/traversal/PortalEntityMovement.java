@@ -218,9 +218,7 @@ public final class PortalEntityMovement {
               sneaking,
               displacement,
               List.copyOf(crossings),
-              entity.position(),
-              state.replayVelocity != null ? state.replayVelocity : entity.getDeltaMovement(),
-              state.sequence);
+              entity.position());
       PortalCrossingSync.completed(entity, state.lastMove);
     }
   }
@@ -599,7 +597,5 @@ public final class PortalEntityMovement {
       boolean sneaking,
       Vec3 requested,
       List<Crossing> crossings,
-      Vec3 afterFeet,
-      Vec3 afterVelocity,
-      long eventId) {}
+      Vec3 afterFeet) {}
 }

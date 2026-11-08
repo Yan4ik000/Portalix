@@ -214,8 +214,8 @@ abstract class CameraTransitionMixin implements CameraOrientationAccess {
     else original.call(camera, forwards, up, right);
   }
 
-  @Override
-  public float portalix$eyeHeight(float partialTick) {
+  @Unique
+  private float portalix$eyeHeight(float partialTick) {
     return Mth.lerp(partialTick, eyeHeightOld, eyeHeight);
   }
 

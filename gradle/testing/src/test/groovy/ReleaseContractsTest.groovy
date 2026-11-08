@@ -30,10 +30,12 @@ class ReleaseContractsTest {
             [true, false].each { compat ->
                 Map<String, String> entries = product(loader, compat)
                 Set<String> classes = entries.keySet().findAll { it.endsWith('.class') } as Set
+                Set<String> resources = (entries.keySet() - classes
+                    - ['LICENSE', 'NOTICE', 'META-INF/MANIFEST.MF']) as Set
                 def versions = [sodium: '0.9.2+mc26.2', iris: '1.11.4+mc26.2']
                 def verify = { Map<String, String> contents ->
                     VerifyModArchive.verify(archive("${loader}-${compat}.jar", contents), loader, '0.1.0', compat,
-                        ['assets/portalix/required.bin'] as Set, classes, versions)
+                        resources, classes, versions)
                 }
                 verify(entries)
                 if (compat) {
@@ -54,7 +56,7 @@ class ReleaseContractsTest {
                 assertThrows(GradleException) { verify(entries + wrongVersion) }
                 assertThrows(GradleException) {
                     VerifyModArchive.verify(archive("opposite-${loader}-${compat}.jar", entries), loader, '0.1.0', !compat,
-                        [] as Set, classes, versions)
+                        resources, classes, versions)
                 }
             }
         }
@@ -69,6 +71,7 @@ class ReleaseContractsTest {
         List<String> configs = ['portalix.mixins.json', 'portalix.client.mixins.json']
         if (compat) configs.add('portalix.compat.mixins.json')
         Map<String, String> entries = ['LICENSE': 'license', 'NOTICE': 'notice',
+            'META-INF/MANIFEST.MF': 'Manifest-Version: 1.0\n',
             'assets/portalix/required.bin': 'asset', 'dev/portalix/PortalixMod.class': 'class']
         configs.each { path -> entries[path] = JsonOutput.toJson([package: 'dev.portalix.mixin', mixins: ['Example']]) }
         entries['dev/portalix/mixin/Example.class'] = 'class'

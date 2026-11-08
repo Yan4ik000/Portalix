@@ -27,10 +27,6 @@ import net.minecraft.world.phys.Vec3;
 public final class VisualShotProbe {
   public record Spec(AABB flightVolume, AABB impactVolume, AABB controlVolume, Vec3 expectedHit,
                      boolean orange, Path evidenceDirectory, PortalixVariant variant) {
-    public Spec(AABB flightVolume, AABB impactVolume, AABB controlVolume, Vec3 expectedHit,
-                boolean orange, Path evidenceDirectory) {
-      this(flightVolume, impactVolume, controlVolume, expectedHit, orange, evidenceDirectory, PortalixVariant.STANDARD);
-    }
     public Spec {
       Objects.requireNonNull(flightVolume);
       Objects.requireNonNull(impactVolume);
@@ -44,11 +40,11 @@ public final class VisualShotProbe {
   private record Pixels(int changed, int spanX, int spanY, int hueChanges,
                         int negativeResidualRejected, int outsideTrajectoryRejected) {}
   public record FrameTicket(long presentation, int playerTick, double partialTick,
-                            double flightAge, double impactAge, String phase) {}
+                            double flightAge, String phase) {}
   private record Sample(long frameId, long presentationNanos, long tick, int playerTick, String phase, double partialTick,
                         long presentation, Pixels flight,
                         Pixels impact, FrameCapture.Difference control, boolean stableCamera) {}
-  private record EventReceipt(long gameTick, int playerTick, long receivedNanos) {
+  private record EventReceipt(long gameTick, int playerTick) {
     double eventPlayerTick(long serverTick) {
       return playerTick - Math.max(0, gameTick - serverTick);
     }
@@ -128,14 +124,14 @@ public final class VisualShotProbe {
       return;
     }
     probe.shot = data;
-    probe.shotReceipt = new EventReceipt(client.level.getGameTime(), client.player.tickCount, FrameCapture.monotonicNanos());
+    probe.shotReceipt = new EventReceipt(client.level.getGameTime(), client.player.tickCount);
   }
 
   public static void portalImpact(PortalImpactPayload data) {
     Minecraft client = Minecraft.getInstance();
     if (active == null || active.shot == null || data.sequence() != active.shot.sequence() || active.impact != null) return;
     active.impact = data;
-    active.impactReceipt = new EventReceipt(client.level.getGameTime(), client.player.tickCount, FrameCapture.monotonicNanos());
+    active.impactReceipt = new EventReceipt(client.level.getGameTime(), client.player.tickCount);
   }
 
   public static void submitted(ParticleView view) {
@@ -168,7 +164,7 @@ public final class VisualShotProbe {
     }
     lastRequestedPlayerTick = client.player.tickCount;
     lastRequestedPhase = phase;
-    return new FrameTicket(index, client.player.tickCount, partial, flightAge, impactAge, phase);
+    return new FrameTicket(index, client.player.tickCount, partial, flightAge, phase);
   }
 
   private String phase(double flightAge, double impactAge, boolean impactReceived) {

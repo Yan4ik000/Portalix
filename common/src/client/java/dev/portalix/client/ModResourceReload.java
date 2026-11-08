@@ -5,6 +5,7 @@ import dev.portalix.client.gun.model.GunMaterialTypes;
 import dev.portalix.client.gun.model.GunModels;
 import dev.portalix.client.particle.CarryParticleRenderer;
 import dev.portalix.client.particle.GunIndicatorRenderer;
+import dev.portalix.client.particle.GunShotEffects;
 import dev.portalix.client.particle.SourceParticleSystem;
 import dev.portalix.client.platform.ClientPlatform;
 import dev.portalix.client.portal.scene.PortalSceneManager;
@@ -27,10 +28,7 @@ final class ModResourceReload extends SimplePreparableReloadListener<Void> {
     GunModels.load();
     CarryParticleRenderer.loadResources();
     GunIndicatorRenderer.loadResources();
-    var texture = PortalixMod.id("textures/effects/particle_glow_05.png");
-    ParticleRenderTypes.spritecard(texture, 1, false);
-    for (int overbright : new int[] {1, 3, 15})
-      ParticleRenderTypes.tintedParticle(texture, overbright, false);
+    GunShotEffects.loadResources();
   }
 
   @Override

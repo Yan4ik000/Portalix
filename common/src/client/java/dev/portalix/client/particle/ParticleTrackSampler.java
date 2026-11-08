@@ -85,7 +85,6 @@ final class ParticleTrackSampler {
   void sample(
       float time,
       String system,
-      long identityOffset,
       float cycleOffset,
       float minimumBirth,
       float maximumBirth,
@@ -115,13 +114,11 @@ final class ParticleTrackSampler {
         for (Pair pair : track.pairs()) {
           ParticleRecording.Particle a = pair.a();
           ParticleRecording.Particle b = pair.b();
-          ParticleRecording.Particle identity = a == null ? b : a;
           float birth = pair.birth();
           if (birth >= minimumBirth
               && birth + cycleOffset <= maximumBirth
               && birth < lastLocalBirth) {
             MutableParticle p = this.pool.get(this.output.size());
-            p.id = identity.id() + identityOffset;
             if (a != null && b != null) {
               for (int i = 0; i < 4; i++) {
                 p.weights[i] = lerp(pair.aw()[i], pair.bw()[i], t);
@@ -136,7 +133,7 @@ final class ParticleTrackSampler {
               p.sequence = t < 0.5F ? a.sequence() : b.sequence();
               p.age = lerp(a.age(), b.age(), t);
             } else {
-              ParticleRecording.Particle source = identity;
+              ParticleRecording.Particle source = a == null ? b : a;
               float[] weights = a == null ? pair.bw() : pair.aw();
               System.arraycopy(weights, 0, p.weights, 0, 4);
               p.radius = source.radius();
@@ -161,7 +158,6 @@ final class ParticleTrackSampler {
   }
 
   static final class MutableParticle implements ParticleRecording.Attributes {
-    long id;
     final float[] weights = new float[4];
     float radius;
     float red;
@@ -171,11 +167,6 @@ final class ParticleTrackSampler {
     float rotation;
     float age;
     int sequence;
-
-    @Override
-    public long id() {
-      return this.id;
-    }
 
     @Override
     public float radius() {

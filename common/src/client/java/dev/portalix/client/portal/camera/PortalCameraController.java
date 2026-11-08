@@ -252,7 +252,6 @@ public final class PortalCameraController {
             pose.position(),
             pose.rotation(),
             vector(pose.rotation().transform(new Vector3f(0, 0, -1))),
-            vector(pose.rotation().transform(new Vector3f(0, 1, 0))),
             pose.path().isEmpty() ? null : pose.path().getLast(),
             pose.path()));
   }
@@ -326,7 +325,6 @@ public final class PortalCameraController {
         clearance(player, position),
         new Quaternionf(rotation),
         vector(rotation.transform(new Vector3f(0, 0, -1))),
-        vector(rotation.transform(new Vector3f(0, 1, 0))),
         path.isEmpty() ? null : path.getLast(),
         List.copyOf(path));
   }
@@ -446,7 +444,6 @@ public final class PortalCameraController {
       Vec3 position,
       Quaternionf rotation,
       Vec3 forward,
-      Vec3 up,
       PortalLink eyeLink,
       List<PortalLink> spacePath) {}
 }

@@ -19,11 +19,9 @@ common/src/main/resources/assets/portalix/; in the JAR, relative to assets/porta
 - meshes/*.pgmesh — gun models and animations;
 - textures/model/, textures/portals/, textures/source_particles/ — textures;
 - textures/gui/*/reticle_*.png — crosshair variants;
-- textures/particle/core_glow.png and textures/effects/: combinemuzzle2.png,
-  energyball.png, impact_sparks_sequence6.png, particle_glow_01.png,
-  particle_glow_05.png, projectile_fiber.png, spark.png, sparks.png,
-  strider_bluebeam.png — effect textures, including a cropped portion of
-  particle/sparks/sparks.vtf used for impact_sparks_sequence6.png;
+- The effect textures in textures/effects/ include impact_sparks_sequence6.png,
+  particle_glow_01.png, particle_glow_05.png, projectile_fiber.png and spark.png.
+  impact_sparks_sequence6.png uses a cropped portion of particle/sparks/sparks.vtf.
 - source_particles/ and portals/ — material and particle definitions, effect
   recordings and extracted data tables;
 - sounds/*.ogg and source_sound_settings.json — sounds and their parameters;

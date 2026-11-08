@@ -52,10 +52,6 @@ public enum GunSounds {
     }
   }
 
-  public float volume() {
-    return SourceSoundSettings.volume(this);
-  }
-
   public float volume(RandomSource random) {
     return SourceSoundSettings.volume(this, random);
   }

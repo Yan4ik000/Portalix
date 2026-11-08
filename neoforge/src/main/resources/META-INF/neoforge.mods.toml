@@ -6,7 +6,7 @@ license="LicenseRef-PolyForm-Perimeter-1.0.1 AND LicenseRef-Portalix-ThirdParty"
 modId="portalix"
 version="${version}"
 displayName="Portalix"
-logoFile="assets/portalix/icon.png"
+iconFile="assets/portalix/icon.png"
 authors="Yan4ik000"
 description="A mod that adds a portal gun to Minecraft."
 

@@ -57,11 +57,6 @@ abstract class TerrainMeshPublicationMixin {
     try {
       if (((SectionRenderDispatcherAccessor) this$0).portalix$closed()
           || ((SectionMeshTaskAccess) mesh).portalix$cancelled()) return mesh;
-      ((SectionMeshBuffersAccess) mesh)
-          .portalix$origin(
-              ((SectionRenderDispatcher.RenderSection) (Object) this)
-                  .getRenderOrigin()
-                  .immutable());
       return original.call(mesh);
     } finally {
       this$0.unlock();

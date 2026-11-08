@@ -128,7 +128,6 @@ public final class LightSectionSnapshot {
     if (node == null) node = new Leaf(owner);
     if (node instanceof Leaf leaf) {
       if (column != null && leaf.columns.size() == WIDTH && !leaf.columns.containsKey(position)) {
-
         node = new Branch(owner);
         var entries = leaf.columns.long2ObjectEntrySet().fastIterator();
         while (entries.hasNext()) {

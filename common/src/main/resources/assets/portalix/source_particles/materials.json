@@ -7,14 +7,14 @@
     "texture_height": 256
   },
   "particle/particle_glow_05_add_15ob.vmt": {
-    "texture": "portalix:textures/source_particles/particle/particle_glow_05.png",
+    "texture": "portalix:textures/effects/particle_glow_05.png",
     "overbright": 15.0,
     "noz": false,
     "sheet": {},
     "texture_height": 256
   },
   "particle/particle_glow_05_add_15ob_noz.vmt": {
-    "texture": "portalix:textures/source_particles/particle/particle_glow_05.png",
+    "texture": "portalix:textures/effects/particle_glow_05.png",
     "overbright": 15.0,
     "noz": true,
     "sheet": {},

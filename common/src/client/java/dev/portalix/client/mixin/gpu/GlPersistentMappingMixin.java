@@ -22,7 +22,6 @@ abstract class GlPersistentMappingMixin implements TransientStagingAccess {
 
   @Inject(method = "close", at = @At("TAIL"))
   private void portalix$releasePools(CallbackInfo ci) {
-
     stagingBlockAllocator.close();
     gpuBlockAllocator.close();
     gpuMappedBlockAllocator.close();

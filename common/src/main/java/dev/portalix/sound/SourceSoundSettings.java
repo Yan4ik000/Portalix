@@ -42,11 +42,6 @@ public final class SourceSoundSettings {
     return Map.copyOf(settings);
   }
 
-  public static float volume(GunSounds event) {
-    Setting setting = SETTINGS.get(event);
-    return setting.volume() * setting.engineGain() * MASTER_VOLUME;
-  }
-
   public static float volume(GunSounds event, RandomSource random) {
     Setting setting = SETTINGS.get(event);
     return (setting.volume() + (setting.volumeMax() - setting.volume()) * random.nextFloat())

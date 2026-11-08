@@ -59,7 +59,9 @@ public final class PortalSurfaceRenderer implements FeatureRenderer<PortalSurfac
       RenderPipelines.register(handSurfacePipeline("portal_iris_hand").build());
   private static final RenderPipeline APERTURE_PIPELINE =
       RenderPipelines.register(
-          surfacePipeline("portal_aperture")
+          portalPipeline(
+                  "portal_aperture",
+                  RenderPipeline.builder().withBindGroupLayout(BindGroupLayouts.MATRICES_PROJECTION))
               .withShaderDefine("PORTALIX_IRIS_HAND")
               .withShaderDefine("PORTALIX_DEPTH_APERTURE")
               .withBindGroupLayout(
@@ -70,19 +72,23 @@ public final class PortalSurfaceRenderer implements FeatureRenderer<PortalSurfac
                       Optional.empty(), GpuFormat.RGBA8_UNORM, ColorTargetState.WRITE_NONE))
               .build());
 
-  private static RenderPipeline.Builder surfacePipeline(String name) {
-    return RenderPipeline.builder(RenderPipelines.ENTITY_EMISSIVE_SNIPPET)
+  private static RenderPipeline.Builder portalPipeline(String name, RenderPipeline.Builder builder) {
+    return builder
         .withLocation(PortalixMod.id("pipeline/" + name))
         .withVertexBinding(0, DefaultVertexFormat.POSITION_TEX_COLOR)
         .withVertexShader(PortalixMod.id("core/portal"))
         .withFragmentShader(PortalixMod.id("core/portal"))
+        .withCull(false)
+        .withPrimitiveTopology(PrimitiveTopology.TRIANGLES);
+  }
+
+  private static RenderPipeline.Builder surfacePipeline(String name) {
+    return portalPipeline(name, RenderPipeline.builder(RenderPipelines.ENTITY_EMISSIVE_SNIPPET))
         .withBindGroupLayout(BindGroupLayouts.SAMPLER1)
         .withBindGroupLayout(BindGroupLayouts.SAMPLER2)
         .withBindGroupLayout(BindGroupLayout.builder().withSampler("PortalScene").build())
         .withColorTargetState(new ColorTargetState(BlendFunction.TRANSLUCENT))
-        .withDepthStencilState(new DepthStencilState(CompareOp.GREATER_THAN_OR_EQUAL, false))
-        .withCull(false)
-        .withPrimitiveTopology(PrimitiveTopology.TRIANGLES);
+        .withDepthStencilState(new DepthStencilState(CompareOp.GREATER_THAN_OR_EQUAL, false));
   }
 
   private static RenderPipeline.Builder handSurfacePipeline(String name) {
@@ -519,10 +525,7 @@ public final class PortalSurfaceRenderer implements FeatureRenderer<PortalSurfac
             surface.dynamicTransforms(),
             surface.scissorState(),
             surface.textures().stream()
-                .filter(
-                    texture ->
-                        !texture.name().equals("PortalWorldDepth")
-                            && !texture.name().equals("PortalHandDepth"))
+                .filter(texture -> texture.name().equals("PortalOcclusionDepth"))
                 .toList())
         .drawFromBuffer(geometry);
   }

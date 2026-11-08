@@ -7,7 +7,6 @@ in vec3 Position;
 in vec4 Color;
 in vec2 UV0;
 out vec2 portalUv;
-out vec3 worldPosition;
 out vec3 tangentPosition;
 out vec3 bitangentPosition;
 out vec3 screenPosition;
@@ -21,7 +20,6 @@ void main() {
     portalDepth = (ProjMat * ModelViewMat * vec4(Position * ColorModulator.w, 1)).zw;
 
     gl_Position.z = gl_Position.w;
-    worldPosition = Position;
 
     tangentPosition = Position + TextureMat[0].xyz;
     bitangentPosition = Position + TextureMat[1].xyz;

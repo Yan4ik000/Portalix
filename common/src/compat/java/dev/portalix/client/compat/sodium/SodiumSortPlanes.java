@@ -15,10 +15,6 @@ import org.joml.Vector3fc;
 public final class SodiumSortPlanes {
   private final Plane[] planes;
 
-  public SodiumSortPlanes(GeometryPlanes geometry) {
-    this(geometry, null);
-  }
-
   public SodiumSortPlanes(GeometryPlanes geometry, TQuad[] topology) {
     var result = new ArrayList<Plane>();
     if (geometry.getAligned() != null)

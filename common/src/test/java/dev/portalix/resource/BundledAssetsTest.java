@@ -41,7 +41,6 @@ class BundledAssetsTest {
       float minVolume = setting.get("volume").getAsFloat() * gain;
       float maxVolume = setting.get("volumeMax").getAsFloat() * gain;
       float minPitch = setting.get("pitchMin").getAsFloat(), maxPitch = setting.get("pitchMax").getAsFloat();
-      assertEquals(minVolume, SourceSoundSettings.volume(sound), 1e-6);
       for (int sample = 0; sample < 5; sample++) {
         float volume = SourceSoundSettings.volume(sound, random), pitch = SourceSoundSettings.pitch(sound, random);
         assertTrue(Float.isFinite(volume) && volume >= minVolume - 1e-6 && volume <= maxVolume + 1e-6, sound.id());
