@@ -156,7 +156,8 @@ public final class PortalSurfaceRenderer implements FeatureRenderer<PortalSurfac
       StagedVertexBuffer.Draw geometry,
       PortalParticleMesh.Batch particles) {}
 
-  private record PreparedGroup(List<PreparedDraw> draws, Background background) {}
+  private record PreparedGroup(
+      List<PreparedDraw> draws, Background background, PortalScreenRegion backgroundRegion) {}
 
   private final class ParticleGeometry implements AutoCloseable {
     GpuBuffer vertices;
@@ -302,14 +303,12 @@ public final class PortalSurfaceRenderer implements FeatureRenderer<PortalSurfac
   @Override
   public void prepareGroup(FeatureFrameContext context, List<Submit> submits, boolean outline) {
     if (IrisShaders.shadowPass()) {
-      groups.add(new PreparedGroup(List.of(), null));
+      groups.add(new PreparedGroup(List.of(), null, null));
       return;
     }
-    boolean needsBackground =
-        submits.stream()
-            .anyMatch(
-                s -> s.surface || s.particles.stream().anyMatch(PortalParticleMesh.Batch::refract));
-    Background background = needsBackground ? prepareBackground() : null;
+    Background background = null;
+    PortalScreenRegion backgroundRegion = null;
+    Matrix4f viewProjection = null;
     StagedVertexBuffer staged = context.stagedVertexBuffer();
     List<PreparedDraw> draws = new ArrayList<>();
     for (Submit submit : submits) {
@@ -322,7 +321,20 @@ public final class PortalSurfaceRenderer implements FeatureRenderer<PortalSurfac
               .setColumn(0, new Vector4f((float) right.x, (float) right.y, (float) right.z, 0))
               .setColumn(1, new Vector4f((float) up.x, (float) up.y, (float) up.z, 0))
               .setColumn(2, new Vector4f((float) normal.x, (float) normal.y, (float) normal.z, 0));
-      if (submit.surface) {
+      List<PortalSurfaceMesh.Vertex> mesh = List.of();
+      if (submit.surface && submit.open > 0) {
+        if (viewProjection == null)
+          viewProjection =
+              PortalSceneManager.surfaceProjection().mul(RenderSystem.getModelViewMatrixCopy());
+        mesh = PortalSurfaceMesh.mesh(endpoint, submit.camera, viewProjection);
+      }
+      if (mesh.size() >= 3) {
+        if (background == null) background = prepareBackground();
+        int width = background.texture.getWidth(0), height = background.texture.getHeight(0);
+        var region = PortalScreenRegion.project(mesh, viewProjection, width, height);
+        // The opening shader refracts outside the mesh. A settled rim only reads under itself.
+        var samples = submit.open < 1 ? PortalScreenRegion.full(width, height) : region;
+        backgroundRegion = samples.union(backgroundRegion);
         double clearance = submit.camera.subtract(endpoint.center()).dot(normal);
         // Bias along each camera ray so the surface stays in front of its wall at grazing angles.
         float depthScale = (float) Math.max(.5, 1 - PortalSurfaceMesh.NORMAL_OFFSET / clearance);
@@ -343,7 +355,7 @@ public final class PortalSurfaceRenderer implements FeatureRenderer<PortalSurfac
         int rgb = submit.variant.particleColor(submit.orange);
         var handTextures =
             IrisShaders.active() && !PortalSceneManager.isPortalView()
-                ? ShaderBackend.INSTANCE.handTextures()
+                ? ShaderBackend.INSTANCE.handTextures(scene != null)
                 : List.<PreparedRenderType.Texture>of();
         var textures =
             new ArrayList<>(
@@ -392,11 +404,11 @@ public final class PortalSurfaceRenderer implements FeatureRenderer<PortalSurfac
                 textures);
         var geometry =
             staged.appendDraw(DefaultVertexFormat.POSITION_TEX_COLOR, PrimitiveTopology.TRIANGLES);
-        buildSurface(submit, staged.getVertexBuilder(geometry));
+        buildSurface(mesh, staged.getVertexBuilder(geometry));
         draws.add(new PreparedDraw(surface, geometry, null));
         if (!handTextures.isEmpty() && scene != null)
           ShaderBackend.INSTANCE.aperture(
-              () -> drawAperture(surface, staged.getExecuteInfo(geometry)));
+              region, () -> drawAperture(surface, staged.getExecuteInfo(geometry)));
       }
       if (submit.particles.isEmpty()) continue;
       Vec3 plane = endpoint.center().subtract(submit.camera);
@@ -427,12 +439,16 @@ public final class PortalSurfaceRenderer implements FeatureRenderer<PortalSurfac
         bindings.add(
             new PreparedRenderType.Texture(
                 "Sampler0", texture.getTextureView(), texture.getSampler()));
-        if (batch.refract())
+        if (batch.refract()) {
+          if (background == null) background = prepareBackground();
+          backgroundRegion =
+              PortalScreenRegion.full(background.texture.getWidth(0), background.texture.getHeight(0));
           bindings.add(
               new PreparedRenderType.Texture(
                   "Sampler1",
                   background.view,
                   RenderSystem.getSamplerCache().getClampToEdge(FilterMode.LINEAR)));
+        }
         RenderPipeline particlePipeline;
         if (batch.refract()) particlePipeline = REFRACTION;
         else particlePipeline = batch.additive() ? TINTED_PARTICLES : TRANSLUCENT_PARTICLES;
@@ -454,7 +470,7 @@ public final class PortalSurfaceRenderer implements FeatureRenderer<PortalSurfac
         }
       }
     }
-    groups.add(new PreparedGroup(draws, background));
+    groups.add(new PreparedGroup(draws, background, backgroundRegion));
   }
 
   private Background prepareBackground() {
@@ -483,10 +499,10 @@ public final class PortalSurfaceRenderer implements FeatureRenderer<PortalSurfac
       draws.add(new SurfaceDraw(draw.renderType, geometry, draw.particles));
     }
     if (IrisShaders.active()) {
-      ShaderBackend.INSTANCE.submit(() -> executeSurfaces(group.background, draws));
+      if (!draws.isEmpty()) ShaderBackend.INSTANCE.submit(() -> executeSurfaces(group, draws));
       return;
     }
-    executeSurfaces(group.background, draws);
+    if (!draws.isEmpty()) executeSurfaces(group, draws);
   }
 
   private record SurfaceDraw(
@@ -494,41 +510,44 @@ public final class PortalSurfaceRenderer implements FeatureRenderer<PortalSurfac
       StagedVertexBuffer.ExecuteInfo geometry,
       PortalParticleMesh.Batch particles) {}
 
-  @SuppressWarnings("try")
   private static void drawAperture(
       PreparedRenderType surface, StagedVertexBuffer.ExecuteInfo geometry) {
     if (geometry == null) return;
-    try (var ignored = IrisEffectTarget.begin()) {
-      new PreparedRenderType(
-              APERTURE_PIPELINE,
-              surface.outputTarget(),
-              surface.dynamicTransforms(),
-              surface.scissorState(),
-              surface.textures().stream()
-                  .filter(
-                      texture ->
-                          !texture.name().equals("PortalWorldDepth")
-                              && !texture.name().equals("PortalHandDepth"))
-                  .toList())
-          .drawFromBuffer(geometry);
-    }
+    new PreparedRenderType(
+            APERTURE_PIPELINE,
+            surface.outputTarget(),
+            surface.dynamicTransforms(),
+            surface.scissorState(),
+            surface.textures().stream()
+                .filter(
+                    texture ->
+                        !texture.name().equals("PortalWorldDepth")
+                            && !texture.name().equals("PortalHandDepth"))
+                .toList())
+        .drawFromBuffer(geometry);
   }
 
   @SuppressWarnings("try")
-  private void executeSurfaces(Background background, List<SurfaceDraw> draws) {
+  private void executeSurfaces(PreparedGroup group, List<SurfaceDraw> draws) {
     try (var ignored = IrisEffectTarget.begin()) {
-      drawSurfaces(background, draws);
+      drawSurfaces(group, draws);
     }
   }
 
-  private void drawSurfaces(Background background, List<SurfaceDraw> draws) {
+  private void drawSurfaces(PreparedGroup group, List<SurfaceDraw> draws) {
+    var background = group.background;
     if (background != null) {
       var color = RenderSystem.outputColorTextureOverride;
       var source = color == null ? background.source : color.texture();
+      var region = group.backgroundRegion;
+      if (source.getWidth(0) != background.texture.getWidth(0)
+          || source.getHeight(0) != background.texture.getHeight(0))
+        region = PortalScreenRegion.full(source.getWidth(0), source.getHeight(0));
       RenderSystem.getDevice()
           .createCommandEncoder()
           .copyTextureToTexture(
-              source, background.texture, 0, 0, 0, 0, 0, source.getWidth(0), source.getHeight(0));
+              source, background.texture, 0, region.x(), region.y(),
+              region.x(), region.y(), region.width(), region.height());
     }
     for (SurfaceDraw draw : draws) {
       if (draw.particles != null) {
@@ -541,13 +560,7 @@ public final class PortalSurfaceRenderer implements FeatureRenderer<PortalSurfac
     }
   }
 
-  private static void buildSurface(Submit submit, VertexConsumer builder) {
-    PortalEndpoint endpoint = submit.endpoint;
-    var polygon =
-        PortalSurfaceMesh.mesh(
-            endpoint,
-            submit.camera,
-            PortalSceneManager.surfaceProjection().mul(RenderSystem.getModelViewMatrixCopy()));
+  private static void buildSurface(List<PortalSurfaceMesh.Vertex> polygon, VertexConsumer builder) {
     for (int i = 1; i + 1 < polygon.size(); i++) {
       for (var vertex : List.of(polygon.getFirst(), polygon.get(i), polygon.get(i + 1))) {
         builder

@@ -1,10 +1,10 @@
 package dev.portalix.client.compat.iris;
 
 import com.mojang.blaze3d.pipeline.RenderPipeline;
-import com.mojang.blaze3d.pipeline.RenderTarget;
 import dev.portalix.client.compat.RenderScope;
 import dev.portalix.client.compat.ShaderBackend;
 import dev.portalix.client.mixin.compat.iris.IrisRenderingPipelineAccessor;
+import dev.portalix.client.portal.render.PortalScreenRegion;
 import java.util.List;
 import net.irisshaders.iris.api.v0.IrisApi;
 import net.irisshaders.iris.api.v0.IrisProgram;
@@ -101,11 +101,6 @@ public final class IrisShaderBackend implements ShaderBackend {
   }
 
   @Override
-  public RenderTarget effectTarget() {
-    return IrisEffectFramebuffer.current();
-  }
-
-  @Override
   public RenderScope beginEffect() {
     return IrisEffectFramebuffer.begin();
   }
@@ -121,13 +116,13 @@ public final class IrisShaderBackend implements ShaderBackend {
   }
 
   @Override
-  public List<PreparedRenderType.Texture> handTextures() {
-    return IrisPortalComposite.handTextures();
+  public List<PreparedRenderType.Texture> handTextures(boolean opensDepth) {
+    return IrisPortalComposite.handTextures(opensDepth);
   }
 
   @Override
-  public void aperture(Runnable draw) {
-    IrisPortalComposite.aperture(draw);
+  public void aperture(PortalScreenRegion region, Runnable draw) {
+    IrisPortalComposite.aperture(region, draw);
   }
 
   @Override

@@ -89,6 +89,7 @@
     "clip.PortalClipPrecompileMixin",
     "clip.PortalClipRenderPassMixin",
     "gpu.GlClipMixin",
+    "gpu.GlTextureCopyMixin",
     "gpu.GlBufferMapMixin",
     "gpu.GlBufferFlushMixin",
     "gpu.GlClipEndMixin",

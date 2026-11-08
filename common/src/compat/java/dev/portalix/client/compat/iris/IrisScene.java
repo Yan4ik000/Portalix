@@ -23,9 +23,10 @@ import org.joml.Vector3d;
 
 public final class IrisScene implements ShaderBackend.Scene {
   private static final int PREPARED_VIEW_CAPACITY = 2 * PortalSceneManager.RECURSION_DEPTH;
+  private enum Creation { PRIMARY, PREWARM, LIVE_PORTAL }
   private static WorldRenderingPipeline current;
   private static final Map<WorldRenderingPipeline, Views> views = new IdentityHashMap<>();
-  private static boolean preparing;
+  private static Creation creation = Creation.PRIMARY;
   private PipelineManager manager;
   private WorldRenderingPipeline pipeline;
   private Views owner;
@@ -56,7 +57,11 @@ public final class IrisScene implements ShaderBackend.Scene {
   }
 
   public static boolean preparing() {
-    return preparing;
+    return creation != Creation.PRIMARY;
+  }
+
+  public static boolean prewarming() {
+    return creation == Creation.PREWARM;
   }
 
   public static void prepare(
@@ -68,7 +73,7 @@ public final class IrisScene implements ShaderBackend.Scene {
     var pool = new Views(manager, dimension);
     views.put(primary, pool);
     for (int i = 0; i < PREPARED_VIEW_CAPACITY; i++)
-      pool.available.addLast(pool.create());
+      pool.available.addLast(pool.create(Creation.PREWARM));
   }
 
   public static void release(WorldRenderingPipeline primary) {
@@ -94,15 +99,16 @@ public final class IrisScene implements ShaderBackend.Scene {
       this.dimension = dimension;
     }
 
-    WorldRenderingPipeline create() {
-      preparing = true;
+    WorldRenderingPipeline create(Creation mode) {
+      var previous = creation;
+      creation = mode;
       try {
         var pipeline = ((PipelineManagerAccessor) manager).portalix$factory().apply(dimension);
         ((IrisRenderingPipelineAccessor) pipeline).portalix$blockIdsInitialized(true);
         pipelines.add(pipeline);
         return pipeline;
       } finally {
-        preparing = false;
+        creation = previous;
       }
     }
   }
@@ -151,8 +157,8 @@ public final class IrisScene implements ShaderBackend.Scene {
       owner = activeOwner;
     }
     if (pipeline == null) {
-      pipeline = owner.available.pollFirst();
-      if (pipeline == null) pipeline = owner.create();
+      pipeline = owner.available.pollLast();
+      if (pipeline == null) pipeline = owner.create(Creation.LIVE_PORTAL);
       invalidated = true;
     }
     if (invalidated) {

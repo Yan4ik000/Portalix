@@ -2,7 +2,6 @@ package dev.portalix.client.compat.iris;
 
 import com.mojang.blaze3d.GpuFormat;
 import com.mojang.blaze3d.pipeline.RenderPipeline;
-import com.mojang.blaze3d.pipeline.RenderTarget;
 import dev.portalix.PortalixMod;
 import dev.portalix.client.compat.RenderScope;
 import dev.portalix.client.compat.ShaderBackend;
@@ -10,7 +9,6 @@ import dev.portalix.client.compat.minecraft.PipelineVariant;
 import java.util.HashMap;
 import java.util.Locale;
 import java.util.Map;
-import net.minecraft.client.Minecraft;
 
 public final class IrisEffectTarget {
   private static final Map<PipelineFormat, RenderPipeline> pipelines = new HashMap<>();
@@ -27,11 +25,6 @@ public final class IrisEffectTarget {
   }
 
   private record PipelineFormat(RenderPipeline source, GpuFormat format) {}
-
-  public static RenderTarget current() {
-    return ShaderBackend.INSTANCE == null ? Minecraft.getInstance().gameRenderer.mainRenderTarget()
-        : ShaderBackend.INSTANCE.effectTarget();
-  }
 
   public static RenderScope begin() {
     return ShaderBackend.INSTANCE == null ? null : ShaderBackend.INSTANCE.beginEffect();

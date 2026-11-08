@@ -1,8 +1,8 @@
 package dev.portalix.client.compat;
 
 import com.mojang.blaze3d.pipeline.RenderPipeline;
-import com.mojang.blaze3d.pipeline.RenderTarget;
 import dev.portalix.client.compat.iris.IrisDrawContext;
+import dev.portalix.client.portal.render.PortalScreenRegion;
 import java.util.List;
 import net.minecraft.client.renderer.rendertype.PreparedRenderType;
 import net.minecraft.world.item.Item;
@@ -24,12 +24,11 @@ public interface ShaderBackend {
   RenderScope itemContext(Item item);
   RenderScope drawContext(IrisDrawContext context);
   long vertexKey();
-  RenderTarget effectTarget();
   RenderScope beginEffect();
   void clearEffects();
   void endFrame();
-  List<PreparedRenderType.Texture> handTextures();
-  void aperture(Runnable draw);
+  List<PreparedRenderType.Texture> handTextures(boolean opensDepth);
+  void aperture(PortalScreenRegion region, Runnable draw);
   void submit(Runnable draw);
   void clearComposite();
 
