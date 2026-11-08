@@ -5,12 +5,11 @@ import org.joml.Vector3f;
 final class SourcePortalRibbon {
   record Control(Vector3f position, float radius, Vector3f normal, Vector3f color, float alpha) {}
 
-  record Vertex(Vector3f position, float u, float v, Vector3f color, float alpha) {}
+  record Sample(Vector3f left, Vector3f right, Vector3f color, float alpha) {}
 
   private SourcePortalRibbon() {}
 
-  static Vertex evaluate(
-      Control a, Control b, Control c, Control d, float t, float side, float scroll) {
+  static Sample evaluate(Control a, Control b, Control c, Control d, float t) {
     Vector3f position = new Vector3f(), tangent = new Vector3f();
     for (int axis = 0; axis < 3; axis++) {
       position.setComponent(
@@ -34,10 +33,11 @@ final class SourcePortalRibbon {
     normal.cross(tangent);
     if (normal.lengthSquared() > 0) normal.normalize();
     float radius = ParticleSpline.position(a.radius, b.radius, c.radius, d.radius, t);
-    position.add(normal.mul(radius * (side - .5F)));
+    var left = new Vector3f(position).add(new Vector3f(normal).mul(radius * -.5F));
+    var right = position.add(normal.mul(radius * .5F));
     Vector3f color = linear(b.color).lerp(linear(c.color), t);
     float alpha = packed(b.alpha) * (1 - t) + packed(c.alpha) * t;
-    return new Vertex(position, 1 - side, scroll, color, alpha);
+    return new Sample(left, right, color, alpha);
   }
 
   private static float packed(float value) {

@@ -12,6 +12,7 @@ import net.minecraft.client.renderer.culling.Frustum;
 import net.minecraft.client.renderer.debug.DebugRenderer;
 import net.minecraft.client.renderer.debug.GameTestBlockHighlightRenderer;
 import net.minecraft.client.renderer.extract.LevelExtractor;
+import net.minecraft.client.renderer.state.level.LevelRenderState;
 import net.minecraft.client.renderer.state.level.ParticlesRenderState;
 import net.minecraft.client.renderer.state.level.SkyRenderState;
 import net.minecraft.client.renderer.state.level.WeatherRenderState;
@@ -20,6 +21,7 @@ import net.minecraft.world.level.border.WorldBorder;
 import net.minecraft.world.phys.Vec3;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
+import org.spongepowered.asm.mixin.injection.Group;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
@@ -32,6 +34,24 @@ abstract class TerrainOnlyExtractionMixin {
       at = @At("HEAD"), cancellable = true, require = 4, allow = 4)
   private void portalix$terrainOnly(CallbackInfo callback) {
     if (PortalSceneManager.terrainOnly()) callback.cancel();
+  }
+
+  @Group(name = "portalix$blockEntities", min = 1, max = 1)
+  @WrapWithCondition(method = "extract", at = @At(value = "INVOKE", target =
+      "Lnet/minecraft/client/renderer/extract/LevelExtractor;extractVisibleBlockEntities(Lnet/minecraft/client/Camera;FLnet/minecraft/client/renderer/state/level/LevelRenderState;)V"), require = 0, allow = 1)
+  private boolean portalix$blockEntities(
+      LevelExtractor extractor, Camera camera, float partial,
+      LevelRenderState state) {
+    return !PortalSceneManager.terrainOnly();
+  }
+
+  @Group(name = "portalix$blockEntities", min = 1, max = 1)
+  @WrapWithCondition(method = "extract", at = @At(value = "INVOKE", target =
+      "Lnet/minecraft/client/renderer/extract/LevelExtractor;extractVisibleBlockEntities(Lnet/minecraft/client/Camera;FLnet/minecraft/client/renderer/state/level/LevelRenderState;Lnet/minecraft/client/renderer/culling/Frustum;)V"), require = 0, allow = 1)
+  private boolean portalix$blockEntities(
+      LevelExtractor extractor, Camera camera, float partial,
+      LevelRenderState state, Frustum frustum) {
+    return !PortalSceneManager.terrainOnly();
   }
 
   @WrapWithCondition(method = "extract", at = @At(value = "INVOKE", target =

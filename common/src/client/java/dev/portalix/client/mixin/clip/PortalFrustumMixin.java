@@ -8,6 +8,7 @@ import dev.portalix.client.portal.clip.PortalFrustumState;
 import net.minecraft.client.renderer.culling.Frustum;
 import net.minecraft.world.phys.Vec3;
 import org.joml.FrustumIntersection;
+import org.joml.Matrix4f;
 import org.joml.Matrix4fc;
 import org.joml.Vector3fc;
 import org.joml.Vector4f;
@@ -23,6 +24,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 @Mixin(Frustum.class)
 public abstract class PortalFrustumMixin implements PortalFrustumState {
   @Shadow @Final private FrustumIntersection intersection;
+  @Shadow @Final private Matrix4f matrix;
   @Shadow private Vector4f viewVector;
   @Unique private boolean portalix$aperture;
   @Unique private PortalCullPlane portalix$exit;
@@ -37,6 +39,11 @@ public abstract class PortalFrustumMixin implements PortalFrustumState {
   private FrustumIntersection portalix$halfSpacePlanes(
       FrustumIntersection intersection, Matrix4fc matrix, Operation<FrustumIntersection> original) {
     return PortalFrustumPlanes.set(intersection, matrix);
+  }
+
+  @Override
+  public Matrix4fc portalix$cullingMatrix() {
+    return matrix;
   }
 
   @Override

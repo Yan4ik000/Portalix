@@ -20,6 +20,8 @@ public interface PortalTerrainGraphAccess {
 
   void portalix$built(SectionPos camera, PortalCullPlane plane);
 
+  Visibility portalix$visibility();
+
   boolean portalix$ready(Vec3 camera);
 
   boolean portalix$settled(Vec3 camera);

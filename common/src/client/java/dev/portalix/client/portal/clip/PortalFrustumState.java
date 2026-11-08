@@ -1,9 +1,12 @@
 package dev.portalix.client.portal.clip;
 
 import net.minecraft.world.phys.Vec3;
+import org.joml.Matrix4fc;
 import org.joml.Vector3fc;
 
 public interface PortalFrustumState {
+  Matrix4fc portalix$cullingMatrix();
+
   boolean portalix$isAperture();
 
   void portalix$aperture(Vector3fc direction, PortalCullPlane exit);

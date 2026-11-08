@@ -13,7 +13,6 @@ import net.minecraft.client.DeltaTracker;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.renderer.LevelRenderer;
-import net.minecraft.client.renderer.state.level.CameraRenderState;
 import net.minecraft.client.renderer.state.level.ChunkLoadingRenderState;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.SectionPos;
@@ -43,6 +42,7 @@ final class PortalRenderScene implements AutoCloseable {
   private long completenessTick = Long.MIN_VALUE;
   PortalScreenVisibility.Bounds visible;
   PortalSceneViewport viewport;
+  Vec3 plannedPosition;
 
   PortalRenderScene(ClientLevel level) {
     this.level = level;
@@ -108,16 +108,9 @@ final class PortalRenderScene implements AutoCloseable {
   }
 
   void configure(
-      CameraRenderState parent, Matrix4fc baseProjection, Camera root, Matrix4fc viewEffects) {
-    var transform = link().transform();
-    Vec3 position = transform.point(parent.pos);
-    Quaternionf orientation = transform.rotation().mul(parent.orientation, new Quaternionf());
-    configure(position, orientation, baseProjection, parent.depthFar, root, viewEffects);
-  }
-
-  void configure(
       Vec3 position, Quaternionf orientation, Matrix4fc baseProjection, float far, Camera root,
       Matrix4fc viewEffects) {
+    plannedPosition = position;
     var main = Minecraft.getInstance().gameRenderer.mainRenderTarget();
     var entrance = link().entrance().endpoint();
     var entity = root.entity();
@@ -187,6 +180,7 @@ final class PortalRenderScene implements AutoCloseable {
       terrainComplete = PortalTerrainBackend.completeDemand(renderer, rendering.state().cameraRenderState);
       completenessTick = level.getGameTime();
     }
+    if (destinationReady) return;
     Vec3 exit = link().exit().endpoint().center().add(link().exit().endpoint().normal().scale(.1));
     var block = BlockPos.containing(exit);
     var chunk =
@@ -197,7 +191,7 @@ final class PortalRenderScene implements AutoCloseable {
         chunk != null
             && level.isInsideBuildHeight(block.getY())
             && chunk.getSection(chunk.getSectionIndex(block.getY())).hasOnlyAir();
-    destinationReady |= empty || renderer.isSectionCompiledAndVisible(block);
+    destinationReady = empty || renderer.isSectionCompiledAndVisible(block);
   }
 
   @Override

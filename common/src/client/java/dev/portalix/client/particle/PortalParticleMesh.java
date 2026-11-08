@@ -184,28 +184,30 @@ public final class PortalParticleMesh {
       var d = i + 2 < particles.size() ? control(particles.get(i + 2)) : extrapolate(c, b);
       float advance =
           b.position().distance(c.position()) * parameters.texelSize() / subdivisions;
-      var left = SourcePortalRibbon.evaluate(a, b, c, d, 0, 0, scroll);
-      var right = SourcePortalRibbon.evaluate(a, b, c, d, 0, 1, scroll);
+      var sample = SourcePortalRibbon.evaluate(a, b, c, d, 0);
+      int tint = color(sample.color(), sample.alpha());
       for (int step = 1; step <= subdivisions; step++) {
+        float previousScroll = scroll;
         scroll += advance;
         float t = (float) step / subdivisions;
-        var nextLeft = SourcePortalRibbon.evaluate(a, b, c, d, t, 0, scroll);
-        var nextRight = SourcePortalRibbon.evaluate(a, b, c, d, t, 1, scroll);
-        for (var vertex : List.of(left, right, nextRight, nextLeft)) {
-          Vector3f point = vertex.position();
-          vertices.add(
-              new Vertex(
-                  point.x * PortalSurfaceMesh.SOURCE_X,
-                  point.y * PortalSurfaceMesh.SOURCE_Y,
-                  point.z * PortalSurfaceMesh.SOURCE_X,
-                  vertex.u(),
-                  vertex.v(),
-                  color(vertex.color(), vertex.alpha())));
-        }
-        left = nextLeft;
-        right = nextRight;
+        var next = SourcePortalRibbon.evaluate(a, b, c, d, t);
+        int nextTint = color(next.color(), next.alpha());
+        vertices.add(ribbonVertex(sample.left(), 1, previousScroll, tint));
+        vertices.add(ribbonVertex(sample.right(), 0, previousScroll, tint));
+        vertices.add(ribbonVertex(next.right(), 0, scroll, nextTint));
+        vertices.add(ribbonVertex(next.left(), 1, scroll, nextTint));
+        sample = next;
+        tint = nextTint;
       }
     }
+  }
+
+  private static Vertex ribbonVertex(Vector3f point, float u, float v, int color) {
+    return new Vertex(
+        point.x * PortalSurfaceMesh.SOURCE_X,
+        point.y * PortalSurfaceMesh.SOURCE_Y,
+        point.z * PortalSurfaceMesh.SOURCE_X,
+        u, v, color);
   }
 
   private static SourcePortalRibbon.Control control(SourceParticleSystem.Particle particle) {

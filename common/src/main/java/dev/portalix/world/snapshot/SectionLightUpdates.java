@@ -41,6 +41,15 @@ public final class SectionLightUpdates extends AbstractLongSet {
     }
   }
 
+  public void addColumnRange(int x, int minY, int z, int maxY) {
+    while (minY <= maxY) {
+      int end = Math.min(maxY, minY | 31);
+      int mask = (-1 << (minY & 31)) & (-1 >>> (31 - (end & 31)));
+      add(SectionPos.asLong(x, minY, z) & -32L, mask);
+      minY = end + 1;
+    }
+  }
+
   @Override
   public boolean contains(long section) {
     return (columns.get(section & -32L) & (1 << ((int) section & 31))) != 0;

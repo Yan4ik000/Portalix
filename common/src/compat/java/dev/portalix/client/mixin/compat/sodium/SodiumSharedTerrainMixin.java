@@ -4,6 +4,7 @@ import com.llamalad7.mixinextras.injector.ModifyReturnValue;
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
 import dev.portalix.client.compat.sodium.SharedSodiumTerrain;
+import dev.portalix.client.compat.PortalTerrainBackend;
 import dev.portalix.client.compat.iris.IrisShaders;
 import dev.portalix.client.compat.sodium.SodiumColumnRetirement;
 import dev.portalix.client.compat.sodium.SodiumRegionViews;
@@ -248,6 +249,7 @@ abstract class SodiumSharedTerrainMixin implements SharedSodiumTerrain {
           if (sort.cancelled() || sort.getRenderSection().isDisposed()) continue;
           sort.calculateEstimations(
               jobDurationEstimator, meshTaskSizeEstimator, jobUploadDurationEstimator);
+          PortalTerrainBackend.invalidatePrimaryDemand();
           sort.job = builder.scheduleTask(sort, false, collector::onJobFinished);
           sort.getRenderSection().addRunningJob(sort.job);
           collector.addSubmittedJob(sort.job);

@@ -98,6 +98,11 @@ abstract class TerrainViewGraphMixin implements PortalTerrainGraphAccess {
   }
 
   @Override
+  public Visibility portalix$visibility() {
+    return portalix$visibility;
+  }
+
+  @Override
   public boolean portalix$ready(Vec3 camera) {
     var visibility = portalix$visibility;
     return visibility != null

@@ -113,6 +113,7 @@ public final class PortalTranslucentIndices implements AutoCloseable {
     var allocation = buffer.getAllocation(entry);
     entry.indices = new GpuBufferSlice(buffer.getGpuBuffer(allocation),
         allocation.getOffsetFromHeap(), allocation.getSize());
+    entry.override = null;
     entry.sorted = entry.staged;
     entry.staged = null;
   }
@@ -120,11 +121,14 @@ public final class PortalTranslucentIndices implements AutoCloseable {
   public RenderSectionBufferSlice slice(
       CompiledSectionMesh mesh, RenderSectionBufferSlice original) {
     Entry entry = entries.get(mesh);
-    return entry == null || entry.indices == null
-        ? original
-        : new RenderSectionBufferSlice(
-            original.vertexBuffer(), original.vertexBufferOffset(),
-            entry.indices.buffer(), entry.indices.offset());
+    if (entry == null || entry.indices == null) return original;
+    if (entry.original != original || entry.override == null) {
+      entry.original = original;
+      entry.override = new RenderSectionBufferSlice(
+          original.vertexBuffer(), original.vertexBufferOffset(),
+          entry.indices.buffer(), entry.indices.offset());
+    }
+    return entry.override;
   }
 
   @Override
@@ -147,6 +151,7 @@ public final class PortalTranslucentIndices implements AutoCloseable {
     TranslucencyPointOfView pointOfView;
     CompletableFuture<PortalDistanceSort.Result> pending;
     GpuBufferSlice indices;
+    RenderSectionBufferSlice original, override;
     PortalDistanceSort.Result sorted, staged;
 
     Entry(MeshData.SortState state, BlockPos origin, Executor executor) {
@@ -180,6 +185,7 @@ public final class PortalTranslucentIndices implements AutoCloseable {
       pending = null;
       sorted = staged = null;
       indices = null;
+      original = override = null;
       camera = requestedCamera = null;
     }
   }

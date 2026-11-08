@@ -163,6 +163,7 @@ public final class PortalSceneManager {
   }
 
   public static void invalidateTerrainPreparation() {
+    PortalTerrainBackend.invalidatePrimaryDemand();
     for (var scene : SCENES.values()) scene.terrainComplete = false;
     for (var scene : IDLE_SCENES) scene.terrainComplete = false;
   }
@@ -175,6 +176,7 @@ public final class PortalSceneManager {
   }
 
   public static void invalidateTerrainPreparation(int x, int y, int z) {
+    PortalTerrainBackend.invalidatePrimaryDemand();
     for (var scene : SCENES.values()) scene.terrainChanged(x, y, z);
     for (var scene : IDLE_SCENES) scene.terrainChanged(x, y, z);
   }
@@ -186,6 +188,7 @@ public final class PortalSceneManager {
     var sections = area == null ? null
         : (PortalRenderSections<?>) ((ViewAreaAccessor) area).portalix$sections();
     var releases = terrainReleases;
+    if (releases != null && !releases.isEmpty()) PortalTerrainBackend.invalidatePrimaryDemand();
     CompiledSectionMesh mesh;
     while (releases != null && (mesh = releases.poll()) != null) {
       ((PortalViewIndicesAccess) primary).portalix$indices().release(mesh);
@@ -237,7 +240,7 @@ public final class PortalSceneManager {
     for (PortalRenderScene scene : SCENES.values()) {
       if (PortalAperture.signedDistance(scene.link().exit().endpoint(), position)
           >= -PortalAperture.PLANE_EPSILON)
-        distance = Math.min(distance, scene.camera.position().distanceToSqr(x, y, z));
+        distance = Math.min(distance, scene.plannedPosition.distanceToSqr(x, y, z));
     }
     return distance;
   }
@@ -355,8 +358,10 @@ public final class PortalSceneManager {
       if (scene == null) continue;
       scene.visible = plan.bounds();
       scene.renderedThisFrame = false;
-      scene.configure(
-          plan.position(), plan.orientation(), root.projectionMatrix, root.depthFar, camera, null);
+      scene.plannedPosition = plan.position();
+      if (plan.bounds() == null || scene.lastRenderedFrame != PortalFrameTerrainBudget.frame() - 1)
+        scene.configure(
+            plan.position(), plan.orientation(), root.projectionMatrix, root.depthFar, camera, null);
       scene.extracted = plan.bounds() != null || scene.needsTerrainPreparation();
     }
     // Reserve preparation time before the primary view consumes this frame's budget.
@@ -376,8 +381,8 @@ public final class PortalSceneManager {
       if (scene == null || scene.extracted) {
         positions.add(plan.position());
         // Primary occlusion is resolved later; completed hidden views must not reserve a turn.
-        if (scene != null && (scene.needsTerrainPreparation()
-            || scene.lastRenderedFrame == PortalFrameTerrainBudget.frame() - 1))
+        if (scene != null && (scene.lastRenderedFrame == PortalFrameTerrainBudget.frame() - 1
+            || scene.needsTerrainPreparation()))
           renderers.add(scene.renderer);
       }
     }
@@ -488,11 +493,8 @@ public final class PortalSceneManager {
         scene.viewport =
             PortalSceneViewport.of(scene.visible, main.width, main.height)
                 .retainSize(scene.rendering.target().width, scene.rendering.target().height);
-        scene.configure(
-            parent == null ? primaryCameraState : parent.rendering.state().cameraRenderState,
-            parentProjection,
-            primaryCamera,
-            viewEffects);
+        scene.configure(plan.position(), plan.orientation(), parentProjection,
+            primaryCameraState.depthFar, primaryCamera, viewEffects);
       }
     }
     hidden.sort(Comparator.comparingDouble(plan ->
@@ -623,6 +625,7 @@ public final class PortalSceneManager {
   public static void clear() {
     RenderSystem.assertOnRenderThread();
     level = null;
+    PortalTerrainBackend.invalidatePrimaryDemand();
     terrainWorkCameras = NO_TERRAIN_WORK_CAMERAS;
     terrainUpdates = null;
     terrainReleases = null;

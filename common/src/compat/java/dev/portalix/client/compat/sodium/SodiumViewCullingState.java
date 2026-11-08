@@ -1,6 +1,7 @@
 package dev.portalix.client.compat.sodium;
 
 import dev.portalix.client.mixin.compat.sodium.RenderRegionAccessor;
+import dev.portalix.client.compat.PortalTerrainBackend;
 import dev.portalix.client.mixin.compat.sodium.RenderSectionAccessor;
 import dev.portalix.client.portal.clip.PortalCullPlane;
 import dev.portalix.client.portal.scene.PortalSceneManager;
@@ -236,6 +237,7 @@ public final class SodiumViewCullingState {
   }
 
   private void publishPrimary(DeferredTaskList tasks, SodiumCullRequest.Snapshot snapshot, boolean clipped) {
+    PortalTerrainBackend.invalidatePrimaryDemand();
     // Native completion changes its task queue, not the draw tree/lists already extracted.
     if (parkedPrimary != null)
       parkedPrimary = new PrimaryView(parkedPrimary.tree, parkedPrimary.lists, tasks, parkedPrimary.camera);
@@ -345,6 +347,7 @@ public final class SodiumViewCullingState {
     boolean primary = primaryFootprint == null || primaryFootprint.contains(x, y, z)
         || primarySnapshot != null && primarySnapshot.footprint().contains(x, y, z)
         || pendingView == null && pendingSnapshot != null && pendingSnapshot.footprint().contains(x, y, z);
+    if (primary && (changedLists || work)) PortalTerrainBackend.invalidatePrimaryDemand();
     if (graph || work) {
       for (var snapshot : snapshots) {
         if (!snapshot.footprint().contains(x, y, z)) continue;

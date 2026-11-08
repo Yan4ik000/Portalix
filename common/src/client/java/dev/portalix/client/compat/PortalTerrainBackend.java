@@ -2,6 +2,8 @@ package dev.portalix.client.compat;
 
 import dev.portalix.client.compat.minecraft.VanillaSceneTerrain;
 import dev.portalix.client.mixin.scene.LevelRendererAccessor;
+import dev.portalix.client.portal.clip.PortalCullPlane;
+import dev.portalix.client.portal.clip.PortalFrustumState;
 import dev.portalix.client.portal.terrain.PortalOcclusionOpenings;
 import dev.portalix.client.portal.terrain.PortalTerrainDemand;
 import dev.portalix.client.portal.terrain.PortalTerrainGraphAccess;
@@ -9,19 +11,24 @@ import dev.portalix.client.portal.terrain.PortalFrameTerrainBudget;
 import dev.portalix.client.portal.scene.PortalSceneManager;
 import dev.portalix.api.PortalEndpoint;
 import it.unimi.dsi.fastutil.longs.LongSet;
+import java.util.Objects;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientChunkCache;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.renderer.LevelRenderer;
+import net.minecraft.client.renderer.ViewArea;
 import net.minecraft.client.renderer.state.level.CameraRenderState;
 import net.minecraft.client.renderer.state.level.ChunkLoadingRenderState;
 import net.minecraft.core.SectionPos;
 import net.minecraft.world.phys.AABB;
+import net.minecraft.world.phys.Vec3;
+import org.joml.Matrix4f;
 
 public final class PortalTerrainBackend {
   private static final TerrainIntegration SODIUM = TerrainIntegration.INSTANCE;
   private static long occlusionProofFrame = Long.MIN_VALUE;
   private static boolean primaryTerrainComplete;
+  private static PrimaryDemand primaryDemand;
 
   private PortalTerrainBackend() {}
 
@@ -52,6 +59,7 @@ public final class PortalTerrainBackend {
   }
 
   public static void exchangePrimary(LevelRenderer renderer) {
+    invalidatePrimaryDemand();
     if (SODIUM != null) SODIUM.exchangePrimary(renderer);
     else VanillaSceneTerrain.exchangePrimary(renderer, Minecraft.getInstance().levelRenderer);
   }
@@ -61,6 +69,7 @@ public final class PortalTerrainBackend {
   }
 
   public static void invalidateOcclusion(LevelRenderer renderer) {
+    invalidatePrimaryDemand();
     if (SODIUM != null) SODIUM.invalidateOcclusion(renderer);
     else {
       var graph = renderer.sectionOcclusionGraph();
@@ -103,9 +112,49 @@ public final class PortalTerrainBackend {
       occlusionProofFrame = frame;
       // Main-view uploads happen after portal rendering; an occluder changing this frame cannot hide a view.
       primaryTerrainComplete = Minecraft.getInstance().gameRenderer.gameRenderState()
-          .levelRenderState.sectionUpdateRenderStates.isEmpty() && completeDemand(renderer, camera);
+          .levelRenderState.sectionUpdateRenderStates.isEmpty() && primaryDemandReady(renderer, camera);
     }
     return primaryTerrainComplete;
+  }
+
+  public static void invalidatePrimaryDemand() {
+    primaryDemand = null;
+  }
+
+  private static boolean primaryDemandReady(LevelRenderer renderer, CameraRenderState camera) {
+    if (PortalSceneManager.hasPendingTerrainChanges()) return false;
+    var frustum = camera.cullFrustum;
+    var window = (PortalFrustumState) frustum;
+    Object visibility = SODIUM == null
+        ? ((PortalTerrainGraphAccess) renderer.sectionOcclusionGraph()).portalix$visibility()
+        : null;
+    var area = renderer.viewArea();
+    int distance = Minecraft.getInstance().options.getEffectiveRenderDistance();
+    if (primaryDemand != null
+        && primaryDemand.matches(area, visibility, distance, camera, window)) return true;
+    if (!completeDemand(renderer, camera)) {
+      primaryDemand = null;
+      return false;
+    }
+    primaryDemand = new PrimaryDemand(area, visibility, distance, camera.pos,
+        frustum.getCamX(), frustum.getCamY(), frustum.getCamZ(),
+        new Matrix4f(window.portalix$cullingMatrix()), window.portalix$exitPlane(),
+        window.portalix$preparationCell());
+    return true;
+  }
+
+  private record PrimaryDemand(
+      ViewArea area, Object visibility, int distance, Vec3 position,
+      double x, double y, double z, Matrix4f matrix, PortalCullPlane exit, Vec3 cell) {
+    boolean matches(ViewArea area, Object visibility, int distance,
+        CameraRenderState camera, PortalFrustumState window) {
+      var frustum = camera.cullFrustum;
+      return this.area == area && this.visibility == visibility && this.distance == distance
+          && position.equals(camera.pos) && x == frustum.getCamX() && y == frustum.getCamY()
+          && z == frustum.getCamZ() && matrix.equals(window.portalix$cullingMatrix())
+          && Objects.equals(exit, window.portalix$exitPlane())
+          && Objects.equals(cell, window.portalix$preparationCell());
+    }
   }
 
   public static void chunkLoaded(ClientLevel level, int x, int z) {
@@ -120,6 +169,9 @@ public final class PortalTerrainBackend {
     events.removedLoadedChunks.clear();
     events.removedLoadedChunks.addAll(chunks.removedLoadedChunks());
     VanillaSceneTerrain.captureChanges(chunks, events);
+    if (!events.addedLoadedChunks.isEmpty() || !events.removedLoadedChunks.isEmpty()
+        || !events.addedEmptySections.isEmpty() || !events.removedEmptySections.isEmpty())
+      invalidatePrimaryDemand();
   }
 
   public static void maintain(

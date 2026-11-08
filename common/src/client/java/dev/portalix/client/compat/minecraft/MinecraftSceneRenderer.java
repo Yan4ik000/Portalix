@@ -191,16 +191,18 @@ public final class MinecraftSceneRenderer implements AutoCloseable {
       }
       ((SceneExtractorAccess) extractor)
           .portalix$shareTerrain(Minecraft.getInstance().levelExtractor);
-      var lightExtractor =
-          ((GameRendererAccessor) Minecraft.getInstance().gameRenderer)
-              .portalix$lightmapExtractor();
-      var lightAccess = (LightmapRenderStateExtractorAccessor) lightExtractor;
-      boolean lightDirty = lightAccess.portalix$needsUpdate();
-      lightAccess.portalix$needsUpdate(true);
-      try {
-        lightExtractor.extract(lightmapState, delta.getGameTimeDeltaPartialTick(false));
-      } finally {
-        lightAccess.portalix$needsUpdate(lightDirty);
+      if (visible) {
+        var lightExtractor =
+            ((GameRendererAccessor) Minecraft.getInstance().gameRenderer)
+                .portalix$lightmapExtractor();
+        var lightAccess = (LightmapRenderStateExtractorAccessor) lightExtractor;
+        boolean lightDirty = lightAccess.portalix$needsUpdate();
+        lightAccess.portalix$needsUpdate(true);
+        try {
+          lightExtractor.extract(lightmapState, delta.getGameTimeDeltaPartialTick(false));
+        } finally {
+          lightAccess.portalix$needsUpdate(lightDirty);
+        }
       }
       state.cameraRenderState.fogData =
           fog.setupFog(
