@@ -358,7 +358,8 @@ public final class PortalSurfaceRenderer implements FeatureRenderer<PortalSurfac
                         "textures/portals/models/portals/portal-"
                             + (submit.orange ? "orange" : "blue")
                             + "-color.png"));
-        int rgb = submit.variant.particleColor(submit.orange);
+        boolean tintedRim = submit.variant.usesTintedRim();
+        int rgb = tintedRim ? submit.variant.rimColor(submit.orange) : 0;
         var handTextures =
             IrisShaders.active() && !PortalSceneManager.isPortalView()
                 ? ShaderBackend.INSTANCE.handTextures(scene != null)
@@ -402,7 +403,7 @@ public final class PortalSurfaceRenderer implements FeatureRenderer<PortalSurfac
                             .setColumn(
                                 2, scene == null ? new Vector4f(1, 1, 0, 0) : scene.uvTransform())
                             .m30(scene == null ? 0 : 1)
-                            .m31(submit.variant.cooperative() ? 1 : 0)
+                            .m31(tintedRim ? 1 : 0)
                             .m32(RenderSystem.getDevice().getDeviceInfo().isZZeroToOne() ? 1 : 0)
                             .m33(PortalSurfaceMesh.UV_SCALE)),
                 new com.mojang.blaze3d.systems.ScissorState(

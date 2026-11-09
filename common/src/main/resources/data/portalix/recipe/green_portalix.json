@@ -1,0 +1,14 @@
+{
+  "type": "minecraft:crafting_shapeless",
+  "category": "equipment",
+  "ingredients": [
+    "portalix:portalix",
+    "portalix:control_board",
+    "minecraft:lime_dye",
+    "minecraft:green_dye"
+  ],
+  "result": {
+    "id": "portalix:green_portalix",
+    "count": 1
+  }
+}

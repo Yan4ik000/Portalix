@@ -217,12 +217,7 @@ public final class WorldScenarioFixture implements AutoCloseable {
       throw new IllegalStateException("The course player must be bound before changing the gun variant");
     if (!gunId.equals(PortalixIdentity.get(owner.getInventory().getItem(0))))
       throw new IllegalStateException("The course gun is no longer in its assigned hotbar slot");
-    gun = new ItemStack(switch (variant) {
-      case STANDARD -> ModItems.PORTALIX.get();
-      case POTATO -> ModItems.POTATO_PORTALIX.get();
-      case ORANGE -> ModItems.ORANGE_PORTALIX.get();
-      case BLUE -> ModItems.BLUE_PORTALIX.get();
-    });
+    gun = new ItemStack(ModItems.gun(variant));
     gun.set(PortalixIdentity.ID.get(), gunId);
     owner.getInventory().setItem(0, gun);
   }

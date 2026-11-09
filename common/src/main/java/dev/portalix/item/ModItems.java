@@ -2,7 +2,9 @@ package dev.portalix.item;
 
 import dev.portalix.PortalixMod;
 import dev.portalix.platform.RegistryPlatform;
+import java.util.EnumMap;
 import java.util.List;
+import java.util.Map;
 import java.util.function.Supplier;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.Identifier;
@@ -10,13 +12,11 @@ import net.minecraft.resources.ResourceKey;
 import net.minecraft.world.item.Item;
 
 public final class ModItems {
-  public static final Supplier<Item> PORTALIX = registerGun("portalix", PortalixVariant.STANDARD);
-  public static final Supplier<Item> POTATO_PORTALIX =
-      registerGun("potato_portalix", PortalixVariant.POTATO);
-  public static final Supplier<Item> ORANGE_PORTALIX =
-      registerGun("orange_portalix", PortalixVariant.ORANGE);
-  public static final Supplier<Item> BLUE_PORTALIX =
-      registerGun("blue_portalix", PortalixVariant.BLUE);
+  private static final Map<PortalixVariant, Supplier<Item>> GUNS = registerGuns();
+  public static final Supplier<Item> PORTALIX = GUNS.get(PortalixVariant.STANDARD);
+  public static final Supplier<Item> POTATO_PORTALIX = GUNS.get(PortalixVariant.POTATO);
+  public static final Supplier<Item> ORANGE_PORTALIX = GUNS.get(PortalixVariant.ORANGE);
+  public static final Supplier<Item> BLUE_PORTALIX = GUNS.get(PortalixVariant.BLUE);
   public static final Supplier<Item> CONTROL_BOARD = register("control_board");
   public static final Supplier<Item> PORTAL_CORE = register("portal_core");
   public static final Supplier<Item> PORTALIX_SHELL = register("portalix_shell");
@@ -27,10 +27,19 @@ public final class ModItems {
 
   private ModItems() {}
 
-  private static Supplier<Item> registerGun(String name, PortalixVariant variant) {
-    var id = PortalixMod.id(name);
-    return RegistryPlatform.INSTANCE.register(Registries.ITEM, id, () -> new PortalixItem(
-        new Item.Properties().setId(ResourceKey.create(Registries.ITEM, id)).stacksTo(1), variant));
+  public static Item gun(PortalixVariant variant) {
+    return GUNS.get(variant).get();
+  }
+
+  private static Map<PortalixVariant, Supplier<Item>> registerGuns() {
+    var guns = new EnumMap<PortalixVariant, Supplier<Item>>(PortalixVariant.class);
+    for (PortalixVariant variant : PortalixVariant.values()) {
+      var id = variant.itemId();
+      var key = ResourceKey.create(Registries.ITEM, id);
+      guns.put(variant, RegistryPlatform.INSTANCE.register(Registries.ITEM, id,
+          () -> new PortalixItem(new Item.Properties().setId(key).stacksTo(1), variant)));
+    }
+    return guns;
   }
 
   private static Supplier<Item> register(String name) {
@@ -43,7 +52,7 @@ public final class ModItems {
     RegistryPlatform.INSTANCE.appendItems(
         ResourceKey.create(
             Registries.CREATIVE_MODE_TAB, Identifier.withDefaultNamespace("tools_and_utilities")),
-        List.of(PORTALIX, POTATO_PORTALIX, ORANGE_PORTALIX, BLUE_PORTALIX));
+        List.copyOf(GUNS.values()));
     RegistryPlatform.INSTANCE.appendItems(
         ResourceKey.create(
             Registries.CREATIVE_MODE_TAB, Identifier.withDefaultNamespace("ingredients")),

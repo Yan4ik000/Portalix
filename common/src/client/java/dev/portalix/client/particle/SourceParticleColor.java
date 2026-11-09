@@ -9,17 +9,19 @@ final class SourceParticleColor {
   private SourceParticleColor() {}
 
   static Vector3f gunPalette(PortalixVariant variant, boolean secondary) {
-    int rgb = variant.particleColor(secondary);
+    return channels(variant.particleColor(secondary));
+  }
+
+  private static Vector3f channels(int rgb) {
     return new Vector3f(rgb >> 16 & 255, rgb >> 8 & 255, rgb & 255);
   }
 
   static Vector3f portalPalette(PortalixVariant variant, boolean secondary) {
-    var color = gunPalette(variant, secondary);
-    // Cooperative portal tints are linear; Source particle colors are gamma-encoded.
-    if (variant.cooperative()) {
-      for (int channel = 0; channel < 3; channel++)
-        color.setComponent(channel, (float) Math.pow(color.get(channel) / 255.0, 1.0 / GAMMA) * 255);
-    }
+    if (!variant.usesTintedRim()) return gunPalette(variant, secondary);
+    // Portal rim tints are linear; Source particle colors are gamma-encoded.
+    var color = channels(variant.rimColor(secondary));
+    for (int channel = 0; channel < 3; channel++)
+      color.setComponent(channel, (float) Math.pow(color.get(channel) / 255.0, 1.0 / GAMMA) * 255);
     return color;
   }
 

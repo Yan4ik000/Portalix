@@ -3,7 +3,9 @@ package dev.portalix.client.gun.model;
 import dev.portalix.PortalixMod;
 import dev.portalix.client.gun.render.PortalixItemRenderer;
 import dev.portalix.item.PortalixVariant;
+import java.util.Arrays;
 import java.util.Set;
+import java.util.stream.Collectors;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.renderer.item.ItemModel;
 import net.minecraft.client.renderer.item.ItemModelResolver;
@@ -15,9 +17,9 @@ import net.minecraft.world.item.ItemDisplayContext;
 import net.minecraft.world.item.ItemStack;
 
 public final class PortalixItemModel implements ItemModel {
-  public static final Set<Identifier> MODELS = Set.of(
-      PortalixMod.id("portalix"), PortalixMod.id("potato_portalix"),
-      PortalixMod.id("orange_portalix"), PortalixMod.id("blue_portalix"));
+  public static final Set<Identifier> MODELS = Arrays.stream(PortalixVariant.values())
+      .map(PortalixVariant::itemId)
+      .collect(Collectors.toUnmodifiableSet());
 
   private final ItemModel original;
 

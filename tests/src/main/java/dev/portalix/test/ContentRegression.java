@@ -4,9 +4,9 @@ import static dev.portalix.test.ServerRegressionSuite.check;
 
 import dev.portalix.item.ModItems;
 import dev.portalix.item.PortalixIdentity;
+import dev.portalix.item.PortalixVariant;
 import java.util.ArrayList;
 import java.util.HashSet;
-import java.util.List;
 import java.util.UUID;
 import net.minecraft.world.item.DyeColor;
 import net.minecraft.world.item.Item;
@@ -36,15 +36,18 @@ final class ContentRegression {
         Items.ENDER_PEARL, Items.NETHER_STAR, Items.ENDER_PEARL, Items.OBSIDIAN, Items.ENDER_PEARL, Items.OBSIDIAN);
     Item gun = ModItems.PORTALIX.get();
     craft(world, gun, Items.AIR, cooling, Items.AIR, core, blackHole, shell, Items.AIR, board, Items.AIR);
-    craft(world, ModItems.BLUE_PORTALIX.get(), gun, board, Items.DYE.pick(DyeColor.CYAN), Items.DYE.pick(DyeColor.PURPLE));
-    craft(world, ModItems.ORANGE_PORTALIX.get(), gun, board, Items.DYE.pick(DyeColor.YELLOW), Items.DYE.pick(DyeColor.RED));
+    craftVariant(world, PortalixVariant.BLUE, DyeColor.CYAN, DyeColor.PURPLE);
+    craftVariant(world, PortalixVariant.ORANGE, DyeColor.YELLOW, DyeColor.RED);
+    craftVariant(world, PortalixVariant.GREEN, DyeColor.LIME, DyeColor.GREEN);
+    craftVariant(world, PortalixVariant.AMETHYST, DyeColor.MAGENTA, DyeColor.PURPLE);
+    craftVariant(world, PortalixVariant.NEON, DyeColor.CYAN, DyeColor.PINK);
+    craftVariant(world, PortalixVariant.MONOCHROME, DyeColor.BLACK, DyeColor.WHITE);
     craft(world, ModItems.POTATOS.get(), ModItems.AI_MODULE.get(), Items.POTATO);
     craft(world, ModItems.POTATO_PORTALIX.get(), gun, ModItems.POTATOS.get());
 
     var identities = new HashSet<UUID>();
-    for (Item item : List.of(gun, ModItems.BLUE_PORTALIX.get(), ModItems.ORANGE_PORTALIX.get(),
-        ModItems.POTATO_PORTALIX.get())) {
-      var stack = new ItemStack(item);
+    for (PortalixVariant variant : PortalixVariant.values()) {
+      var stack = new ItemStack(ModItems.gun(variant));
       check(stack.getMaxStackSize() == 1, "Portalixs must not stack");
       var identity = PortalixIdentity.ensure(stack);
       check(identities.add(identity), "Independent guns share an identity");
@@ -52,6 +55,12 @@ final class ContentRegression {
     }
     check(PortalixIdentity.get(new ItemStack(Items.IRON_INGOT)) == null, "An ordinary item became a portalix");
     BuiltinLootRegression.run(world);
+  }
+
+  private static void craftVariant(RegressionWorld world, PortalixVariant variant,
+      DyeColor first, DyeColor second) {
+    craft(world, ModItems.gun(variant), ModItems.PORTALIX.get(), ModItems.CONTROL_BOARD.get(),
+        Items.DYE.pick(first), Items.DYE.pick(second));
   }
 
   private static void craft(RegressionWorld world, Item result, Item... ingredients) {

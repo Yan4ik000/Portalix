@@ -1,25 +1,35 @@
 package dev.portalix.item;
 
 import com.google.gson.JsonArray;
+import dev.portalix.PortalixMod;
 import dev.portalix.resource.ModAssetLoader;
 import java.util.HashMap;
 import java.util.Map;
+import net.minecraft.resources.Identifier;
 import net.minecraft.world.item.ItemStack;
 
 public enum PortalixVariant {
-  STANDARD("standard", "", false),
-  POTATO("standard", "", true),
-  ORANGE("orange", "_orange", false),
-  BLUE("blue", "_blue", false);
+  STANDARD("standard", "", "portalix"),
+  POTATO("standard", "", "potato_portalix"),
+  ORANGE("orange"),
+  BLUE("blue"),
+  GREEN("green"),
+  AMETHYST("amethyst"),
+  NEON("neon"),
+  MONOCHROME("monochrome");
 
   private final String palette;
   private final String skin;
-  private final boolean potato;
+  private final Identifier itemId;
 
-  PortalixVariant(String palette, String skin, boolean potato) {
+  PortalixVariant(String palette) {
+    this(palette, "_" + palette, palette + "_portalix");
+  }
+
+  PortalixVariant(String palette, String skin, String itemName) {
     this.palette = palette;
     this.skin = skin;
-    this.potato = potato;
+    this.itemId = PortalixMod.id(itemName);
   }
 
   public static PortalixVariant of(ItemStack stack) {
@@ -35,53 +45,67 @@ public enum PortalixVariant {
     return skin;
   }
 
+  public Identifier itemId() {
+    return itemId;
+  }
+
   public boolean potato() {
-    return potato;
+    return this == POTATO;
   }
 
   public int particleColor(boolean secondary) {
-    ParticleColors colors = Palettes.COLORS.get(palette);
-    return secondary ? colors.secondary() : colors.primary();
+    return Palettes.BY_NAME.get(palette).particles().select(secondary);
+  }
+
+  public int rimColor(boolean secondary) {
+    return Palettes.BY_NAME.get(palette).rim().select(secondary);
   }
 
   public int particleGlowColor(boolean secondary) {
-    int color = particleColor(secondary);
-    int red = color >> 16 & 255;
-    int green = color >> 8 & 255;
-    int blue = color & 255;
-    float scale = 255.0F / Math.max(red, Math.max(green, blue));
-    return Math.round(red * scale) << 16
-        | Math.round(green * scale) << 8
-        | Math.round(blue * scale);
+    return Palettes.BY_NAME.get(palette).glow().select(secondary);
   }
 
-  public boolean cooperative() {
-    return this == ORANGE || this == BLUE;
+  public boolean usesTintedRim() {
+    return Palettes.BY_NAME.get(palette).rim() != null;
   }
 
-  private record ParticleColors(int primary, int secondary) {
+  private record Colors(int primary, int secondary) {
+    private static Colors read(JsonArray pair) {
+      return new Colors(rgb(pair.get(0).getAsJsonArray()), rgb(pair.get(1).getAsJsonArray()));
+    }
+
     private static int rgb(JsonArray color) {
       return color.get(0).getAsInt() << 16 | color.get(1).getAsInt() << 8 | color.get(2).getAsInt();
     }
+
+    int select(boolean useSecondary) {
+      return useSecondary ? secondary : primary;
+    }
   }
 
-  private static final class Palettes {
-    static final Map<String, ParticleColors> COLORS = load();
+  private record Palette(Colors particles, Colors rim, Colors glow) {}
 
-    private static Map<String, ParticleColors> load() {
+  private static final class Palettes {
+    static final Map<String, Palette> BY_NAME = load();
+
+    private static Map<String, Palette> load() {
       var data = ModAssetLoader.json("/assets/portalix/gun_palettes.json");
-      Map<String, ParticleColors> colors = new HashMap<>();
+      Map<String, Palette> palettes = new HashMap<>();
       for (PortalixVariant variant : values()) {
-        colors.computeIfAbsent(
+        palettes.computeIfAbsent(
             variant.palette(),
             name -> {
-              var particles = data.getAsJsonObject(name).getAsJsonArray("particles");
-              return new ParticleColors(
-                  ParticleColors.rgb(particles.get(0).getAsJsonArray()),
-                  ParticleColors.rgb(particles.get(1).getAsJsonArray()));
+              var entry = data.getAsJsonObject(name);
+              var particles = Colors.read(entry.getAsJsonArray("particles"));
+              var rim = entry.get("rim");
+              var glow = entry.get("glow");
+              return new Palette(
+                  particles,
+                  rim.isJsonNull() ? null : Colors.read(rim.getAsJsonArray()),
+                  glow.isJsonNull() ? particles : Colors.read(glow.getAsJsonArray()));
             });
       }
-      return Map.copyOf(colors);
+      return Map.copyOf(palettes);
     }
   }
 }
