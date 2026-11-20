@@ -10,6 +10,24 @@ pluginManagement {
     }
 }
 
+def minecraftVersion = providers.gradleProperty('mcVersion').orElse(providers.gradleProperty('default_minecraft_version')).get()
+def versionDirectories = new File(settingsDir, 'versions').listFiles().findAll { directory ->
+    directory.isDirectory() && new File(directory, 'gradle.properties').isFile()
+}
+def versionDirectory = versionDirectories.find { it.name == minecraftVersion }
+if (versionDirectory == null) {
+    def supported = versionDirectories*.name.sort().join(', ')
+    throw new GradleException("Unsupported Minecraft version '${minecraftVersion}'. Set -PmcVersion to one of: ${supported}")
+}
+
+// Loom stores generated launch arguments in Gradle's project cache.
+def cacheDirectory = gradle.startParameter.projectCacheDir ?: new File(settingsDir, '.gradle')
+gradle.startParameter.projectCacheDir = new File(cacheDirectory, minecraftVersion)
+gradle.rootProject { project ->
+    project.ext.minecraft_version = minecraftVersion
+    project.ext.minecraftSourcesDir = versionDirectory
+}
+
 rootProject.name = 'Portalix'
 includeBuild('gradle/testing') { name = 'test-infrastructure' }
 include 'common', 'fabric', 'neoforge'

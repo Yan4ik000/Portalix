@@ -1,11 +1,12 @@
 def gameTestReportFile = layout.buildDirectory.file('reports/gametest/results.xml')
+def gameTestRunDirectory = layout.buildDirectory.dir('run/gametest')
 
 loom {
     runs {
         regressionServer {
             server()
             source sourceSets.regression
-            runDir 'build/run/gametest'
+            runDir gameTestRunDirectory.get().asFile.absolutePath
             property 'fabric-api.gametest', 'true'
             rootProject.regressionEnvironmentProperties.each { name, value -> property name, value }
             property 'fabric-api.gametest.filter', rootProject.regressionServerTestFilter
@@ -18,13 +19,13 @@ loom {
 }
 
 def resetGameTestWorld = tasks.register('resetRegressionServerWorld', Delete) {
-    delete layout.buildDirectory.dir('run/gametest/world')
+    delete gameTestRunDirectory.map { it.dir('world') }
 }
 
 tasks.named('runRegressionServer') {
     dependsOn resetGameTestWorld
     doFirst {
-        def runDirectory = layout.buildDirectory.dir('run/gametest').get().asFile
+        def runDirectory = gameTestRunDirectory.get().asFile
         runDirectory.mkdirs()
         new File(runDirectory, 'eula.txt').createNewFile()
     }

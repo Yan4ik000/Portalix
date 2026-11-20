@@ -5,13 +5,10 @@ plugins {
     id 'net.fabricmc.fabric-loom'
 }
 
-sourceSets.main {
-    java.srcDir project(':common').file('src/main/java')
-    resources.srcDir project(':common').file('src/main/resources')
-}
+rootProject.addMinecraftSources(sourceSets.main, 'common/src/main')
 
 loom {
-    accessWidenerPath = project(':common').file('src/main/resources/portalix.accesswidener')
+    accessWidenerPath = new File(rootProject.minecraftSourcesDir, 'common/main/resources/portalix.accesswidener')
     splitEnvironmentSourceSets()
     mods {
         portalix {
@@ -20,17 +17,13 @@ loom {
         }
     }
     runs {
-        client { runDir 'build/run/client' }
-        server { runDir 'build/run/server' }
+        client { runDir layout.buildDirectory.dir('run/client').get().asFile.absolutePath }
+        server { runDir layout.buildDirectory.dir('run/server').get().asFile.absolutePath }
     }
 }
 
-sourceSets.client {
-    java.srcDir project(':common').file('src/client/java')
-    resources.srcDir project(':common').file('src/client/resources')
-    java.srcDir project(':common').file('src/compat/java')
-    resources.srcDir project(':common').file('src/compat/resources')
-}
+rootProject.addMinecraftSources(sourceSets.client, 'common/src/client')
+rootProject.addMinecraftSources(sourceSets.client, 'common/src/compat')
 
 dependencies {
     minecraft "com.mojang:minecraft:${rootProject.minecraft_version}"

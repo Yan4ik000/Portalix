@@ -33,11 +33,14 @@ class ReleaseContractsTest {
                 - ['LICENSE.md', 'META-INF/MANIFEST.MF']) as Set
             def versions = [sodium: '0.9.2+mc26.2', iris: '1.11.4+mc26.2']
             def verify = { Map<String, String> contents ->
-                VerifyModArchive.verify(archive("${loader}.jar", contents), loader, '0.1.0',
+                VerifyModArchive.verify(archive("${loader}.jar", contents), loader, '0.1.0', '26.2',
                     resources, classes, versions)
             }
             verify(entries)
             String path = loader == 'fabric' ? 'fabric.mod.json' : 'META-INF/neoforge.mods.toml'
+            String wrongMinecraft = loader == 'fabric' ? entries[path].replace('"minecraft":"26.2"', '"minecraft":"26.3"') :
+                entries[path].replace('[26.2]', '[26.3]')
+            assertThrows(GradleException) { verify(entries + [(path): wrongMinecraft]) }
             String invalidRange = loader == 'fabric' ? entries[path].replace('>0.9.2+mc26.2', '*') :
                 entries[path].replace('[0.9.2+mc26.2]', '[0,)')
             assertThrows(GradleException) { verify(entries + [(path): invalidRange]) }
@@ -80,6 +83,7 @@ class ReleaseContractsTest {
         if (loader == 'fabric') {
             entries['portalix.accesswidener'] = 'accessWidener v2 official'
             entries['fabric.mod.json'] = JsonOutput.toJson([id: 'portalix', version: '0.1.0',
+                depends: [minecraft: '26.2'],
                 accessWidener: 'portalix.accesswidener',
                 mixins: commonConfigs + clientConfigs.collect { [config: it, environment: 'client'] },
                 entrypoints: [main: ['dev.portalix.PortalixMod']], breaks:
@@ -89,6 +93,7 @@ class ReleaseContractsTest {
             entries['META-INF/accesstransformer.cfg'] = 'public example.Type'
             String path = 'META-INF/neoforge.mods.toml'
             configs.each { config -> entries[path] += "\n[[mixins]]\nconfig=\"${config}\"\n" }
+            entries[path] += '\n[[dependencies.portalix]]\nmodId="minecraft"\ntype="required"\nversionRange="[26.2]"\n'
             ['sodium', 'iris'].each { id ->
                 String range = "[${id == 'sodium' ? '0.9.2+mc26.2' : '1.11.4+mc26.2'}]"
                 entries[path] += "\n[[dependencies.portalix]]\nmodId=\"${id}\"\ntype=\"optional\"\nversionRange=\"${range}\"\n"

@@ -3,7 +3,7 @@ plugins {
 }
 
 loom {
-    accessWidenerPath = file('src/main/resources/portalix.accesswidener')
+    accessWidenerPath = new File(rootProject.minecraftSourcesDir, 'common/main/resources/portalix.accesswidener')
     splitEnvironmentSourceSets()
 }
 
@@ -15,10 +15,7 @@ dependencies {
     clientCompileOnly "maven.modrinth:iris:${rootProject.iris_version}"
 }
 
-sourceSets.client {
-    java.srcDir 'src/compat/java'
-    resources.srcDir 'src/compat/resources'
-}
+rootProject.addMinecraftSources(sourceSets.client, 'common/src/compat')
 
 tasks.named('jar') {
     enabled = false

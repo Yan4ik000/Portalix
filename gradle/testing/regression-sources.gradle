@@ -7,26 +7,19 @@ import VerifyRegressionLog
 
 sourceSets {
     test {
-        java.srcDir rootProject.file('common/src/test/java')
-        resources.srcDir rootProject.file('common/src/test/resources')
+        rootProject.addMinecraftSources(sourceSets.test, 'common/src/test')
     }
     regression {
-        java.srcDir rootProject.file('tests/src/main/java')
-        resources.srcDir rootProject.file('tests/src/main/resources')
-        resources.srcDir rootProject.file("tests/${project.name}/resources")
-        java.srcDir rootProject.file("tests/${project.name}/java")
+        rootProject.addMinecraftSources(sourceSets.regression, 'tests/src/main')
+        rootProject.addMinecraftSources(sourceSets.regression, "tests/${project.name}/main")
         compileClasspath += sourceSets.main.output + sourceSets.main.compileClasspath
         runtimeClasspath += sourceSets.main.output + sourceSets.main.runtimeClasspath
     }
     regressionClient {
-        java.srcDir rootProject.file('tests/src/client/java')
-        java.srcDir rootProject.file("tests/${project.name}/client/java")
-        resources.srcDir rootProject.file("tests/${project.name}/client/resources")
-        java.srcDir rootProject.file('tests/src/benchmark/java')
-        java.srcDir rootProject.file('tests/src/compat/java')
-        resources.srcDir rootProject.file('tests/src/compat/resources')
-        resources.srcDir rootProject.file('tests/src/client/resources')
-        resources.srcDir rootProject.file('tests/src/benchmark/resources')
+        rootProject.addMinecraftSources(sourceSets.regressionClient, 'tests/src/client')
+        rootProject.addMinecraftSources(sourceSets.regressionClient, "tests/${project.name}/client")
+        rootProject.addMinecraftSources(sourceSets.regressionClient, 'tests/src/benchmark')
+        rootProject.addMinecraftSources(sourceSets.regressionClient, 'tests/src/compat')
         compileClasspath += sourceSets.regression.output + sourceSets.client.output + sourceSets.client.compileClasspath
         runtimeClasspath += sourceSets.regression.output + sourceSets.client.output + sourceSets.client.runtimeClasspath
     }
@@ -58,7 +51,7 @@ ext.benchmarkReportDirectory = rootProject.layout.buildDirectory.dir("reports/be
         supported = profile.supported
         runDirectory = benchmark ? benchmarkRunDirectory : regressionRunDirectory
         reportDirectory = benchmark ? benchmarkReportDirectory : regressionReportDirectory
-        shaderCacheDirectory = rootProject.layout.projectDirectory.dir('.gradle/regression-assets')
+        shaderCacheDirectory = rootProject.layout.projectDirectory.dir(".gradle/regression-assets/${rootProject.minecraft_version}")
         minecraftClasspath.from(sourceSets.main.compileClasspath)
     }
 

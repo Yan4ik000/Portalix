@@ -16,8 +16,8 @@ def timestamp():
     return datetime.now(timezone.utc).isoformat()
 
 
-def select_profiles(repository, profiles, compatibility=False):
-    catalog = json.loads((repository / "tests/test-profiles.json").read_text(encoding="utf-8"))
+def select_profiles(catalog_file, profiles, compatibility=False):
+    catalog = json.loads(catalog_file.read_text(encoding="utf-8"))
     available = [
         f"{loader}-{renderer}-{backend}"
         for loader in catalog["loaders"]
@@ -121,11 +121,11 @@ def stop_process(process):
 
 
 def run_matrix(repository, args, profiles):
-    report_root = repository / "tests/build/reports/regression"
+    report_root = repository / "tests/build" / args.mc_version / "reports/regression"
     if args.packaged:
         report_root = report_root / "packaged"
     run = new_run(profiles, report_root)
-    run.update(clientTest=args.client_test, packaged=args.packaged,
+    run.update(minecraftVersion=args.mc_version, clientTest=args.client_test, packaged=args.packaged,
                expectedStatus="unsupported" if args.compatibility else "passed")
     write_run(run, report_root)
     verified_loaders = set()
@@ -141,7 +141,7 @@ def run_matrix(repository, args, profiles):
             loader = profile.split("-", 1)[0]
             task = ":testClient" if args.compatibility or loader in verified_loaders else ":testProfile"
             wrapper = repository / ("gradlew.bat" if os.name == "nt" else "gradlew")
-            command = [str(wrapper), task, f"-PtestProfile={profile}",
+            command = [str(wrapper), task, f"-PmcVersion={args.mc_version}", f"-PtestProfile={profile}",
                        f"-PclientTest={args.client_test}", f"-PtestDiagnostics={args.diagnostics}",
                        f"-PtestPackaged={str(args.packaged).lower()}",
                        "--no-daemon", "--console=plain"]
@@ -186,6 +186,18 @@ def run_matrix(repository, args, profiles):
 
 def main():
     parser = argparse.ArgumentParser(description="Run the Fabric/NeoForge regression matrix.")
+    versions_dir = REPOSITORY / "versions"
+    versions = sorted(path.parent.name for path in versions_dir.glob("*/gradle.properties"))
+    default_version = None
+    for line in (REPOSITORY / "gradle.properties").read_text(encoding="utf-8").splitlines():
+        key, _, value = line.partition("=")
+        if key.strip() == "default_minecraft_version":
+            default_version = value.strip()
+            break
+    if default_version not in versions:
+        parser.error("default_minecraft_version in gradle.properties must match a version directory")
+    parser.add_argument("--mc-version", choices=versions, default=default_version,
+                        help="Minecraft version (default: %(default)s)")
     parser.add_argument("--profiles", nargs="+", default=[])
     parser.add_argument("--client-test", default="all")
     parser.add_argument("--diagnostics", choices=("compact", "full"), default="compact")
@@ -196,14 +208,20 @@ def main():
     args = parser.parse_args()
     if not 60 <= args.timeout_seconds <= 7200:
         parser.error("--timeout-seconds must be between 60 and 7200")
+    version_dir = versions_dir / args.mc_version
     try:
-        profiles = select_profiles(REPOSITORY, args.profiles, args.compatibility)
+        profiles = select_profiles(version_dir / "tests/test-profiles.json", args.profiles, args.compatibility)
     except ValueError as error:
         parser.error(str(error))
     if args.list:
         print("\n".join(profiles))
         return 0
-    scenes = json.loads((REPOSITORY / "tests/src/client/resources/portalix-regression-scenes.json").read_text(encoding="utf-8"))
+    scene_path = Path("tests/src/client/resources/portalix-regression-scenes.json")
+    version_scene_path = version_dir / "tests/client/resources" / scene_path.name
+    scene_files = [path for path in (REPOSITORY / scene_path, version_scene_path) if path.is_file()]
+    if len(scene_files) != 1:
+        parser.error(f"Expected exactly one {scene_path} in shared or Minecraft {args.mc_version} sources")
+    scenes = json.loads(scene_files[0].read_text(encoding="utf-8"))
     if args.client_test != "all" and args.client_test not in scenes["scenes"]:
         parser.error(f"Unknown client system: {args.client_test}")
     try:

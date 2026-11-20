@@ -33,6 +33,7 @@ def archiveContract = tasks.register('verifyModArchive', VerifyModArchive) {
     archiveFile = tasks.named('jar', Jar).flatMap { it.archiveFile }
     loaderName = project.name
     modVersion = project.version.toString()
+    minecraftVersion = rootProject.minecraft_version
     declaredRenderVersions = [sodium: rootProject.sodium_compat_version, iris: rootProject.iris_compat_version]
     classDirectories.from(sourceSets.main.output.classesDirs, sourceSets.client.output.classesDirs)
     requiredResources = provider {

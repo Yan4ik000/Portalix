@@ -18,6 +18,7 @@ abstract class VerifyModArchive extends DefaultTask {
     @InputFile @PathSensitive(PathSensitivity.NONE) abstract RegularFileProperty getArchiveFile()
     @Input abstract Property<String> getLoaderName()
     @Input abstract Property<String> getModVersion()
+    @Input abstract Property<String> getMinecraftVersion()
     @Input abstract MapProperty<String, String> getDeclaredRenderVersions()
     @Input abstract ListProperty<String> getRequiredResources()
     @InputFiles @PathSensitive(PathSensitivity.RELATIVE) abstract ConfigurableFileCollection getClassDirectories()
@@ -31,11 +32,11 @@ abstract class VerifyModArchive extends DefaultTask {
                     classes.add(root.toPath().relativize(file.toPath()).toString().replace('\\', '/'))
             }
         }
-        verify(archiveFile.get().asFile, loaderName.get(), modVersion.get(),
+        verify(archiveFile.get().asFile, loaderName.get(), modVersion.get(), minecraftVersion.get(),
             requiredResources.get() as Set, classes, declaredRenderVersions.get())
     }
 
-    static void verify(File file, String loader, String version,
+    static void verify(File file, String loader, String version, String minecraft,
             Set<String> resources, Set<String> classes, Map<String, String> renderVersions) {
         new ZipFile(file).withCloseable { archive ->
             List<String> names = archive.entries().toList().findAll { !it.directory }.collect { it.name }
@@ -59,6 +60,8 @@ abstract class VerifyModArchive extends DefaultTask {
             if (loader == 'fabric') {
                 require(!readText(archive, 'fabric.mod.json').contains('${'), 'Unexpanded Fabric metadata')
                 def json = readJson(archive, 'fabric.mod.json')
+                require(json.depends?.minecraft == minecraft,
+                    "Packaged Fabric Minecraft dependency must be ${minecraft}")
                 require(json.accessWidener == 'portalix.accesswidener' && entries.contains(json.accessWidener),
                     'Fabric access widener is absent or misdeclared')
                 Map<String, String> expectedConfigs = [
@@ -99,12 +102,13 @@ abstract class VerifyModArchive extends DefaultTask {
                 require(entries.contains('META-INF/accesstransformer.cfg') && !entries.contains('portalix.accesswidener'),
                     'NeoForge access rules are absent or include the Fabric access widener')
                 def sections = metadata.split(/(?m)^\[\[dependencies\.portalix]]/).drop(1)
-                renderVersions.each { id, selected ->
+                ([minecraft: minecraft] + renderVersions).each { id, selected ->
                     def dependency = sections.findAll { (it =~ /(?m)^\s*modId\s*=\s*"${id}"/).find() }
                     require(dependency.size() == 1, "Missing or duplicate NeoForge dependency ${id}")
-                    require(ModArchiveMetadata.stringValue(dependency[0], 'type') == 'optional' &&
+                    String type = id == 'minecraft' ? 'required' : 'optional'
+                    require(ModArchiveMetadata.stringValue(dependency[0], 'type') == type &&
                         ModArchiveMetadata.stringValue(dependency[0], 'versionRange') == "[${selected}]",
-                        "Packaged NeoForge ${id} must be optional and allow only ${selected}")
+                        "Packaged NeoForge ${id} must be ${type} and allow only ${selected}")
                 }
             }
             configs.each { path ->

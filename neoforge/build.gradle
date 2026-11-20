@@ -15,15 +15,12 @@ tasks.withType(NeoFormRuntimeTask).configureEach {
 
 sourceSets {
     main {
-        java.srcDir project(':common').file('src/main/java')
-        resources.srcDir project(':common').file('src/main/resources')
+        rootProject.addMinecraftSources(it, 'common/src/main')
         resources.exclude 'portalix.accesswidener'
     }
     client {
-        java.srcDir project(':common').file('src/client/java')
-        resources.srcDir project(':common').file('src/client/resources')
-        java.srcDir project(':common').file('src/compat/java')
-        resources.srcDir project(':common').file('src/compat/resources')
+        rootProject.addMinecraftSources(it, 'common/src/client')
+        rootProject.addMinecraftSources(it, 'common/src/compat')
         compileClasspath += sourceSets.main.output
         runtimeClasspath += sourceSets.main.output
     }
@@ -39,7 +36,7 @@ configurations {
 neoForge {
     version = rootProject.neoforge_version
     addModdingDependenciesTo(sourceSets.client)
-    accessTransformers.from(file('src/main/resources/META-INF/accesstransformer.cfg'))
+    accessTransformers.from(new File(rootProject.minecraftSourcesDir, 'neoforge/main/resources/META-INF/accesstransformer.cfg'))
     mods {
         portalix {
             sourceSet sourceSets.main

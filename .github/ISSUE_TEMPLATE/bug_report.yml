@@ -11,6 +11,12 @@ body:
     validations:
       required: true
   - type: input
+    id: minecraft_version
+    attributes:
+      label: Версия Minecraft / Minecraft version
+    validations:
+      required: true
+  - type: input
     id: version
     attributes:
       label: Версия Portalix / Portalix version

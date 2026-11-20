@@ -15,22 +15,28 @@
 | `./gradlew :testInfrastructure` | Работа запуска и проверки результатов |
 | `./gradlew build` | Сборка, JUnit и состав выпускаемых JAR |
 
-Профиль задаётся через `-PtestProfile`, по умолчанию используется `fabric-native-opengl`. Список профилей: `./gradlew :listTestProfiles`.
+По умолчанию тесты запускаются на Minecraft 26.3. Для 26.2 добавьте `-PmcVersion=26.2` к Gradle или `--mc-version=26.2` к скрипту матрицы.
 
-Отдельную игровую сцену можно выбрать через `-PclientTest`, серверную группу — через `-PserverTest`:
+Профиль по умолчанию - `fabric-native-opengl`. Список выводит `./gradlew :listTestProfiles`.
 
 ```sh
 ./gradlew :testClient -PtestProfile=fabric-sodium-iris-opengl -PclientTest=portal_views
 ./gradlew :testServer -PserverTest=carry
 ```
 
-Все поддерживаемые графические профили с загрузкой собранных JAR:
+Одна команда запускает все поддерживаемые графические профили на собранных JAR.
 
 ```sh
 python3 tests/test_matrix.py --packaged
 ```
 
 Матрица включает native, Sodium и Sodium + Iris на OpenGL, а также native и Sodium на Vulkan для обоих загрузчиков. Iris-профили используют Complementary Unbound с настройками HIGH.
+
+Если Minecraft 26.2 зависает под Xwayland, запустите тесты через Wayland.
+
+```sh
+JDK_JAVA_OPTIONS='-DMC_DEBUG_ENABLED=true -DMC_DEBUG_PREFER_WAYLAND=true' python3 tests/test_matrix.py --mc-version=26.2 --packaged
+```
 
 ## Сценарии
 
@@ -55,14 +61,14 @@ python3 tests/test_matrix.py --packaged
 
 Сцены используют реальный клиент, обычные игровые действия и нативную физику. Размер окна выбирает Minecraft. Проверки отображения используют снимки в фактическом разрешении кадрового буфера, которое записывается в отчёт. `-PtestDiagnostics=full` дополнительно сохраняет запись кадров для ручного просмотра.
 
-Результаты находятся в `tests/build/reports/regression`, серверные отчёты — в каталогах сборки загрузчиков. Если внутри сцены пропущена проверка, JSON отмечает прогон как `incomplete`, а JSON и JUnit указывают причину пропуска. Ошибка запуска, провал сцены или пропущенная проверка приводят к ненулевому коду завершения.
+Результаты находятся в `tests/build/<minecraft-version>/reports/regression`. Серверные отчёты лежат в каталогах сборки загрузчиков для выбранной версии. Если внутри сцены пропущена проверка, JSON отмечает прогон как `incomplete`, а JSON и JUnit указывают причину пропуска. Ошибка запуска, провал сцены или пропущенная проверка приводят к ненулевому коду завершения.
 
 ## Производительность
 
-Отдельный маршрут измеряет время кадров при выстреле, проходе в удалённую область, повторном посещении и обратном проходе через ту же пару:
+Отдельный маршрут измеряет время кадров при выстреле, проходе в удалённую область, повторном посещении и обратном проходе через ту же пару.
 
 ```sh
 ./gradlew :benchmarkClient -PtestProfile=fabric-native-opengl
 ```
 
-Отчёт сохраняется в `tests/build/reports/benchmarks`. Сравнивайте показатели при одинаковом разрешении кадрового буфера. Дальность прорисовки по умолчанию составляет 16 чанков. Параметр `-PbenchmarkRenderDistance=32` увеличивает её до 32.
+Отчёт сохраняется в `tests/build/<minecraft-version>/reports/benchmarks`. Сравнивайте показатели при одинаковом разрешении кадрового буфера. Дальность прорисовки по умолчанию составляет 16 чанков. Параметр `-PbenchmarkRenderDistance=32` увеличивает её до 32.

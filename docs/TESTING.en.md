@@ -15,22 +15,28 @@ The suite includes JUnit tests for mod logic and gameplay scenarios on Fabric an
 | `./gradlew :testInfrastructure` | Launching tests and checking results |
 | `./gradlew build` | Build, JUnit and contents of release JARs |
 
-Set the profile with `-PtestProfile`; the default is `fabric-native-opengl`. List profiles with `./gradlew :listTestProfiles`.
+Tests default to Minecraft 26.3. For 26.2, add `-PmcVersion=26.2` to Gradle or `--mc-version=26.2` to the matrix script.
 
-Select an individual client scene with `-PclientTest` or a server group with `-PserverTest`:
+The default profile is `fabric-native-opengl`. Run `./gradlew :listTestProfiles` to list profiles.
 
 ```sh
 ./gradlew :testClient -PtestProfile=fabric-sodium-iris-opengl -PclientTest=portal_views
 ./gradlew :testServer -PserverTest=carry
 ```
 
-Run all supported graphics profiles using the built JARs:
+Run all supported graphics profiles with the built JARs.
 
 ```sh
 python3 tests/test_matrix.py --packaged
 ```
 
 The matrix includes native, Sodium and Sodium + Iris on OpenGL, as well as native and Sodium on Vulkan, for both loaders. Iris profiles use Complementary Unbound with HIGH settings.
+
+If Minecraft 26.2 hangs under Xwayland, run the tests on Wayland.
+
+```sh
+JDK_JAVA_OPTIONS='-DMC_DEBUG_ENABLED=true -DMC_DEBUG_PREFER_WAYLAND=true' python3 tests/test_matrix.py --mc-version=26.2 --packaged
+```
 
 ## Scenarios
 
@@ -55,14 +61,14 @@ Client scenes:
 
 Scenes use the real client, ordinary gameplay actions and native physics. Minecraft chooses the window size. Rendering checks use captures at the actual framebuffer resolution, which is recorded in the report. `-PtestDiagnostics=full` additionally saves a frame recording for manual review.
 
-Results are stored in `tests/build/reports/regression`. Server reports are stored in the loaders' build directories. If a scene skips a case, JSON marks the run as `incomplete`, and both JSON and JUnit record the reason. Launch errors, failed scenes and skipped cases produce a nonzero exit code.
+Results are stored in `tests/build/<minecraft-version>/reports/regression`. Server reports are stored in the loaders' build directories for the selected version. If a scene skips a case, JSON marks the run as `incomplete`, and both JSON and JUnit record the reason. Launch errors, failed scenes and skipped cases produce a nonzero exit code.
 
 ## Performance
 
-A separate route measures frame times during firing, traversal to a remote area, a repeat visit and return traversal through the same pair:
+A separate route measures frame times during firing, traversal to a remote area, a repeat visit and return traversal through the same pair.
 
 ```sh
 ./gradlew :benchmarkClient -PtestProfile=fabric-native-opengl
 ```
 
-The report is saved in `tests/build/reports/benchmarks`. Compare results at the same framebuffer resolution. The default render distance is 16 chunks. Set `-PbenchmarkRenderDistance=32` to increase it to 32.
+The report is saved in `tests/build/<minecraft-version>/reports/benchmarks`. Compare results at the same framebuffer resolution. The default render distance is 16 chunks. Set `-PbenchmarkRenderDistance=32` to increase it to 32.

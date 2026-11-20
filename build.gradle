@@ -4,12 +4,32 @@ plugins {
     id 'net.neoforged.moddev' version "${moddev_version}" apply false
 }
 
-layout.buildDirectory = layout.projectDirectory.dir('tests/build')
+def minecraftVersion = minecraft_version
+def versionDirectory = minecraftSourcesDir
+
+def versionProperties = new Properties()
+new File(versionDirectory, 'gradle.properties').withReader('UTF-8') { versionProperties.load(it) }
+versionProperties.each { name, value -> ext.set(name, providers.gradleProperty(name).getOrElse(value)) }
+ext.addMinecraftSources = { SourceSet sourceSet, String path ->
+    def sharedDirectory = file(path)
+    def targetDirectory = new File(versionDirectory, path.replace('/src/', '/'))
+    sourceSet.java.srcDirs sharedDirectory, targetDirectory
+    sourceSet.resources.srcDirs new File(sharedDirectory, 'resources'), new File(targetDirectory, 'resources')
+}
+
+layout.buildDirectory = layout.projectDirectory.dir("tests/build/${minecraftVersion}")
 
 subprojects {
     apply plugin: 'java-library'
     group = rootProject.group
     version = rootProject.version
+    layout.buildDirectory = layout.projectDirectory.dir("build/${minecraftVersion}")
+    sourceSets.configureEach { sourceSet ->
+        def directory = new File(versionDirectory, "${project.name}/${sourceSet.name}")
+        sourceSet.java.setSrcDirs([file("src/${sourceSet.name}"), directory])
+        sourceSet.java.exclude('resources/**')
+        sourceSet.resources.srcDir new File(directory, 'resources')
+    }
     repositories {
         mavenCentral()
         maven { url = 'https://api.modrinth.com/maven' }

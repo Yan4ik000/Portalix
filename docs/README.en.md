@@ -13,7 +13,7 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/Minecraft-26.3-0aa8e8?style=flat-square" alt="Minecraft 26.3">
+  <img src="https://img.shields.io/badge/Minecraft-26.2%20%2F%2026.3-0aa8e8?style=flat-square" alt="Minecraft 26.2 / 26.3">
   <img src="https://img.shields.io/badge/Fabric%20%2B%20NeoForge-ff6a00?style=flat-square" alt="Fabric + NeoForge">
   <img src="https://img.shields.io/badge/Status-Release-34C924?style=flat-square" alt="Release">
 </p>
@@ -40,18 +40,18 @@
 
 Portalix changes how many Minecraft subsystems work, so compatibility with optimization mods is not guaranteed. If you encounter a bug or an incompatibility with another mod, open an issue in the Portalix GitHub repository.
 
-Only Sodium **0.9.2** and Iris **1.11.7** for Minecraft are supported. Use the versions for your loader.
+Supported versions are Sodium **0.9.2** and Iris with OpenGL (**1.11.4** for Minecraft 26.2, **1.11.7** for 26.3).
 
 ## Installation
 
-Choose the Portalix build for your loader and install the required dependencies:
+Choose the JAR for your Minecraft version and mod loader. [Portalix releases](https://github.com/Yan4ik000/Portalix/releases)
 
-| Loader | Required dependencies for Minecraft |
-| --- | --- |
-| Fabric Loader 0.20.1+ | Fabric API 0.166.2+26.3 |
-| NeoForge 26.3.0.115+ | None |
+| Minecraft | Fabric Loader | Fabric API | NeoForge |
+| --- | --- | --- | --- |
+| 26.2 | 0.19.5+ | 0.161.0+26.2 | 26.2.0.93+ |
+| 26.3 | 0.20.1+ | 0.166.2+26.3 | 26.3.0.115+ |
 
-Place the mod JAR and its dependencies in the `mods` folder on both the client and the server. The Portalix version must match on the client and server.
+Put the JAR in `mods` on both the client and server. On Fabric, add Fabric API too. The Portalix version must match on the client and server.
 
 ## Controls
 
@@ -78,16 +78,16 @@ You hold the key to the portals. What you do with it is up to you.
 
 ## Building
 
-Building requires JDK 25. Gradle uses the JDK from `JAVA_HOME` or `PATH`.
+Use JDK 25 and run `gradlew.bat` on Windows. The `build` task covers both loaders and defaults to Minecraft 26.3.
 
-Run `./gradlew build` on Linux/macOS or `./gradlew.bat build` on Windows. This command builds the mod for both loaders.
+```sh
+./gradlew build
+./gradlew build -PmcVersion=26.2
+```
 
-Output JARs:
+JARs go to `fabric/build/<mc>/libs/` and `neoforge/build/<mc>/libs/`. To build for one loader, use `:fabric:build` or `:neoforge:build`.
 
-- `fabric/build/libs/Portalix-fabric-<minecraft-version>-<version>.jar`
-- `neoforge/build/libs/Portalix-neoforge-<minecraft-version>-<version>.jar`
-
-To build the mod for just one loader, use the `:fabric:build` or `:neoforge:build` task.
+`clean` removes the selected version's build output.
 
 ## Planned work
 

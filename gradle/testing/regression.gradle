@@ -5,7 +5,7 @@ buildscript {
 import VerifyRegressionReport
 
 def profiles = [:]
-def profileCatalog = new groovy.json.JsonSlurper().parse(file('tests/test-profiles.json'), 'UTF-8')
+def profileCatalog = new groovy.json.JsonSlurper().parse(new File(minecraftSourcesDir, 'tests/test-profiles.json'), 'UTF-8')
 profileCatalog.loaders.each { loader ->
     profileCatalog.backends.each { backend ->
         profileCatalog.renderers.each { renderer ->
@@ -25,8 +25,9 @@ if (!profiles.containsKey(regressionProfileId)) {
 }
 ext.regressionProfile = profiles[regressionProfileId]
 
-def sceneCatalogFile = layout.projectDirectory.file('tests/src/client/resources/portalix-regression-scenes.json')
-def sceneCatalog = new groovy.json.JsonSlurper().parseText(providers.fileContents(sceneCatalogFile).asText.get())
+def sceneCatalogPath = 'tests/src/client/resources/portalix-regression-scenes.json'
+def sceneCatalogFile = files(sceneCatalogPath, new File(minecraftSourcesDir, sceneCatalogPath.replace('/src/', '/'))).filter { it.isFile() }.singleFile
+def sceneCatalog = new groovy.json.JsonSlurper().parse(sceneCatalogFile, 'UTF-8')
 ext.regressionClientTestSelection = providers.gradleProperty('clientTest').getOrElse('all')
 if (regressionClientTestSelection != 'all' && !sceneCatalog.scenes.contains(regressionClientTestSelection)) {
     throw new GradleException("Unknown clientTest '${regressionClientTestSelection}'. Choose all or: ${sceneCatalog.scenes.join(', ')}")
@@ -47,9 +48,9 @@ if (!(regressionDiagnostics in ['compact', 'full'])) {
     throw new GradleException('testDiagnostics must be compact or full')
 }
 
-def testInstances = fileTree('tests/src/main/resources/data/portalix_regression/test_instance') {
-    include '*.json'
-}
+def testInstancesPath = 'tests/src/main/resources/data/portalix_regression/test_instance'
+def testInstances = fileTree(testInstancesPath).plus(fileTree(new File(minecraftSourcesDir, testInstancesPath.replace('/src/', '/'))))
+    .matching { include '*.json' }
 def serverTests = testInstances.files.collect {
     it.name.substring(0, it.name.length() - '.json'.length())
 }.sort()
@@ -94,7 +95,7 @@ tasks.register('testServer') {
         clientTestSelection = benchmark ? regressionBenchmarkSelection : regressionClientTestSelection
         diagnosticsMode = regressionDiagnostics
         reportDirectory = layout.buildDirectory.dir("reports/${benchmark ? 'benchmarks' : 'regression'}/${regressionModeDirectory}${regressionProfileId}")
-        sceneContract = layout.projectDirectory.file('tests/src/client/resources/portalix-regression-scenes.json')
+        sceneContract = sceneCatalogFile
         dependsOn ":${loader}:run${benchmark ? 'Benchmark' : 'Regression'}Client", ":${loader}:verify${benchmark ? 'Benchmark' : 'Regression'}Log"
     }
 }
