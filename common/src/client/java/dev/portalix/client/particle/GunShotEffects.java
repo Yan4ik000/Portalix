@@ -7,6 +7,7 @@ import dev.portalix.client.render.ParticleGeometry;
 import dev.portalix.client.render.ParticleRenderTypes;
 import dev.portalix.client.render.ParticleView;
 import dev.portalix.client.render.ParticleVisibility;
+import dev.portalix.gun.GunMuzzle;
 import dev.portalix.network.gun.GunShotPayload;
 import dev.portalix.network.gun.PortalImpactPayload;
 import java.util.ArrayList;
@@ -30,8 +31,8 @@ public final class GunShotEffects {
   private static final double SPARK_COLLISION_RANGE_SQUARED = 64.0 * 64.0;
   private static final Identifier TEX_MUZZLE =
       PortalixMod.id("textures/effects/particle_glow_05.png");
-  private static final double MUZZLE_LENGTH = .07;
-  private static final float MUZZLE_RADIUS = .26F;
+  private static final double MUZZLE_LENGTH = .07 * GunMuzzle.MODEL_SCALE;
+  private static final float MUZZLE_RADIUS = .26F * GunMuzzle.MODEL_SCALE;
   private static final int MAX_SHOTS = 128;
   private static final int IMPACT_LIFETIME_TICKS = 25;
   private static final int COLLISION_TRACE_BUDGET = 256;
@@ -198,14 +199,14 @@ public final class GunShotEffects {
               TEX_MUZZLE,
               (pose, vertices) -> {
                 for (int i = 0; i < 4; i++) {
-                  double distance = Mth.lerp(i / 3.0, .01, MUZZLE_LENGTH);
+                  double distance = Mth.lerp(i / 3.0, .01 * GunMuzzle.MODEL_SCALE, MUZZLE_LENGTH);
                   Vec3 position = muzzle.add(direction.scale(distance));
                   Vector3f center =
                       new Vector3f(
                           (float) (position.x - camera.x),
                           (float) (position.y - camera.y),
                           (float) (position.z - camera.z));
-                  float radius = Mth.lerp(i / 3.0F, .16F, MUZZLE_RADIUS) * fade;
+                  float radius = Mth.lerp(i / 3.0F, .16F * GunMuzzle.MODEL_SCALE, MUZZLE_RADIUS) * fade;
                   int alpha = (int) (240 * fade);
                   ParticleGeometry.sprite(pose, vertices, center, right, up, radius, red, green, blue, alpha);
                 }

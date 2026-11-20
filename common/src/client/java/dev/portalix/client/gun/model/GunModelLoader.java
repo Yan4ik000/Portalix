@@ -6,6 +6,7 @@ import com.google.gson.JsonObject;
 import dev.portalix.client.gun.model.GunModelAsset.Attachment;
 import dev.portalix.client.gun.model.GunModelAsset.Group;
 import dev.portalix.client.gun.model.GunModelAsset.MaterialMode;
+import dev.portalix.gun.GunMuzzle;
 import dev.portalix.resource.ModAssetLoader;
 import java.io.DataInputStream;
 import java.io.EOFException;
@@ -269,13 +270,19 @@ final class GunModelLoader {
     Matrix4f left = new Matrix4f();
     for (JsonElement item : operations) {
       JsonObject operation = item.getAsJsonObject();
+      String kind = operation.get("kind").getAsString();
+      if (kind.equals("modelScale")) {
+        right.scale(GunMuzzle.MODEL_SCALE);
+        left.scale(GunMuzzle.MODEL_SCALE);
+        continue;
+      }
       JsonArray values = operation.getAsJsonArray("values");
       float x = values.get(0).getAsFloat();
       float y = values.size() > 1 ? values.get(1).getAsFloat() : 0.0F;
       float z = values.size() > 2 ? values.get(2).getAsFloat() : 0.0F;
       if (!Float.isFinite(x) || !Float.isFinite(y) || !Float.isFinite(z))
         throw new IOException("Invalid presentation transform");
-      switch (operation.get("kind").getAsString()) {
+      switch (kind) {
         case "translate" -> {
           right.translate(x, y, z);
           left.translate(x, y, z);

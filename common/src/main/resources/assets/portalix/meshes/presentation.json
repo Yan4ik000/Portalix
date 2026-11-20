@@ -1,5 +1,5 @@
 {
-  "worldGripOffset": [0, -3.3, 1.5],
+  "worldGripOffset": [0, -5.3, 1.5],
   "presentation": {
     "hand": [
       {
@@ -29,6 +29,9 @@
         "values": [-5]
       },
       {
+        "kind": "modelScale"
+      },
+      {
         "kind": "translate",
         "values": [-7, 7, 12]
       }
@@ -42,6 +45,9 @@
         "kind": "scale",
         "values": [0.038, 0.038, 0.038],
         "mirror": true
+      },
+      {
+        "kind": "modelScale"
       }
     ],
     "icon": [
@@ -63,6 +69,9 @@
         "mirror": false
       },
       {
+        "kind": "modelScale"
+      },
+      {
         "kind": "translate",
         "values": [0, -2, 12]
       }
@@ -78,6 +87,9 @@
         "mirror": false
       },
       {
+        "kind": "modelScale"
+      },
+      {
         "kind": "translate",
         "values": [0, -2, 12]
       }
@@ -91,6 +103,9 @@
         "kind": "scale",
         "values": [0.035, 0.035, 0.035],
         "mirror": false
+      },
+      {
+        "kind": "modelScale"
       },
       {
         "kind": "translate",
