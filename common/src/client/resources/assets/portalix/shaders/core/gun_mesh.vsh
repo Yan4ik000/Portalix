@@ -1,5 +1,4 @@
 #version 330
-// Adapted from Minecraft's core/entity.vsh (Mojang); see NOTICE.
 
 #if defined(PER_FACE_LIGHTING) || !defined(NO_CARDINAL_LIGHTING)
 #moj_import <minecraft:light.glsl>

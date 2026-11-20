@@ -40,7 +40,7 @@ subprojects {
         }
     }
     tasks.withType(Jar).configureEach {
-        from(rootProject.file('LICENSE.md'), rootProject.file('NOTICE'))
+        from(rootProject.file('LICENSE.md'))
         preserveFileTimestamps = false
         reproducibleFileOrder = true
     }

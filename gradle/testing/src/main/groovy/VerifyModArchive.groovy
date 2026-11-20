@@ -43,7 +43,7 @@ abstract class VerifyModArchive extends DefaultTask {
             Set<String> entries = names as Set
             require(classes && classes == (entries.findAll { it.endsWith('.class') } as Set),
                 'Packaged classes differ from the compiled main and client outputs')
-            Set<String> required = resources + ['LICENSE.md', 'NOTICE', 'META-INF/MANIFEST.MF']
+            Set<String> required = resources + ['LICENSE.md', 'META-INF/MANIFEST.MF']
             require(entries.containsAll(required), "Missing resources: ${required - entries}")
             Set<String> unexpected = (entries - classes - required).findAll {
                 !(it ==~ /META-INF\/[A-Z0-9_-]{1,8}\.(SF|RSA|DSA|EC)/)

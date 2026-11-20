@@ -30,7 +30,7 @@ class ReleaseContractsTest {
             Map<String, String> entries = releaseContents(loader)
             Set<String> classes = entries.keySet().findAll { it.endsWith('.class') } as Set
             Set<String> resources = (entries.keySet() - classes
-                - ['LICENSE.md', 'NOTICE', 'META-INF/MANIFEST.MF']) as Set
+                - ['LICENSE.md', 'META-INF/MANIFEST.MF']) as Set
             def versions = [sodium: '0.9.2+mc26.2', iris: '1.11.4+mc26.2']
             def verify = { Map<String, String> contents ->
                 VerifyModArchive.verify(archive("${loader}.jar", contents), loader, '0.1.0',
@@ -66,7 +66,7 @@ class ReleaseContractsTest {
         List<String> clientConfigs = ['portalix.client.mixins.json', 'portalix.compat.mixins.json']
         if (loader == 'fabric') clientConfigs.add(1, 'portalix.fabric.client.mixins.json')
         List<String> configs = commonConfigs + clientConfigs
-        Map<String, String> entries = ['LICENSE.md': 'license', 'NOTICE': 'notice',
+        Map<String, String> entries = ['LICENSE.md': 'license',
             'META-INF/MANIFEST.MF': 'Manifest-Version: 1.0\n',
             'assets/portalix/required.bin': 'asset', 'dev/portalix/PortalixMod.class': 'class']
         configs.each { path -> entries[path] = JsonOutput.toJson([package: 'dev.portalix.mixin', mixins: ['Example']]) }

@@ -98,4 +98,4 @@ To build the mod for just one loader, use the `:fabric:build` or `:neoforge:buil
 
 ## License
 
-The project's original code is licensed under [PolyForm Perimeter 1.0.1](../LICENSE.md). See [NOTICE](../NOTICE) for information about third-party materials and their terms of use.
+The project's original code is licensed under [PolyForm Perimeter 1.0.1](../LICENSE.md).

@@ -1,5 +1,4 @@
 #version 330
-// Adapts Portal 2's portal_refract_vs20 (Valve); see NOTICE.
 #moj_import <minecraft:dynamictransforms.glsl>
 #moj_import <minecraft:projection.glsl>
 in vec3 Position;

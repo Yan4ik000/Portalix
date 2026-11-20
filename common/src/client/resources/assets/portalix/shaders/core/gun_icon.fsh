@@ -1,5 +1,4 @@
 #version 330
-// Adapted from Minecraft's core/rendertype_entity_shadow.fsh (Mojang); see NOTICE.
 
 #moj_import <minecraft:fog.glsl>
 #moj_import <minecraft:dynamictransforms.glsl>

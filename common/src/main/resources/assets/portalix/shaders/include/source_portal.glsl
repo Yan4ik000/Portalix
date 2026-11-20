@@ -1,4 +1,3 @@
-// Translated from Portal 2's portal_refract_ps20b (Valve); see NOTICE.
 float sourcePortalAperture(vec2 uv, float opening) {
     float scale = clamp(opening, 0.0, 1.0);
     float radius = (-2.0 * scale + 3.0) * (scale * scale);

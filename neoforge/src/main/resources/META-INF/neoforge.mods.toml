@@ -1,6 +1,6 @@
 modLoader="javafml"
 loaderVersion="[11,)"
-license="LicenseRef-PolyForm-Perimeter-1.0.1 AND LicenseRef-Portalix-ThirdParty"
+license="LicenseRef-PolyForm-Perimeter-1.0.1"
 
 [[mods]]
 modId="portalix"

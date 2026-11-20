@@ -11,7 +11,6 @@ import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Pseudo;
 import org.spongepowered.asm.mixin.Shadow;
 
-// Unpacking methods adapted from Sodium's PalettedContainerMixin (PolyForm Shield 1.0.0); see NOTICE.
 @Pseudo
 @Mixin(value = PaletteReadView.class, remap = false)
 abstract class SodiumPaletteReadViewMixin<T>

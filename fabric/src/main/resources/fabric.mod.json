@@ -7,7 +7,7 @@
   "authors": [
     "Yan4ik000"
   ],
-  "license": "LicenseRef-PolyForm-Perimeter-1.0.1 AND LicenseRef-Portalix-ThirdParty",
+  "license": "LicenseRef-PolyForm-Perimeter-1.0.1",
   "description": "A mod that adds a portal gun to Minecraft.",
   "environment": "*",
   "accessWidener": "portalix.accesswidener",

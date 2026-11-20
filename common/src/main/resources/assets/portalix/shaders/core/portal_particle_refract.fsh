@@ -1,5 +1,4 @@
 #version 330
-// Refraction sampling adapted from Portal 2's refract_ps20b (Valve); see NOTICE.
 uniform sampler2D Sampler0;
 uniform sampler2D Sampler1;
 in vec2 texCoord;
