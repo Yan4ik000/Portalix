@@ -83,8 +83,6 @@ public final class PortalEffectObservers {
     private boolean owns(Observer observer, BlockPos sample, int horizontalRadius, int verticalRadius) {
       var region = regions.get(observer);
       if (!region.contains(sample, horizontalRadius, verticalRadius)) return false;
-      if (index.region != null)
-        return observer.exit() == null || region.inFront(Vec3.atCenterOf(sample));
       var point = Vec3.atCenterOf(sample);
       return region.inFront(point)
           && !index.hasBetter(sample, point, horizontalRadius, verticalRadius, region, region.distance(point));

@@ -35,7 +35,7 @@ class PortalSoundPropagationTest {
         Vec3 image = entrance.center().subtract(entrance.normal().scale(3)).add(entrance.right().scale(side));
         for (double front : new double[] {0, 2}) {
           Vec3 listener = entrance.center().add(entrance.normal().scale(front));
-          var path = routes.findPath(listener, emitter, distance -> 1 / (1 + distance));
+          var path = unobstructedPath(routes, listener, emitter);
           assertEquals(List.of(link), path.links());
           assertEquals(listener.distanceTo(image), path.distance(), 1e-8);
           assertVector(image, path.position(), 1e-8);
@@ -44,9 +44,9 @@ class PortalSoundPropagationTest {
       }
       Vec3 listener = entrance.center().add(entrance.normal().scale(2));
       Vec3 emitter = exit.center().add(exit.normal().scale(3));
-      assertTrue(routes.findPath(listener, exit.center().subtract(exit.normal()), distance -> 1 / (1 + distance))
+      assertTrue(unobstructedPath(routes, listener, exit.center().subtract(exit.normal()))
           .links().isEmpty());
-      assertTrue(routes.findPath(entrance.center().subtract(entrance.normal()), emitter, distance -> 1 / (1 + distance))
+      assertTrue(unobstructedPath(routes, entrance.center().subtract(entrance.normal()), emitter)
           .links().isEmpty());
     }
   }
@@ -61,13 +61,19 @@ class PortalSoundPropagationTest {
     for (double side : new double[] {-1, 1}) {
       Vec3 listener = entrance.center().add(entrance.normal().scale(2));
       Vec3 emitter = exit.center().add(exit.normal().scale(3)).subtract(exit.right().scale(2 * side));
-      var path = routes.findPath(listener, emitter, distance -> 1 / (1 + distance));
+      var path = unobstructedPath(routes, listener, emitter);
       double expected = Math.hypot(2, halfWidth) + Math.hypot(3, 2 - halfWidth);
       assertEquals(List.of(link), path.links());
       assertEquals(expected, path.distance(), 1e-7);
       Vec3 bend = entrance.center().add(entrance.right().scale(halfWidth * side));
       assertVector(bend.subtract(listener).normalize(), path.position().subtract(listener).normalize(), 1e-7);
     }
+  }
+
+  private static PortalSoundPropagation.Path unobstructedPath(
+      PortalSoundPropagation.Routes routes, Vec3 listener, Vec3 emitter) {
+    return routes.findPath(listener, emitter, distance -> 1 / (1 + distance), 0,
+        (start, end, radius) -> 1);
   }
 
   @ParameterizedTest

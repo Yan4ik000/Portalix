@@ -84,7 +84,8 @@ public final class PortalixClient {
     current = new PortalClientSession(initialClient.level, initialClient.player);
     PortalViewReadiness.register();
     PortalAudioRouter.configure(
-        () -> PortalTopology.links(Minecraft.getInstance().level), MinecraftSoundOcclusion::transmission);
+        () -> PortalTopology.soundRoutes(Minecraft.getInstance().level),
+        MinecraftSoundOcclusion::transmission);
   }
 
   public static void tick(Minecraft client) {

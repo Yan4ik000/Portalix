@@ -1,7 +1,9 @@
 package dev.portalix.portal;
 
+import com.google.common.base.Suppliers;
 import dev.portalix.api.PortalEndpoint;
 import dev.portalix.api.PortalInstance;
+import dev.portalix.portal.audio.PortalSoundPropagation;
 import dev.portalix.portal.geometry.ConvexPolyhedron;
 import dev.portalix.portal.geometry.PortalAperture;
 import dev.portalix.portal.geometry.PortalCollisionOpening;
@@ -13,6 +15,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.function.Supplier;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
@@ -32,15 +35,21 @@ public final class PortalTopology {
       EntranceIndex entrances,
       Map<Entrance, PortalLink> byEntrance,
       Map<PortalLinkId, PortalLink> byId,
-      Map<PortalEndpoint, Opening> openings) {
+      Map<PortalEndpoint, Opening> openings,
+      Supplier<PortalSoundPropagation.Routes> soundRoutes) {
     private static final Topology EMPTY =
-        new Topology(List.of(), new EntranceIndex(List.of()), Map.of(), Map.of(), Map.of());
+        new Topology(List.of(), new EntranceIndex(List.of()), Map.of(), Map.of(), Map.of(),
+            Suppliers.memoize(() -> PortalSoundPropagation.prepare(List.of())));
   }
 
   private volatile Topology topology = Topology.EMPTY;
 
   public static List<PortalLink> links(Level level) {
     return of(level).links();
+  }
+
+  public static PortalSoundPropagation.Routes soundRoutes(Level level) {
+    return of(level).soundRoutes().get();
   }
 
   public static List<PortalLink> entrances(
@@ -95,7 +104,7 @@ public final class PortalTopology {
     List<PortalLink> snapshot = List.copyOf(ordered);
     state.topology = snapshot.isEmpty() ? Topology.EMPTY : new Topology(
         snapshot, new EntranceIndex(snapshot), Map.copyOf(byEntrance), Map.copyOf(byId),
-        Map.copyOf(openings));
+        Map.copyOf(openings), Suppliers.memoize(() -> PortalSoundPropagation.prepare(snapshot)));
   }
 
   public static List<PortalLink> linkPair(UUID gun, PortalInstance blue, PortalInstance orange) {

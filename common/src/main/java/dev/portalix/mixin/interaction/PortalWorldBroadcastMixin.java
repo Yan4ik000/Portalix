@@ -1,16 +1,18 @@
 package dev.portalix.mixin.interaction;
 
-import dev.portalix.mixin.world.tracking.ChunkMapAccessor;
 import dev.portalix.portal.PortalTopology;
 import dev.portalix.portal.audio.PortalSoundPropagation;
 import dev.portalix.portal.camera.PortalEyePose;
 import dev.portalix.portal.query.PlayerPortalVisibility;
-import dev.portalix.server.PortalEntityTracking;
+import dev.portalix.server.EntityObservers;
+import java.util.Collection;
+import java.util.List;
 import net.minecraft.network.protocol.Packet;
 import net.minecraft.network.protocol.game.ClientboundLevelEventPacket;
 import net.minecraft.network.protocol.game.ClientboundSoundEntityPacket;
 import net.minecraft.network.protocol.game.ClientboundSoundPacket;
 import net.minecraft.resources.ResourceKey;
+import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.server.players.PlayerList;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.Level;
@@ -37,27 +39,30 @@ abstract class PortalWorldBroadcastMixin {
     boolean sound =
         packet instanceof ClientboundSoundPacket || packet instanceof ClientboundSoundEntityPacket;
     PortalSoundPropagation.Routes routes = null;
+    Collection<ServerPlayer> soundObservers = null;
+    ClientboundSoundPacket positionalSound = null;
     for (var player : ((PlayerList) (Object) this).getPlayers()) {
       if (player == except
           || !player.level().dimension().equals(dimension)
           || player.position().distanceToSqr(source) < squared) continue;
       if (sound || packet instanceof ClientboundLevelEventPacket) {
         if (routes == null)
-          routes = PortalSoundPropagation.prepare(PortalTopology.links(player.level()));
-        var path = routes.findPath(
-            PortalEyePose.sample(player).position(), source, distance -> Math.max(0, 1 - distance / range));
-        if (path.distance() < range) {
+          routes = PortalTopology.soundRoutes(player.level());
+        if (routes.closerThan(PortalEyePose.sample(player).position(), source, range)) {
           Packet<?> delivered = packet;
           if (packet instanceof ClientboundSoundEntityPacket entitySound) {
-            var tracker =
-                (PortalEntityTracking.Tracker)
-                    ((ChunkMapAccessor) player.level().getChunkSource().chunkMap)
-                        .portalix$entityTrackers().get(entitySound.getId());
-            if (tracker == null || !tracker.portalix$hasObserver(player)) {
-              delivered =
-                  new ClientboundSoundPacket(
-                      entitySound.getSound(), entitySound.getSource(), x, y, z,
-                      entitySound.getVolume(), entitySound.getPitch(), entitySound.getSeed());
+            if (soundObservers == null) {
+              var entity = player.level().getEntity(entitySound.getId());
+              soundObservers = entity == null ? List.of() : EntityObservers.tracking(entity);
+            }
+            if (!soundObservers.contains(player)) {
+              if (positionalSound == null) {
+                positionalSound =
+                    new ClientboundSoundPacket(
+                        entitySound.getSound(), entitySound.getSource(), x, y, z,
+                        entitySound.getVolume(), entitySound.getPitch(), entitySound.getSeed());
+              }
+              delivered = positionalSound;
             }
           }
           player.connection.send(delivered);

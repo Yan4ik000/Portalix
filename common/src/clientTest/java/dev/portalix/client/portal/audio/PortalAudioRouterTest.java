@@ -6,8 +6,8 @@ import static org.junit.jupiter.api.Assertions.*;
 
 import dev.portalix.api.PortalInstance;
 import dev.portalix.item.PortalixVariant;
-import dev.portalix.portal.PortalLink;
 import dev.portalix.portal.PortalTopology;
+import dev.portalix.portal.audio.PortalSoundPropagation;
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -31,7 +31,8 @@ class PortalAudioRouterTest {
     var first = new PortalInstance(endpoint(new Vec3(0, 100, 0), direction), 0, 1, PortalixVariant.STANDARD);
     var second = new PortalInstance(endpoint(new Vec3(1000, 100, 0), direction), 0, 2, PortalixVariant.STANDARD);
     var pair = PortalTopology.linkPair(gun, first, second);
-    var topology = new AtomicReference<List<PortalLink>>(pair);
+    var topology = new AtomicReference<>(PortalSoundPropagation.prepare(pair));
+    var empty = PortalTopology.soundRoutes(null);
     var traces = new AtomicInteger();
     try {
       PortalAudioRouter.reset();
@@ -69,7 +70,7 @@ class PortalAudioRouterTest {
       assertEquals(1, relative.occlusion());
       assertEquals(priorTraces, traces.get(), "listener-relative audio must not use world occlusion");
 
-      topology.set(List.of());
+      topology.set(empty);
       var direct = PortalAudioRouter.playback(sound);
       assertTrue(direct.route().isEmpty());
       near(emitter, direct.position(), 1e-9, "removed topology is reflected without a listener update");
@@ -80,7 +81,7 @@ class PortalAudioRouterTest {
       assertEquals(0, PortalAudioRouter.playback(sound).gain(), "a new session cannot retain the previous listener");
     } finally {
       PortalAudioRouter.reset();
-      PortalAudioRouter.configure(List::of, (start, end, radius) -> 1);
+      PortalAudioRouter.configure(() -> empty, (start, end, radius) -> 1);
     }
   }
 

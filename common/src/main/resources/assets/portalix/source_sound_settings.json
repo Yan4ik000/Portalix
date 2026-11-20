@@ -6,7 +6,6 @@
     "pitchMin": 0.95,
     "pitchMax": 1.05,
     "soundLevel": 140,
-    "channel": "CHAN_STATIC",
     "engineGain": 1.0
   },
   "fire_orange": {
@@ -16,7 +15,6 @@
     "pitchMin": 0.95,
     "pitchMax": 1.05,
     "soundLevel": 140,
-    "channel": "CHAN_STATIC",
     "engineGain": 1.0
   },
   "draw": {
@@ -26,7 +24,6 @@
     "pitchMin": 0.95,
     "pitchMax": 1.05,
     "soundLevel": 90,
-    "channel": "CHAN_STATIC",
     "engineGain": 1.0
   },
   "fizzle": {
@@ -36,7 +33,6 @@
     "pitchMin": 0.95,
     "pitchMax": 1.05,
     "soundLevel": 90,
-    "channel": "CHAN_STATIC",
     "engineGain": 1.0
   },
   "hold": {
@@ -46,7 +42,6 @@
     "pitchMin": 1.0,
     "pitchMax": 1.0,
     "soundLevel": 75,
-    "channel": "CHAN_ITEM",
     "engineGain": 1.0
   },
   "hold_intro": {
@@ -56,7 +51,6 @@
     "pitchMin": 1.0,
     "pitchMax": 1.0,
     "soundLevel": 75,
-    "channel": "CHAN_ITEM",
     "engineGain": 1.0
   },
   "release": {
@@ -66,7 +60,6 @@
     "pitchMin": 1.0,
     "pitchMax": 1.0,
     "soundLevel": 75,
-    "channel": "CHAN_ITEM",
     "engineGain": 1.0
   },
   "grab_failed": {
@@ -76,7 +69,6 @@
     "pitchMin": 1.0,
     "pitchMax": 1.0,
     "soundLevel": 75,
-    "channel": "CHAN_ITEM",
     "engineGain": 1.0
   },
   "invalid": {
@@ -86,7 +78,6 @@
     "pitchMin": 0.95,
     "pitchMax": 1.05,
     "soundLevel": 115,
-    "channel": "CHAN_STATIC",
     "engineGain": 1.0
   },
   "invalid_surface": {
@@ -96,7 +87,6 @@
     "pitchMin": 0.95,
     "pitchMax": 1.05,
     "soundLevel": 90,
-    "channel": "CHAN_ITEM",
     "engineGain": 1.0
   },
   "portal_open_blue": {
@@ -106,7 +96,6 @@
     "pitchMin": 0.95,
     "pitchMax": 1.05,
     "soundLevel": 105,
-    "channel": "CHAN_AUTO",
     "engineGain": 1.0
   },
   "portal_open_orange": {
@@ -116,7 +105,6 @@
     "pitchMin": 0.95,
     "pitchMax": 1.05,
     "soundLevel": 105,
-    "channel": "CHAN_AUTO",
     "engineGain": 1.0
   },
   "portal_open_layer": {
@@ -126,7 +114,6 @@
     "pitchMin": 0.95,
     "pitchMax": 1.05,
     "soundLevel": 85,
-    "channel": "CHAN_AUTO",
     "engineGain": 1.0
   },
   "portal_close_blue": {
@@ -136,7 +123,6 @@
     "pitchMin": 0.95,
     "pitchMax": 1.05,
     "soundLevel": 80,
-    "channel": "CHAN_BODY",
     "engineGain": 1.0
   },
   "portal_close_orange": {
@@ -146,7 +132,6 @@
     "pitchMin": 0.95,
     "pitchMax": 1.05,
     "soundLevel": 80,
-    "channel": "CHAN_BODY",
     "engineGain": 1.0
   },
   "portal_ambient": {
@@ -156,7 +141,6 @@
     "pitchMin": 1.0,
     "pitchMax": 1.0,
     "soundLevel": 70,
-    "channel": "CHAN_STATIC",
     "engineGain": 0.4
   },
   "portal_fizzle": {
@@ -166,7 +150,6 @@
     "pitchMin": 0.95,
     "pitchMax": 1.05,
     "soundLevel": 105,
-    "channel": "CHAN_ITEM",
     "engineGain": 1.0
   }
 }
