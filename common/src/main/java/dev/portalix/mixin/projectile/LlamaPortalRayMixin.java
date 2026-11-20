@@ -6,10 +6,10 @@ import dev.portalix.portal.traversal.PortalCollisionWorld;
 import dev.portalix.portal.traversal.PortalEntityCollisions;
 import dev.portalix.portal.traversal.ProjectilePortalMovement;
 import java.util.function.Predicate;
-import java.util.stream.Stream;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.projectile.LlamaSpit;
 import net.minecraft.world.level.ClipContext;
+import net.minecraft.world.level.blockscan.BlockMatcher;
 import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
 import org.spongepowered.asm.mixin.Mixin;
@@ -25,11 +25,10 @@ public abstract class LlamaPortalRayMixin {
       at =
           @At(
               value = "INVOKE",
-              target = "Ljava/util/stream/Stream;noneMatch(Ljava/util/function/Predicate;)Z"),
+              target = "Lnet/minecraft/world/level/blockscan/BlockMatcher;noneMatched()Z"),
       allow = 1)
-  private <T> boolean portalix$inside(
-      Stream<T> states, Predicate<? super T> predicate, Operation<Boolean> original) {
-    if (!original.call(states, predicate)) return false;
+  private boolean portalix$inside(BlockMatcher blocks, Operation<Boolean> original) {
+    if (!original.call(blocks)) return false;
     Entity entity = (Entity) (Object) this;
     var link = PortalEntityCollisions.intersectingPortal(entity);
     return link == null

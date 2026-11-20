@@ -27,12 +27,13 @@ abstract class PortalSoundEngineMixin {
   @Shadow @Final private ChannelAccess channelAccess;
 
   @WrapOperation(
-      method = "play",
+      method = {"play", "playWithoutEvent"},
       at =
           @At(
               value = "INVOKE",
               target =
-                  "Lnet/minecraft/client/sounds/ChannelAccess$ChannelHandle;execute(Ljava/util/function/Consumer;)V"))
+                  "Lnet/minecraft/client/sounds/ChannelAccess$ChannelHandle;execute(Ljava/util/function/Consumer;)V"),
+      require = 1, allow = 1)
   private void portalix$bind(
       ChannelAccess.ChannelHandle handle,
       Consumer<Channel> setup,

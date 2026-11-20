@@ -18,7 +18,7 @@ public abstract class PortalEntityStateMixin implements PortalEntityRenderStateA
 
   @Override
   public void portalix$applyModelRotation(PoseStack poses) {
-    if (portalix$modelRotation != null) poses.mulPose(portalix$modelRotation);
+    if (portalix$modelRotation != null) poses.rotate(portalix$modelRotation);
   }
 
   @Override

@@ -93,7 +93,7 @@ public final class PortalEntityScenes {
     double dy = rendered.y - position.y;
     double dz = rendered.z - position.z;
     var bounds =
-        ((EntityRendererAccessor) dispatcher.getRenderer(entity)).portalix$renderBounds(entity);
+        ((EntityRendererAccessor) dispatcher.getRenderer(entity)).portalix$renderBounds(entity, 1.0F);
     var body = entity.getBoundingBox();
     var carried = PortalixClient.carryController().renderCenter(entity, partial);
     if (carried != null) {
@@ -334,7 +334,7 @@ public final class PortalEntityScenes {
       poses.pushPose();
       try {
         poses.translate(position.x, position.y, position.z);
-        poses.mulPose(rotation);
+        poses.rotate(rotation);
 
         var localCamera = camera;
         if (!slice.frame().isEmpty() || carriedRotation != null) {

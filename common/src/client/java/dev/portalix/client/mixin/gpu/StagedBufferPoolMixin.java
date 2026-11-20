@@ -1,8 +1,8 @@
 package dev.portalix.client.mixin.gpu;
 
 import com.llamalad7.mixinextras.injector.ModifyExpressionValue;
-import com.mojang.blaze3d.buffers.GpuBuffer;
-import com.mojang.blaze3d.systems.GpuDevice;
+import com.mojang.renderpearl.api.buffers.GpuBuffer;
+import com.mojang.renderpearl.api.device.GpuDevice;
 import java.time.Duration;
 import java.util.IdentityHashMap;
 import java.util.List;
@@ -54,7 +54,7 @@ abstract class StagedBufferPoolMixin {
   }
 
   @ModifyExpressionValue(method = "acquire", at = @At(value = "INVOKE", target =
-      "Lcom/mojang/blaze3d/systems/GpuDevice;createBuffer(Ljava/util/function/Supplier;IJ)Lcom/mojang/blaze3d/buffers/GpuBuffer;"))
+      "Lcom/mojang/renderpearl/api/device/GpuDevice;createBuffer(Ljava/util/function/Supplier;IJ)Lcom/mojang/renderpearl/api/buffers/GpuBuffer;"))
   private GpuBuffer portalix$trackBuffer(GpuBuffer buffer) {
     portalix$bufferUses.put(buffer, new BufferUse(System.nanoTime()));
     return buffer;

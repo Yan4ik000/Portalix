@@ -19,7 +19,7 @@ abstract class PortalPostPassMixin {
         @At(
             value = "INVOKE",
             target =
-                "Lnet/minecraft/client/renderer/MappableRingBuffer;currentBuffer()Lcom/mojang/blaze3d/buffers/GpuBuffer;"),
+                "Lnet/minecraft/client/renderer/MappableRingBuffer;currentBuffer()Lcom/mojang/renderpearl/api/buffers/GpuBuffer;"),
         @At(
             value = "INVOKE",
             target = "Lnet/minecraft/client/renderer/MappableRingBuffer;rotate()V")

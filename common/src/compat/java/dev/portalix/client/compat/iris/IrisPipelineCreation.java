@@ -1,6 +1,6 @@
 package dev.portalix.client.compat.iris;
 
-import com.mojang.blaze3d.opengl.GlStateManager;
+import com.mojang.renderpearl.backend.opengl.GlStateManager;
 import dev.portalix.client.mixin.compat.iris.IrisStorageBufferAccessor;
 import dev.portalix.client.mixin.compat.iris.IrisStorageBuffersAccessor;
 import it.unimi.dsi.fastutil.ints.IntOpenHashSet;

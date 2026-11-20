@@ -1,17 +1,20 @@
 package dev.portalix.client.portal.clip;
 
-import com.mojang.blaze3d.buffers.GpuBufferSlice;
 import com.mojang.blaze3d.buffers.Std140Builder;
-import com.mojang.blaze3d.pipeline.BindGroupLayout;
-import com.mojang.blaze3d.shaders.UniformType;
 import com.mojang.blaze3d.systems.RenderSystem;
+import com.mojang.renderpearl.api.buffers.GpuBuffer;
+import com.mojang.renderpearl.api.buffers.GpuBufferSlice;
+import com.mojang.renderpearl.api.pipeline.BindGroupLayout;
+import com.mojang.renderpearl.api.pipeline.UniformType;
 import dev.portalix.api.PortalEndpoint;
 import dev.portalix.client.compat.iris.IrisShaders;
 import dev.portalix.client.portal.entity.PortalEntityClipMask;
 import dev.portalix.client.portal.scene.PortalSceneManager;
 import java.nio.ByteBuffer;
+import java.util.function.Supplier;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.renderer.DynamicUniformStorage;
+import net.minecraft.client.renderer.DynamicGpuDataStorage;
+import net.minecraft.client.renderer.DynamicGpuDataStorageMapped;
 import net.minecraft.world.phys.Vec3;
 import org.joml.Matrix4f;
 import org.joml.Matrix4fc;
@@ -21,7 +24,7 @@ public final class PortalClipping {
   public static final String UNIFORM_NAME = "PortalClip";
   public static final BindGroupLayout LAYOUT =
       BindGroupLayout.builder().withUniform(UNIFORM_NAME, UniformType.UNIFORM_BUFFER).build();
-  private static DynamicUniformStorage<Planes> storage;
+  private static DynamicGpuDataStorageMapped<Planes> storage;
   private static GpuBufferSlice disabled;
   private static Vec3 disabledCamera;
   private static GpuBufferSlice current;
@@ -69,8 +72,9 @@ public final class PortalClipping {
   }
 
   private static GpuBufferSlice write(Planes planes) {
-    if (storage == null) storage = new DynamicUniformStorage<>("Portal clip planes", 128, 16);
-    return storage.writeUniform(planes);
+    if (storage == null)
+      storage = new DynamicGpuDataStorageMapped<>("Portal clip planes", 128, GpuBuffer.USAGE_UNIFORM, 16);
+    return storage.writeData(planes);
   }
 
   public static void withEntity(PortalEntityClipMask mask, Runnable render) {
@@ -118,8 +122,22 @@ public final class PortalClipping {
   }
 
   public static void without(Runnable render) {
+    withUniform(null, render);
+  }
+
+  public static <T> T without(Supplier<T> operation) {
     var previous = current;
     current = null;
+    try {
+      return operation.get();
+    } finally {
+      current = previous;
+    }
+  }
+
+  public static void withUniform(GpuBufferSlice uniform, Runnable render) {
+    var previous = current;
+    current = uniform;
     try {
       render.run();
     } finally {
@@ -181,13 +199,12 @@ public final class PortalClipping {
 
   private record Planes(
       Vector4f scene, Vector4f entity, Vector4f[] edges, float mode, boolean oval, Vec3 camera)
-      implements DynamicUniformStorage.DynamicUniform {
+      implements DynamicGpuDataStorage.DynamicGpuData {
     @Override
     public void write(ByteBuffer buffer) {
       var builder = Std140Builder.intoBuffer(buffer).putVec4(scene).putVec4(entity);
       for (var edge : edges) builder.putVec4(edge);
       builder.putVec4(mode, oval ? 1 : 0, 0, 0);
-
       builder.putVec4(
           (float) (Math.floor(camera.x) - camera.x),
           (float) (Math.floor(camera.y) - camera.y),

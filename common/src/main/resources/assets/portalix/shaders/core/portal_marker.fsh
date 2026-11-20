@@ -1,5 +1,6 @@
 #version 330
-#moj_import <minecraft:dynamictransforms.glsl>
+#extension GL_ARB_separate_shader_objects : require
+#include <minecraft:dynamictransforms.glsl>
 uniform sampler2D Sampler0;
 #ifdef PORTALIX_MARKER_OCCLUSION
 uniform sampler2D PortalSurfaceDepth;
@@ -8,8 +9,8 @@ uniform sampler2D PortalSurfaceDepth;
 uniform sampler2D PortalWorldDepth;
 uniform sampler2D PortalHandDepth;
 #endif
-in vec2 texCoord0;
-out vec4 fragColor;
+layout(location = 0) in vec2 texCoord0;
+layout(location = 0) out vec4 fragColor;
 
 void main() {
 #if defined(PORTALIX_MARKER_OCCLUSION) || defined(PORTALIX_IRIS_HAND)

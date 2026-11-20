@@ -173,7 +173,7 @@ public final class PortalCameraReorientation {
     forward.set(referenceUp).cross(right).mul(Math.cos(elevation));
     forward.fma(Math.sin(elevation), referenceUp).normalize();
     var up = new Vector3d(right).cross(forward).normalize();
-    commandView.identity().lookAlong(forward, up).conjugate().normalize();
+    commandView.identity().lookAlong(forward.negate(), up).conjugate().normalize();
     if (restoringUp && pitchDegrees != 0 && referenceUp.y > .9) finishReorientation();
     refreshLookAngles();
   }
@@ -222,7 +222,7 @@ public final class PortalCameraReorientation {
       right.fma(-right.dot(forward), forward);
     }
     up = right.normalize().cross(forward, new Vector3d()).normalize();
-    commandView.identity().lookAlong(forward, up).conjugate().normalize();
+    commandView.identity().lookAlong(forward.negate(), up).conjugate().normalize();
   }
 
   private Quaterniond visibleRotation() {

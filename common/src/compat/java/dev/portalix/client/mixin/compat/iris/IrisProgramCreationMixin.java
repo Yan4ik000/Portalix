@@ -9,7 +9,7 @@ import org.spongepowered.asm.mixin.injection.At;
 @Mixin(ProgramCreator.class)
 abstract class IrisProgramCreationMixin {
   @ModifyExpressionValue(method = "create", at = @At(value = "INVOKE",
-      target = "Lcom/mojang/blaze3d/opengl/GlStateManager;glCreateProgram()I"), allow = 1)
+      target = "Lcom/mojang/renderpearl/backend/opengl/GlStateManager;glCreateProgram()I"), allow = 1)
   private static int portalix$trackProgram(int program) {
     return IrisScene.trackProgram(program);
   }

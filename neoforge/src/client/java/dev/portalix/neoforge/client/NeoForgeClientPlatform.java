@@ -1,6 +1,6 @@
 package dev.portalix.neoforge.client;
 
-import com.mojang.blaze3d.pipeline.RenderPipeline;
+import com.mojang.renderpearl.api.pipeline.RenderPipeline;
 import dev.portalix.PortalixMod;
 import dev.portalix.client.compat.minecraft.PipelineVariant;
 import dev.portalix.client.gun.model.GunMeshFeatureRenderer;
@@ -97,8 +97,7 @@ public final class NeoForgeClientPlatform implements ClientPlatform {
     NeoForgePipeline(PipelineVariant variant) {
       super(
           variant.location(),
-          variant.vertexShader(),
-          variant.source().getFragmentShader(),
+          variant.shaders(),
           variant.defines(),
           variant.layouts(),
           variant.colors(),
@@ -107,7 +106,7 @@ public final class NeoForgeClientPlatform implements ClientPlatform {
           variant.source().isCull(),
           variant.bindings(),
           variant.topology(),
-          variant.source().getStencilTest(),
+          variant.source().pushConstantSize(),
           variant.source().getSortKey());
     }
   }

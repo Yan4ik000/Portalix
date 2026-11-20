@@ -13,7 +13,7 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/Minecraft-26.2-0aa8e8?style=flat-square" alt="Minecraft 26.2">
+  <img src="https://img.shields.io/badge/Minecraft-26.3-0aa8e8?style=flat-square" alt="Minecraft 26.3">
   <img src="https://img.shields.io/badge/Fabric%20%2B%20NeoForge-ff6a00?style=flat-square" alt="Fabric + NeoForge">
   <img src="https://img.shields.io/badge/Статус-Release-34C924?style=flat-square" alt="Release">
 </p>
@@ -40,7 +40,7 @@
 
 Portalix изменяет работу многих подсистем Minecraft, поэтому совместимость с модами для оптимизации не гарантируется. Если вы столкнулись с ошибкой или несовместимостью с другим модом, создайте issue в GitHub-репозитории Portalix.
 
-Поддерживаются только Sodium **0.9.2** и Iris **1.11.4** для Minecraft. Используйте версии для своего загрузчика.
+Поддерживаются только Sodium **0.9.2** и Iris **1.11.7** для Minecraft. Используйте версии для своего загрузчика.
 
 ## Установка
 
@@ -48,8 +48,8 @@ Portalix изменяет работу многих подсистем Minecraft
 
 | Загрузчик | Обязательные зависимости для Minecraft |
 | --- | --- |
-| Fabric Loader 0.19.5+ | Fabric API 0.161.0+26.2 |
-| NeoForge 26.2.0.93+ | Не требуются |
+| Fabric Loader 0.20.1+ | Fabric API 0.166.2+26.3 |
+| NeoForge 26.3.0.115+ | Не требуются |
 
 Поместите JAR-файл мода и его зависимости в папку `mods` на клиенте и сервере. Версия Portalix на клиенте и сервере должна совпадать.
 

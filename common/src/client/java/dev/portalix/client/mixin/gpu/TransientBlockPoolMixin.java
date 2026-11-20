@@ -2,7 +2,7 @@ package dev.portalix.client.mixin.gpu;
 
 import com.llamalad7.mixinextras.injector.wrapmethod.WrapMethod;
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
-import com.mojang.blaze3d.util.TransientBlockAllocator;
+import com.mojang.renderpearl.backend.util.TransientBlockAllocator;
 import it.unimi.dsi.fastutil.objects.ReferenceArrayList;
 import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
@@ -13,7 +13,7 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 @Mixin(TransientBlockAllocator.class)
-abstract class TransientBlockPoolMixin<T> {
+abstract class TransientBlockPoolMixin<T extends TransientBlockAllocator.Allocator.Block> {
   @Shadow @Final private long blockSize;
   @Shadow @Final private TransientBlockAllocator.Allocator<T> allocator;
   @Shadow @Final private ReferenceArrayList<T> freeBlocks;
@@ -42,7 +42,10 @@ abstract class TransientBlockPoolMixin<T> {
     specialBlocks.clear();
 
     return () -> {
-      freeBlocks.addAll(used);
+      for (T block : used) {
+        if (block.suboptimal()) allocator.free(block);
+        else freeBlocks.add(block);
+      }
       special.forEach(allocator::free);
       portalix$trim();
     };

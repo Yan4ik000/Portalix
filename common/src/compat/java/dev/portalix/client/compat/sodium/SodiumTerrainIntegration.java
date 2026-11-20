@@ -1,7 +1,9 @@
 package dev.portalix.client.compat.sodium;
 
+import com.mojang.renderpearl.api.pipeline.RenderPipeline;
 import dev.portalix.client.compat.TerrainIntegration;
 import dev.portalix.client.mixin.compat.sodium.LevelRendererAccessor;
+import java.util.function.Consumer;
 import net.caffeinemc.mods.sodium.client.render.SodiumWorldRenderer;
 import net.caffeinemc.mods.sodium.client.world.LevelRendererExtension;
 import net.minecraft.client.Minecraft;
@@ -59,5 +61,11 @@ public final class SodiumTerrainIntegration implements TerrainIntegration {
   public void invalidateOcclusion(LevelRenderer renderer) {
     var world = ((LevelRendererExtension) renderer).sodium$getWorldRenderer();
     if (world != null) ((SodiumPrimaryView) world).portalix$invalidateOcclusion();
+  }
+
+  @Override
+  public void visitTerrainPipelines(LevelRenderer renderer, Consumer<RenderPipeline> visitor) {
+    var world = ((LevelRendererExtension) renderer).sodium$getWorldRenderer();
+    if (world != null) ((SodiumTerrainPipelines) world).portalix$visitTerrainPipelines(visitor);
   }
 }

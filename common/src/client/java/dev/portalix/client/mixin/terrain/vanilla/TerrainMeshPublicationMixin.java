@@ -56,7 +56,7 @@ abstract class TerrainMeshPublicationMixin {
     this$0.lock();
     try {
       if (((SectionRenderDispatcherAccessor) this$0).portalix$closed()
-          || ((SectionMeshTaskAccess) mesh).portalix$cancelled()) return mesh;
+          || mesh instanceof SectionMeshTaskAccess task && task.portalix$cancelled()) return mesh;
       return original.call(mesh);
     } finally {
       this$0.unlock();

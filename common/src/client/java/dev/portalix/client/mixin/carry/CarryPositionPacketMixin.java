@@ -16,12 +16,7 @@ public abstract class CarryPositionPacketMixin {
     var client = Minecraft.getInstance();
     var entity = client.level == null ? null : client.level.getEntity(packet.id());
     if (entity != null) {
-      var interpolation = entity.getInterpolation();
-      var position =
-          interpolation != null && interpolation.hasActiveInterpolation()
-              ? interpolation.position()
-              : entity.position();
-      PortalixClient.carryController().teleport(entity, position);
+      PortalixClient.carryController().teleport(entity, entity.getClientPosition());
     }
   }
 }

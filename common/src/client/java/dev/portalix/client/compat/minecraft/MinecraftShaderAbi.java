@@ -8,10 +8,12 @@ import net.minecraft.resources.Identifier;
 public final class MinecraftShaderAbi {
   private MinecraftShaderAbi() {}
 
-  public static PortalShaderInterface vertex(Identifier shader, GlslSource source) {
-    boolean projected = source.hasUniformBlock("Projection", null, Map.of("ProjMat", "mat4"));
+  public static PortalShaderInterface vertex(Identifier shader, GlslSource source, String glsl) {
+    boolean projected = glsl.contains("<minecraft:projection.glsl>")
+        || source.hasUniformBlock("Projection", null, Map.of("ProjMat", "mat4"));
     boolean terrain = source.hasUniformBlock("ChunkSection", null,
-        Map.of("ModelViewMat", "mat4", "ChunkPosition", "ivec3"));
+        Map.of("ModelViewMat", "mat4", "ChunkPosition", "ivec3"))
+        || glsl.contains("<minecraft:terrainglobals.glsl>") && source.hasIdentifier("ChunkPosition");
     if (shader != null && (shader.getNamespace().equals("minecraft")
         || shader.getNamespace().equals("portalix"))) {
       boolean core = shader.getPath().startsWith("core/");

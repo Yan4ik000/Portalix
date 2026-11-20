@@ -6,7 +6,6 @@ import dev.portalix.world.snapshot.PaletteSnapshot;
 import dev.portalix.world.snapshot.PaletteSnapshotAccess;
 import java.util.ArrayList;
 import java.util.List;
-import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.protocol.game.ClientboundLevelChunkPacketData;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.chunk.LevelChunk;
@@ -32,9 +31,8 @@ abstract class PortalLocalChunkSnapshotMixin implements ChunkPaletteSnapshots {
     portalix$palettes = List.copyOf(snapshots);
   }
 
-  @Inject(method = "<init>(Lnet/minecraft/network/RegistryFriendlyByteBuf;II)V", at = @At("RETURN"))
-  private void portalix$receivedSnapshots(
-      RegistryFriendlyByteBuf buffer, int x, int z, CallbackInfo ci) {
+  @Inject(method = "<init>(Ljava/util/Map;[BLjava/util/List;)V", at = @At("RETURN"))
+  private void portalix$receivedSnapshots(CallbackInfo ci) {
     portalix$palettes = LocalChunkPalettes.decoding();
   }
 

@@ -33,7 +33,7 @@ abstract class SodiumArenaDataTypeMixin {
 
   @ModifyExpressionValue(
       method = "createSharedArena",
-      at = @At(value = "INVOKE", target = "Lcom/mojang/blaze3d/buffers/GpuBuffer;size()J"))
+      at = @At(value = "INVOKE", target = "Lcom/mojang/renderpearl/api/buffers/GpuBuffer;size()J"))
   private long portalix$alignedCapacity(long bytes) {
     return SodiumArenaCapacity.align(bytes, stride);
   }

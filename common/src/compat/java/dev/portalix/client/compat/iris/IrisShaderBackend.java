@@ -1,7 +1,7 @@
 package dev.portalix.client.compat.iris;
 
-import com.mojang.blaze3d.pipeline.RenderPipeline;
-import com.mojang.blaze3d.vertex.VertexFormat;
+import com.mojang.renderpearl.api.pipeline.RenderPipeline;
+import com.mojang.renderpearl.api.vertex.VertexFormat;
 import dev.portalix.client.compat.RenderScope;
 import dev.portalix.client.compat.ShaderBackend;
 import dev.portalix.client.compat.minecraft.PipelineVariant;

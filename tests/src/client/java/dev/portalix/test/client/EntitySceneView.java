@@ -23,7 +23,7 @@ final class EntitySceneView {
   boolean ready() {
     var window = client.getWindow();
     var presented = FrameCapture.presentation();
-    if (client.gui.screen() != null || client.gui.overlay() != null || window.isMinimized()
+    if (client.gui.screen() != null || client.gui.overlay() != null || window.isIconified()
         || !client.player.onGround() || !client.levelRenderer.hasRenderedAllSections()
         || presented.frameId() <= firstFrame || presented.camera() == null
         || presented.camera().position().distanceTo(client.player.getEyePosition()) > .1) return false;
@@ -36,7 +36,7 @@ final class EntitySceneView {
   Map<String, Object> diagnostics() {
     var data = new LinkedHashMap<String, Object>();
     data.put("screen", client.gui.screen() == null ? null : client.gui.screen().getClass().getSimpleName());
-    data.put("minimized", client.getWindow().isMinimized());
+    data.put("minimized", client.getWindow().isIconified());
     var presentation = FrameCapture.presentation();
     data.put("presentedFrameId", presentation.frameId());
     data.put("presentedNanos", presentation.nanos());

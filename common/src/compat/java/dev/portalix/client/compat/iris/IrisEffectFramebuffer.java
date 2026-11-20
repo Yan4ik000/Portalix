@@ -1,13 +1,13 @@
 package dev.portalix.client.compat.iris;
 
-import com.mojang.blaze3d.GpuFormat;
-import com.mojang.blaze3d.opengl.FrameBufferCache;
-import com.mojang.blaze3d.opengl.GlConst;
-import com.mojang.blaze3d.opengl.GlTexture;
 import com.mojang.blaze3d.pipeline.RenderTarget;
 import com.mojang.blaze3d.systems.RenderSystem;
-import com.mojang.blaze3d.textures.GpuTexture;
-import com.mojang.blaze3d.textures.GpuTextureView;
+import com.mojang.renderpearl.api.GpuFormat;
+import com.mojang.renderpearl.api.textures.GpuTexture;
+import com.mojang.renderpearl.api.textures.GpuTextureView;
+import com.mojang.renderpearl.backend.opengl.FrameBufferCache;
+import com.mojang.renderpearl.backend.opengl.GlConst;
+import com.mojang.renderpearl.backend.opengl.GlTexture;
 import dev.portalix.client.compat.RenderScope;
 import dev.portalix.client.mixin.compat.iris.GlDeviceAccessor;
 import dev.portalix.client.mixin.compat.iris.IrisRenderingPipelineAccessor;
@@ -32,7 +32,7 @@ public final class IrisEffectFramebuffer {
   private IrisEffectFramebuffer() {}
 
   public static boolean supportsColorEffects() {
-    if (!IrisShaders.active() || ImmediateState.bypass || RenderSystem.outputColorTextureOverride != null)
+    if (!IrisShaders.active() || ImmediateState.bypass || IrisEffectTarget.current() != null)
       return true;
     if (!(Iris.getPipelineManager().getPipelineNullable() instanceof IrisRenderingPipeline iris)
         || !iris.shouldOverrideShaders()) return true;
@@ -51,6 +51,7 @@ public final class IrisEffectFramebuffer {
       return Minecraft.getInstance().gameRenderer.mainRenderTarget();
     var images = targets.computeIfAbsent(iris, ignored -> new HashMap<>());
     var access = (IrisRenderingPipelineAccessor) iris;
+    var depth = access.portalix$targets().getDepthTexture();
     int id = colorAttachment(iris);
     var target = images.get(id);
     var image = target == null ? findImage(access.portalix$targets(), id) : target.image;
@@ -59,10 +60,10 @@ public final class IrisEffectFramebuffer {
       var format = borrowedFormat(image.getInternalFormat());
       var backend = ((GpuDeviceAccessor) RenderSystem.getDevice()).getBackend();
       var cache = ((GlDeviceAccessor) backend).portalix$framebuffers();
-      target = new Target(id, format, image, cache);
+      target = new Target(id, format, image, depth.getFormat(), cache);
       images.put(id, target);
     }
-    target.depth(access.portalix$targets().getDepthTexture());
+    target.depth(depth);
     target.used = true;
     return target;
   }
@@ -107,7 +108,7 @@ public final class IrisEffectFramebuffer {
 
   public static Scope begin() {
     if (!IrisShaders.active() || ImmediateState.bypass) return null;
-    return new Scope(RenderSystem.outputColorTextureOverride == null ? current() : null);
+    return new Scope(IrisEffectTarget.current() == null ? current() : null);
   }
 
   static Scope beginDepth(RenderTarget target) {
@@ -147,24 +148,19 @@ public final class IrisEffectFramebuffer {
   }
 
   public static final class Scope implements RenderScope {
-    private final GpuTextureView color = RenderSystem.outputColorTextureOverride;
-    private final GpuTextureView depth = RenderSystem.outputDepthTextureOverride;
+    private final RenderScope targetScope;
     private final boolean bypass = ImmediateState.bypass;
     private final boolean multiply = ImmediateState.safeToMultiply;
 
     Scope(RenderTarget target) {
-      if (target != null) {
-        RenderSystem.outputColorTextureOverride = target.getColorTextureView();
-        RenderSystem.outputDepthTextureOverride = target.getDepthTextureView();
-      }
+      targetScope = target == null ? null : IrisEffectTarget.override(target);
       ImmediateState.bypass = true;
       ImmediateState.safeToMultiply = false;
     }
 
     @Override
     public void close() {
-      RenderSystem.outputColorTextureOverride = color;
-      RenderSystem.outputDepthTextureOverride = depth;
+      if (targetScope != null) targetScope.close();
       ImmediateState.bypass = bypass;
       ImmediateState.safeToMultiply = multiply;
     }
@@ -177,8 +173,8 @@ public final class IrisEffectFramebuffer {
 
     Target(
         int id, GpuFormat format, net.irisshaders.iris.targets.RenderTarget image,
-        FrameBufferCache cache) {
-      super("Iris effect target", true, format);
+        GpuFormat depthFormat, FrameBufferCache cache) {
+      super("Iris effect target", format, depthFormat);
       this.image = image;
       width = image.getWidth();
       height = image.getHeight();

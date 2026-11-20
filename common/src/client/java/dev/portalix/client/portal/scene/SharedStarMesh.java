@@ -1,6 +1,6 @@
 package dev.portalix.client.portal.scene;
 
-import com.mojang.blaze3d.buffers.GpuBuffer;
+import com.mojang.renderpearl.api.buffers.GpuBuffer;
 import java.util.function.Supplier;
 
 public final class SharedStarMesh {

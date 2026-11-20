@@ -20,6 +20,7 @@ import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import net.minecraft.client.CameraType;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.renderer.entity.state.ItemEntityRenderState;
 import net.minecraft.util.Mth;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.Mob;
@@ -375,8 +376,17 @@ final class CarrySystemScene implements ClientSystemScene {
           : center.add(0, -entity.getBbHeight() / 2, 0);
       Quaternionf carryRotation = carry.renderRotation(entity, partial);
       Quaternionf rotation = carryRotation == null ? new Quaternionf() : new Quaternionf(carryRotation);
-      if (entity instanceof ItemEntity item) rotation.mul(PortalItemRotation.rotation(item));
       var body = entity.getBoundingBox().move(entity.position().scale(-1));
+      if (entity instanceof ItemEntity item) {
+        var state = (ItemEntityRenderState) client.getEntityRenderDispatcher().extractEntity(item, partial);
+        var model = state.item.getModelBoundingBox();
+        float bob = Mth.sin(state.ageInTicks / 10 + state.bobOffset) * .1f + .1f;
+        rotation.mul(PortalItemRotation.rotation(item));
+        var lift = rotation.transform(new Vector3f(0, bob - (float) model.minY + .0625f, 0));
+        feet = feet.add(lift.x, lift.y, lift.z);
+        rotation.rotateY(ItemEntity.getSpin(state.ageInTicks, state.bobOffset));
+        body = state.count > 1 ? model.inflate(.15) : model;
+      }
       double minX = Double.POSITIVE_INFINITY, minY = minX, minZ = minX;
       double maxX = Double.NEGATIVE_INFINITY, maxY = maxX, maxZ = maxX;
       for (int corner = 0; corner < 8; corner++) {

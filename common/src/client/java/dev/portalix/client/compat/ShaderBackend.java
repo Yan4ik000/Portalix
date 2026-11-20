@@ -1,15 +1,17 @@
 package dev.portalix.client.compat;
 
-import com.mojang.blaze3d.pipeline.RenderPipeline;
-import com.mojang.blaze3d.vertex.VertexFormat;
+import com.mojang.renderpearl.api.pipeline.RenderPipeline;
+import com.mojang.renderpearl.api.vertex.VertexFormat;
 import dev.portalix.client.compat.iris.IrisDrawContext;
+import dev.portalix.client.compat.iris.IrisShaders;
 import dev.portalix.client.portal.render.PortalScreenRegion;
 import net.minecraft.client.renderer.rendertype.PreparedRenderType;
 import net.minecraft.world.item.Item;
 import org.joml.Matrix4f;
 
 public interface ShaderBackend {
-  ShaderBackend INSTANCE = OptionalRenderServices.load(ShaderBackend.class, "iris");
+  ShaderBackend INSTANCE = IrisShaders.available()
+      ? OptionalRenderServices.require(ShaderBackend.class, "iris") : null;
 
   boolean active();
   boolean shadowPass();

@@ -1,7 +1,7 @@
 package dev.portalix.client.compat.sodium;
 
-import com.mojang.blaze3d.buffers.GpuBuffer;
-import com.mojang.blaze3d.buffers.GpuBufferSlice;
+import com.mojang.renderpearl.api.buffers.GpuBuffer;
+import com.mojang.renderpearl.api.buffers.GpuBufferSlice;
 import com.mojang.blaze3d.systems.RenderSystem;
 import dev.portalix.client.render.TransientStagingAccess;
 import java.nio.ByteBuffer;

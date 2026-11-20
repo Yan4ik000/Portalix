@@ -3,6 +3,7 @@ package dev.portalix.client.mixin.terrain.vanilla;
 import com.llamalad7.mixinextras.injector.ModifyExpressionValue;
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
+import com.llamalad7.mixinextras.sugar.Local;
 import com.llamalad7.mixinextras.sugar.Share;
 import com.llamalad7.mixinextras.sugar.ref.LocalRef;
 import dev.portalix.client.compat.minecraft.VanillaSceneTerrain;
@@ -11,6 +12,7 @@ import dev.portalix.client.portal.terrain.PortalTranslucentIndices;
 import dev.portalix.client.portal.terrain.PortalViewIndicesAccess;
 import dev.portalix.client.portal.terrain.SectionMeshBuffersAccess;
 import it.unimi.dsi.fastutil.objects.ObjectArrayList;
+import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.LevelRenderer;
 import net.minecraft.client.renderer.ViewArea;
 import net.minecraft.client.renderer.chunk.ChunkSectionLayer;
@@ -19,8 +21,8 @@ import net.minecraft.client.renderer.chunk.SectionMesh;
 import net.minecraft.client.renderer.chunk.SectionRenderDispatcher;
 import net.minecraft.client.renderer.chunk.TranslucencyPointOfView;
 import net.minecraft.world.phys.Vec3;
-import org.objectweb.asm.Opcodes;
 import org.joml.Matrix4fc;
+import org.objectweb.asm.Opcodes;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.Unique;
@@ -36,9 +38,9 @@ abstract class TerrainPortalIndicesMixin implements PortalViewIndicesAccess {
 
   @Shadow public abstract SectionRenderDispatcher sectionRenderDispatcher();
 
-  @Inject(method = "prepareChunkRenders", at = @At("HEAD"))
-  private void portalix$uploadIndices(Matrix4fc matrix, CallbackInfoReturnable<?> cir) {
-    portalix$indices.prepare(sectionRenderDispatcher());
+  @Inject(method = {"prepareChunkRenders", "prepareChunkRendersIndirect"}, at = @At("HEAD"))
+  private void portalix$uploadIndices(Matrix4fc matrix, boolean sort, CallbackInfoReturnable<?> cir) {
+    if (sort) portalix$indices.prepare(sectionRenderDispatcher());
   }
 
   @ModifyExpressionValue(
@@ -69,13 +71,14 @@ abstract class TerrainPortalIndicesMixin implements PortalViewIndicesAccess {
   private void portalix$independentSort(
       SectionRenderDispatcher.RenderSection section, TranslucencyPointOfView pointOfView,
       Vec3 camera, boolean blockChanged, boolean nearby, CallbackInfo ci) {
-    if (!(viewArea instanceof PortalTerrainViewArea)) return;
+    if (!(viewArea instanceof PortalTerrainViewArea)
+        || Minecraft.getInstance().gameRenderer.useImprovedTransparency()) return;
     portalix$indices.schedule(section, pointOfView, camera, blockChanged, nearby);
     ci.cancel();
   }
 
   @WrapOperation(
-      method = "prepareChunkRenders",
+      method = "extractSectionDrawGroups",
       at =
           @At(
               value = "INVOKE",
@@ -85,10 +88,11 @@ abstract class TerrainPortalIndicesMixin implements PortalViewIndicesAccess {
       SectionRenderDispatcher dispatcher,
       SectionMesh mesh,
       ChunkSectionLayer layer,
-      Operation<SectionRenderDispatcher.RenderSectionBufferSlice> original) {
+      Operation<SectionRenderDispatcher.RenderSectionBufferSlice> original,
+      @Local(argsOnly = true) boolean sort) {
     if (!(mesh instanceof SectionMeshBuffersAccess buffers)) return null;
     var slice = buffers.portalix$slice(layer);
-    if (viewArea instanceof PortalTerrainViewArea
+    if (sort && viewArea instanceof PortalTerrainViewArea
         && layer == ChunkSectionLayer.TRANSLUCENT
         && slice != null
         && mesh instanceof CompiledSectionMesh compiled)

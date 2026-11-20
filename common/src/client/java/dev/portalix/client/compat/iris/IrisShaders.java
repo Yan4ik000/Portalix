@@ -1,13 +1,19 @@
 package dev.portalix.client.compat.iris;
 
-import com.mojang.blaze3d.pipeline.RenderPipeline;
+import com.mojang.renderpearl.api.pipeline.RenderPipeline;
 import dev.portalix.client.compat.ShaderBackend;
+import dev.portalix.platform.ModPresence;
+import net.irisshaders.iris.mixin.IrisMixinPlugin;
 import org.joml.Matrix4f;
 
 public final class IrisShaders {
   public static final int MAX_PORTAL_VIEWS = 4;
 
   private IrisShaders() {}
+
+  public static boolean available() {
+    return ModPresence.INSTANCE.isLoaded("iris") && !IrisMixinPlugin.usingVulkan;
+  }
 
   public static boolean active() {
     return ShaderBackend.INSTANCE != null && ShaderBackend.INSTANCE.active();

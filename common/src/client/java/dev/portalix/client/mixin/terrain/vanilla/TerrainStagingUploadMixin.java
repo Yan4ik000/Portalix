@@ -2,9 +2,9 @@ package dev.portalix.client.mixin.terrain.vanilla;
 
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
-import com.mojang.blaze3d.buffers.GpuBuffer;
-import com.mojang.blaze3d.buffers.GpuBufferSlice;
-import com.mojang.blaze3d.systems.CommandEncoder;
+import com.mojang.renderpearl.api.buffers.GpuBuffer;
+import com.mojang.renderpearl.api.buffers.GpuBufferSlice;
+import com.mojang.renderpearl.api.commands.CommandEncoder;
 import dev.portalix.client.portal.terrain.TerrainStagingCapacityAccess;
 import dev.portalix.client.render.TransientStagingAccess;
 import java.nio.ByteBuffer;
@@ -45,7 +45,7 @@ abstract class TerrainStagingUploadMixin implements TerrainStagingCapacityAccess
           @At(
               value = "INVOKE",
               target =
-                  "Lcom/mojang/blaze3d/systems/CommandEncoder;writeToBuffer(Lcom/mojang/blaze3d/buffers/GpuBufferSlice;Ljava/nio/ByteBuffer;)V"))
+                  "Lcom/mojang/renderpearl/api/commands/CommandEncoder;writeToBuffer(Lcom/mojang/renderpearl/api/buffers/GpuBufferSlice;Ljava/nio/ByteBuffer;)V"))
   private void portalix$upload(
       CommandEncoder encoder,
       GpuBufferSlice destination,

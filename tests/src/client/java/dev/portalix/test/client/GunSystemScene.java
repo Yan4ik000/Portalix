@@ -11,6 +11,7 @@ import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import net.minecraft.client.Minecraft;
 import net.minecraft.core.BlockPos;
+import net.minecraft.util.Util;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.phys.AABB;
 
@@ -181,7 +182,8 @@ final class GunSystemScene extends CourseSceneSupport {
     return camera != null && camera.position().distanceTo(client.player.getEyePosition()) < .05
         && client.player.onGround() && client.level.getBlockState(floor).is(Blocks.QUARTZ_BLOCK)
         && client.level.getBlockState(BlockPos.containing(course.missAim())).is(Blocks.IRON_BARS)
-        && client.levelRenderer.isSectionCompiledAndVisible(floor);
+        && client.levelRenderer.isSectionCompiledAndVisible(
+            floor, Util.toMillis(client.options.chunkSectionFadeInTime().get()));
   }
 
   public List<String> passed() { return List.copyOf(passed); }

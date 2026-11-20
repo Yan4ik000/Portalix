@@ -6,7 +6,7 @@ import com.llamalad7.mixinextras.injector.ModifyExpressionValue;
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
 import com.llamalad7.mixinextras.sugar.Local;
-import com.mojang.blaze3d.textures.GpuTexture;
+import com.mojang.renderpearl.api.textures.GpuTexture;
 import dev.portalix.client.compat.iris.IrisScene;
 import dev.portalix.client.compat.iris.IrisTargetHistory;
 import net.irisshaders.iris.targets.RenderTargets;

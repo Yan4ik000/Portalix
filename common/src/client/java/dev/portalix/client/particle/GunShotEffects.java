@@ -196,7 +196,6 @@ public final class GunShotEffects {
               collector,
               this.identityPose,
               ParticleRenderTypes.linearTintedParticle(TEX_MUZZLE, 15, false),
-              TEX_MUZZLE,
               (pose, vertices) -> {
                 for (int i = 0; i < 4; i++) {
                   double distance = Mth.lerp(i / 3.0, .01 * GunMuzzle.MODEL_SCALE, MUZZLE_LENGTH);

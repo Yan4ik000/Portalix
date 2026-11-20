@@ -2,6 +2,7 @@ package dev.portalix.item;
 
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.util.Prediction;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.entity.LivingEntity;
@@ -35,7 +36,7 @@ public final class PortalixItem extends Item {
     if (slot == EquipmentSlot.OFFHAND && entity instanceof Player player) {
       player.setItemSlot(EquipmentSlot.OFFHAND, ItemStack.EMPTY);
       if (!player.getInventory().add(stack)) {
-        player.drop(stack, false);
+        player.drop(stack, false, Prediction.SERVER_ONLY);
       }
     }
   }

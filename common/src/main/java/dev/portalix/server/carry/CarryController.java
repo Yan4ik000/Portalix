@@ -311,7 +311,7 @@ public final class CarryController {
                 .scale(THROW_SPEED)
                 .add(hold.releaseVelocity)
             : hold.releaseVelocity);
-    entity.hurtMarked = true;
+    entity.syncVelocity = true;
     flights.put(entity.getUUID(), new Flight(entity, hold.generation));
     broadcast.sendRelease(
         entity, player, launch, hold.generation, tick);

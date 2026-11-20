@@ -46,14 +46,14 @@ public final class PortalCameraEnvironment {
 
   public record BlockingBlock(BlockState state, BlockPos position) {}
 
-  public static BlockingBlock blockingBlock(Player player) {
+  public static BlockingBlock blockingBlock(Player player, AABB nearPlane) {
     if (player.noPhysics) return null;
     var camera = Minecraft.getInstance().gameRenderer.mainCamera();
     Vec3 eye = camera.position();
     BlockPos block = BlockPos.containing(eye);
     BlockState state = player.level().getBlockState(block);
     if (state.getRenderShape() == RenderShape.INVISIBLE
-        || !state.isViewBlocking(player.level(), block)) return null;
+        || !state.isViewBlocking(player.level(), block, nearPlane.move(eye))) return null;
     var opening =
         samplingLinks(camera).stream()
             .filter(link -> insideOpening(link, eye))

@@ -1,26 +1,23 @@
 package dev.portalix.client.mixin.gpu;
 
-import com.mojang.blaze3d.pipeline.RenderPipeline;
-import dev.portalix.client.compat.iris.IrisShaders;
+import com.mojang.renderpearl.api.pipeline.CompiledRenderPipeline;
+import com.mojang.renderpearl.backend.opengl.GlRenderPipeline;
+import com.mojang.renderpearl.frontend.FrontendRenderPass;
+import com.mojang.renderpearl.frontend.FrontendRenderPipeline;
+import dev.portalix.client.portal.clip.GlClipState;
 import dev.portalix.client.portal.clip.PortalClipping;
-import org.lwjgl.opengl.GL33C;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
-@Mixin(targets = "com.mojang.blaze3d.opengl.GlRenderPass")
+@Mixin(FrontendRenderPass.class)
 abstract class GlClipMixin {
   @Inject(method = "setPipeline", at = @At("TAIL"))
-  private void portalix$clipDistance(RenderPipeline pipeline, CallbackInfo ci) {
-    if (PortalClipping.active()
-        && (pipeline.getShaderDefines().flags().contains("PORTALIX_CLIP")
-            || IrisShaders.overridesGeometry(pipeline))) {
-      GL33C.glEnable(GL33C.GL_CLIP_DISTANCE0);
-      GL33C.glEnable(GL33C.GL_CLIP_DISTANCE1);
-    } else {
-      GL33C.glDisable(GL33C.GL_CLIP_DISTANCE0);
-      GL33C.glDisable(GL33C.GL_CLIP_DISTANCE1);
-    }
+  private void portalix$clipDistance(CompiledRenderPipeline pipeline, CallbackInfo ci) {
+    if (!(pipeline instanceof FrontendRenderPipeline front)
+        || !(front.backendRenderPipeline() instanceof GlRenderPipeline)) return;
+    GlClipState.setEnabled(PortalClipping.active()
+        && front.uniformIndices().containsKey(PortalClipping.UNIFORM_NAME));
   }
 }

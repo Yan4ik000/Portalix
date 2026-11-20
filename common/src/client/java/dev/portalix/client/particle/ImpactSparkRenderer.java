@@ -87,7 +87,6 @@ final class ImpactSparkRenderer {
         collector,
         IDENTITY_POSE,
         ParticleRenderTypes.linearTintedParticle(texture, overbright, false),
-        texture,
         (pose, buffer) -> {
           Vector3f a = new Vector3f();
           Vector3f b = new Vector3f();

@@ -21,6 +21,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import net.minecraft.client.Minecraft;
+import net.minecraft.util.Util;
 import net.minecraft.world.level.chunk.status.ChunkStatus;
 import net.minecraft.world.phys.Vec3;
 
@@ -269,6 +270,7 @@ final class PerformanceSystemScene implements ClientSystemScene {
     boolean queuesDrained = false;
     boolean coreReady = false;
     if (openedLink != null) {
+      long fadeMillis = Util.toMillis(client.options.chunkSectionFadeInTime().get());
       for (var entry : PortalSceneManagerAccessor.portalix$scenes().entrySet()) {
         if (!entry.getKey().equals(List.of(openedLink))) continue;
         var scene = (PortalRenderSceneAccessor) entry.getValue();
@@ -278,7 +280,7 @@ final class PerformanceSystemScene implements ClientSystemScene {
           var chunk = client.level.getChunkSource().getChunk(position.getX() >> 4, position.getZ() >> 4,
               ChunkStatus.FULL, false);
           return chunk != null && (chunk.getSection(chunk.getSectionIndex(position.getY())).hasOnlyAir()
-              || scene.portalix$renderer().isSectionCompiledAndVisible(position));
+              || scene.portalix$renderer().isSectionCompiledAndVisible(position, fadeMillis));
         });
       }
       if (remoteImage && firstRemoteImageNanos == 0) firstRemoteImageNanos = nanos;

@@ -2,8 +2,8 @@ package dev.portalix.client.mixin.terrain.vanilla;
 
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
-import com.mojang.blaze3d.systems.GpuDevice;
 import com.mojang.blaze3d.vertex.UberGpuBuffer;
+import com.mojang.renderpearl.api.device.GpuDevice;
 import dev.portalix.client.portal.terrain.TerrainBufferSizing;
 import dev.portalix.client.portal.terrain.TerrainStagedAllocationAccess;
 import it.unimi.dsi.fastutil.objects.Object2ObjectOpenHashMap;

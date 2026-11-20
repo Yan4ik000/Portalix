@@ -1,13 +1,16 @@
 package dev.portalix.client.portal.clip;
 
-import com.mojang.blaze3d.shaders.ShaderType;
 import com.mojang.blaze3d.systems.RenderSystem;
+import com.mojang.renderpearl.api.pipeline.ShaderType;
 import dev.portalix.client.compat.minecraft.MinecraftShaderAbi;
 import dev.portalix.client.compat.sodium.SodiumShaderAbi;
 import dev.portalix.client.render.GlslSource;
+import java.util.regex.Pattern;
 import net.minecraft.resources.Identifier;
 
 public final class PortalClipShaders {
+  private static final Pattern LOCATION = Pattern.compile("\\blocation\\s*=\\s*(\\d+)");
+
   public enum ClipAbi {
     VANILLA(PortalClipping.UNIFORM_NAME, "#ifdef PORTALIX_CLIP\n"),
     IRIS("iris_" + PortalClipping.UNIFORM_NAME, "#if 1\n"),
@@ -24,10 +27,17 @@ public final class PortalClipShaders {
 
   private PortalClipShaders() {}
 
-  public static String shader(Identifier shader, String source, ShaderType type) {
+  public static int firstVaryingLocation(String vertexSource) {
+    var locations = LOCATION.matcher(vertexSource);
+    int next = 0;
+    while (locations.find()) next = Math.max(next, 1 + Integer.parseInt(locations.group(1)));
+    return next;
+  }
+
+  public static String shader(Identifier shader, String source, ShaderType type, int location) {
     boolean hardwareClipping =
         RenderSystem.getDevice().getDeviceInfo().backendName().equals("OpenGL");
-    return patch(source, type, hardwareClipping, null, false, ClipAbi.VANILLA, shader);
+    return patch(source, type, hardwareClipping, null, false, ClipAbi.VANILLA, shader, location);
   }
 
   public static String patch(
@@ -37,7 +47,7 @@ public final class PortalClipShaders {
       PortalShaderInterface shaderInterface,
       boolean geometryStage,
       ClipAbi abi) {
-    return patch(source, type, hardwareClipping, shaderInterface, geometryStage, abi, null);
+    return patch(source, type, hardwareClipping, shaderInterface, geometryStage, abi, null, -1);
   }
 
   private static String patch(
@@ -47,7 +57,8 @@ public final class PortalClipShaders {
       PortalShaderInterface shaderInterface,
       boolean geometryStage,
       ClipAbi abi,
-      Identifier shader) {
+      Identifier shader,
+      int location) {
     if (source == null) return null;
     var parsed = new GlslSource(source);
     int main = parsed.function("void", "main");
@@ -64,7 +75,7 @@ public final class PortalClipShaders {
           shaderInterface != null
               ? shaderInterface
               : SodiumShaderAbi.terrain(shader)
-                  ? SodiumShaderAbi.vertex(parsed) : MinecraftShaderAbi.vertex(shader, parsed);
+                  ? SodiumShaderAbi.vertex(parsed) : MinecraftShaderAbi.vertex(shader, parsed, source);
       boolean projected = layout.projected();
       boolean unwarped =
           parsed.hasIdentifier("portalix_UnclippedPosition")
@@ -79,12 +90,7 @@ public final class PortalClipShaders {
               + " { vec4 portalix_Plane; vec4 portalix_EntityPlane;"
               + " vec4 portalix_Edges[4]; vec4 portalix_Mode; vec4 portalix_CameraFraction; };\n"
               + (correction ? abi.guard : "")
-              + "out float portalix_EntityDistance;\nout vec4 portalix_Aperture;\n"
-              + "flat out float portalix_EntityMode;\n"
-              + "flat out float portalix_Oval;\n"
-              + "out vec3 portalix_ProjectedPosition;\nflat out vec4 portalix_ScenePlane;\n"
-              + "flat out float portalix_Terrain;\n"
-              + (hardwareClipping ? "" : "out float portalix_Distance;\n")
+              + varyings("out", location, hardwareClipping)
               + "#endif\n";
       String assignments =
           layout.vertexCorrection()
@@ -139,12 +145,7 @@ public final class PortalClipShaders {
     }
     return renamed
         + "\n" + abi.guard
-        + "in float portalix_EntityDistance;\nin vec4 portalix_Aperture;\n"
-        + "flat in float portalix_EntityMode;\n"
-        + "flat in float portalix_Oval;\n"
-        + "in vec3 portalix_ProjectedPosition;\nflat in vec4 portalix_ScenePlane;\n"
-        + "flat in float portalix_Terrain;\n"
-        + (hardwareClipping ? "" : "in float portalix_Distance;\n")
+        + varyings("in", location, hardwareClipping)
         + "void main() { "
         + "if (portalix_Terrain > 0.0 && dot(portalix_ScenePlane.xyz, portalix_ScenePlane.xyz) > 0.0) { "
         + "vec3 planeNormal = portalix_ScenePlane.xyz; "
@@ -163,5 +164,21 @@ public final class PortalClipShaders {
         + "if (portalix_EntityMode < 0.0 && portalix_EntityDistance < 0.0 && inside) discard;\n"
         + "if (portalix_EntityMode > 0.0 && !inside) discard;\n"
         + originalMain + "(); }\n#else\nvoid main() { " + originalMain + "(); }\n#endif\n";
+  }
+
+  private static String varyings(String direction, int location, boolean hardwareClipping) {
+    return varying(direction, location, 0, "", "float portalix_EntityDistance")
+        + varying(direction, location, 1, "", "vec4 portalix_Aperture")
+        + varying(direction, location, 2, "flat ", "float portalix_EntityMode")
+        + varying(direction, location, 3, "flat ", "float portalix_Oval")
+        + varying(direction, location, 4, "", "vec3 portalix_ProjectedPosition")
+        + varying(direction, location, 5, "flat ", "vec4 portalix_ScenePlane")
+        + varying(direction, location, 6, "flat ", "float portalix_Terrain")
+        + (hardwareClipping ? "" : varying(direction, location, 7, "", "float portalix_Distance"));
+  }
+
+  private static String varying(String direction, int location, int offset, String qualifier, String declaration) {
+    String layout = location < 0 ? "" : "layout(location = " + (location + offset) + ") ";
+    return layout + qualifier + direction + " " + declaration + ";\n";
   }
 }

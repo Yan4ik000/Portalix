@@ -1,16 +1,15 @@
 #version 330
+#extension GL_ARB_separate_shader_objects : require
 uniform sampler2D Sampler0;
-in vec2 texCoord;
-in vec4 vertexColor;
+layout(location = 0) in vec2 texCoord;
+layout(location = 1) in vec4 vertexColor;
 
 // Vulkan packs the inputs, so projected reserves the location before worldPosition.
-in vec4 projected;
-in vec3 worldPosition;
-out vec4 fragColor;
-#moj_import <portalix:portal_particle_depth.glsl>
-#moj_import <portalix:color_space.glsl>
+layout(location = 2) in vec4 projected;
+layout(location = 3) in vec3 worldPosition;
+#include <portalix:portal_particle_output.glsl>
+#include <portalix:color_space.glsl>
 void main() {
-    gl_FragDepth = portalParticleDepth(worldPosition);
     vec4 texel = texture(Sampler0, texCoord);
     vec3 color = vertexColor.rgb;
     float alpha = texel.a * vertexColor.a;
@@ -20,5 +19,5 @@ void main() {
 #else
     color = srgbToLinear(texel.rgb) * color;
 #endif
-    fragColor = vec4(linearToSrgb(clamp(color, 0.0, 1.0)), clamp(alpha, 0.0, 1.0));
+    writePortalParticle(vec4(linearToSrgb(clamp(color, 0.0, 1.0)), clamp(alpha, 0.0, 1.0)));
 }

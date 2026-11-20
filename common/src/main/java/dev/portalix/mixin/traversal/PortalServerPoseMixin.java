@@ -53,6 +53,14 @@ abstract class PortalServerPoseMixin {
     if (portalix$positionCorrection && ServerPlayerMotion.awaitingTeleport(player)) ci.setReturnValue(true);
   }
 
+  @Inject(method = "handleAcceptTeleportPacket", at = @At(value = "INVOKE", target =
+      "Lnet/minecraft/server/network/ServerGamePacketListenerImpl;handlePlayerPositionChange(DDDFFZZ)V"),
+      require = 1, allow = 1)
+  private void portalix$rebaseAfterTeleport(CallbackInfo ci) {
+    // The acknowledgement supplies movement from the position the server just installed.
+    ServerPlayerMotion.rebaseMovementBudget(player, player);
+  }
+
   @WrapOperation(
       method = "teleport(Lnet/minecraft/world/entity/PositionMoveRotation;Ljava/util/Set;)V",
       at = @At(value = "INVOKE", target =

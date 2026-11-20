@@ -1,9 +1,10 @@
 package dev.portalix.client.portal.clip;
 
-import com.mojang.blaze3d.pipeline.RenderPipeline;
+import com.mojang.renderpearl.api.pipeline.RenderPipeline;
 import dev.portalix.client.compat.iris.IrisShaders;
 import dev.portalix.client.compat.minecraft.PipelineVariant;
 import java.util.IdentityHashMap;
+import java.util.List;
 import java.util.Map;
 import net.minecraft.client.renderer.ShaderDefines;
 
@@ -14,19 +15,14 @@ public final class PortalClipPipelineCache {
 
   private PortalClipPipelineCache() {}
 
-  public static void clear() {
-    VARIANTS.clear();
+  public static void retainVariantsFor(List<RenderPipeline> active) {
+    VARIANTS.keySet().retainAll(active);
   }
 
   public static RenderPipeline select(RenderPipeline pipeline) {
     return PortalClipping.active() && !IrisShaders.overrides(pipeline)
         ? clipped(pipeline)
         : pipeline;
-  }
-
-  public static boolean usesClipUniform(RenderPipeline pipeline) {
-    return pipeline.getBindGroupLayouts().contains(PortalClipping.LAYOUT)
-        || IrisShaders.overridesGeometry(pipeline);
   }
 
   public static RenderPipeline clipped(RenderPipeline pipeline) {

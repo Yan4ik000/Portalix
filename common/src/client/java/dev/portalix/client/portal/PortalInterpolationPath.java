@@ -34,6 +34,10 @@ public final class PortalInterpolationPath {
   }
 
   public PortalLookAngles sourceAngles(float yaw, float pitch) {
+    return sourceAngles(crossings, yaw, pitch);
+  }
+
+  static PortalLookAngles sourceAngles(List<Crossing> crossings, float yaw, float pitch) {
     var angles = new PortalLookAngles(yaw, pitch);
     for (var crossing : crossings.reversed())
       angles =
@@ -43,6 +47,10 @@ public final class PortalInterpolationPath {
   }
 
   public Vec3 sourceVector(Vec3 vector) {
+    return sourceVector(crossings, vector);
+  }
+
+  static Vec3 sourceVector(List<Crossing> crossings, Vec3 vector) {
     for (var crossing : crossings.reversed())
       vector = crossing.link().transform().inverse().vector(vector);
     return vector;

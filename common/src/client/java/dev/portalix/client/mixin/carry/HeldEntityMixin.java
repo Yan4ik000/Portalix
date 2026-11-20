@@ -24,6 +24,7 @@ public abstract class HeldEntityMixin {
       double x,
       double y,
       double z,
+      float partialTick,
       CallbackInfoReturnable<Boolean> result) {
     if (PortalixClient.carryController().predicted(entity)) {
       result.setReturnValue(

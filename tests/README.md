@@ -32,12 +32,6 @@ python3 tests/test_matrix.py --packaged
 
 Матрица включает native, Sodium и Sodium + Iris на OpenGL, а также native и Sodium на Vulkan для обоих загрузчиков. Iris-профили используют Complementary Unbound с настройками HIGH.
 
-В сеансе Linux Wayland при зависании показа Xwayland-окна внутри GLFW можно выбрать нативный Wayland для текущего запуска:
-
-```sh
-JDK_JAVA_OPTIONS='-DMC_DEBUG_ENABLED=true -DMC_DEBUG_PREFER_WAYLAND=true' python3 tests/test_matrix.py --packaged
-```
-
 ## Сценарии
 
 Серверные группы: `placement`, `traversal`, `player_traversal`, `projectiles`, `combat`, `carry`, `chunks`, `content`. Они проверяют установку и сброс порталов, обычное движение, полёт и попадание снарядов, бой, перенос объектов, загрузку удалённого мира, сохранение сущностей, крафт и добычу.

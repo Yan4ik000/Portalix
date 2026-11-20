@@ -20,6 +20,7 @@ import java.util.ArrayList;
 import java.util.concurrent.atomic.AtomicReference;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
+import net.minecraft.core.PositionAndRotation;
 import net.minecraft.network.protocol.common.ClientboundPingPacket;
 import net.minecraft.network.protocol.common.ServerboundKeepAlivePacket;
 import net.minecraft.network.protocol.common.ServerboundPongPacket;
@@ -274,6 +275,7 @@ final class MovementPacketRegression {
     connection.handleMovePlayer(new ServerboundMovePlayerPacket.Pos(next, false, false));
     check(!ServerPlayerMotion.awaitingTeleport(player) && player.position().equals(next),
         "The portal replay clock corrected ordinary player movement");
+    connection.handleClientTickEnd(ServerboundClientTickEndPacket.INSTANCE);
     connection.handleMovePlayer(new ServerboundMovePlayerPacket.Pos(next.add(20, 0, 0), false, false));
     check(ServerPlayerMotion.awaitingTeleport(player) && player.position().equals(next),
         "The native player speed check did not run outside portal replay");
@@ -296,9 +298,11 @@ final class MovementPacketRegression {
           "A mount without portals did not retain the vanilla packet order");
       acceptTeleport(player);
       ServerPlayerMotion.rebase(boat);
-      connection.handleMoveVehicle(new ServerboundMoveVehiclePacket(next, 0, 0, false));
+      connection.handleMoveVehicle(new ServerboundMoveVehiclePacket(
+          PositionAndRotation.of(next, 0, 0), false));
       check(boat.position().equals(next), "The portal replay clock corrected ordinary vehicle movement");
-      connection.handleMoveVehicle(new ServerboundMoveVehiclePacket(next.add(20, 0, 0), 0, 0, false));
+      connection.handleMoveVehicle(new ServerboundMoveVehiclePacket(
+          PositionAndRotation.of(next.add(20, 0, 0), 0, 0), false));
       check(boat.position().equals(next), "The native vehicle speed check did not run outside portal replay");
     } finally {
       player.stopRiding();
@@ -340,7 +344,8 @@ final class MovementPacketRegression {
         player.setKnownMovement(Vec3.ZERO);
         ServerPlayerMotion.rebase(subject);
         check(!observation.contains(outsideCore), "The distant arrival was already selected against nearer portals");
-        if (mounted) connection.handleMoveVehicle(new ServerboundMoveVehiclePacket(next, 0, 0, false));
+        if (mounted) connection.handleMoveVehicle(new ServerboundMoveVehiclePacket(
+            PositionAndRotation.of(next, 0, 0), false));
         else connection.handleMovePlayer(new ServerboundMovePlayerPacket.Pos(next, false, false));
         check(subject.position().distanceToSqr(next) < 1e-10
                 && player.getKnownMovement().distanceToSqr(next.subtract(start)) < 1e-10,
@@ -356,11 +361,14 @@ final class MovementPacketRegression {
     }
   }
 
-  private static void acceptTeleport(ServerPlayer player) {
+  static void acceptTeleport(ServerPlayer player) {
     var connection = player.connection;
-    if (ServerPlayerMotion.awaitingTeleport(player))
+    var access = (ServerGamePacketListenerImplAccessor) connection;
+    var position = access.portalix$teleportPosition();
+    if (position != null)
       connection.handleAcceptTeleportPacket(new ServerboundAcceptTeleportationPacket(
-          ((ServerGamePacketListenerImplAccessor) connection).portalix$teleportId()));
+          access.portalix$teleportId(), position.x, position.y, position.z,
+          player.getYRot(), player.getXRot()));
   }
 
   static void checkKeepAliveOrdering(RegressionWorld world) {

@@ -1,9 +1,11 @@
 package dev.portalix.client.mixin.traversal;
 
 import dev.portalix.client.portal.RemotePortalInterpolation;
+import net.minecraft.core.PositionAndRotation;
+import net.minecraft.world.entity.AbstractInterpolationHandler;
 import net.minecraft.world.entity.Entity;
-import net.minecraft.world.entity.InterpolationHandler;
-import net.minecraft.world.phys.Vec3;
+import net.minecraft.world.entity.PositionPath;
+import org.jspecify.annotations.Nullable;
 import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
@@ -13,11 +15,11 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
-@Mixin(InterpolationHandler.class)
+@Mixin(AbstractInterpolationHandler.class)
 abstract class PortalInterpolationMixin implements RemotePortalInterpolation.Access {
-  @Shadow @Final private Entity entity;
-  @Shadow private int interpolationSteps;
-  @Unique private RemotePortalInterpolation portalix$path;
+  @Shadow @Final protected Entity entity;
+  @Shadow protected int interpolationSteps;
+  @Unique private @Nullable RemotePortalInterpolation portalix$path;
 
   @Override
   public int portalix$length() {
@@ -30,46 +32,32 @@ abstract class PortalInterpolationMixin implements RemotePortalInterpolation.Acc
     return portalix$path;
   }
 
-  @Inject(method = "interpolateTo", at = @At("HEAD"), cancellable = true)
-  private void portalix$target(Vec3 position, float yaw, float pitch, CallbackInfo ci) {
-    if (portalix$path != null && portalix$path.active()) {
-      portalix$path.target(position, yaw, pitch, interpolationSteps);
-      ci.cancel();
-    }
+  @Override
+  public @Nullable RemotePortalInterpolation portalix$existingInterpolation() {
+    return portalix$path;
   }
 
-  @Inject(method = "position", at = @At("HEAD"), cancellable = true)
-  private void portalix$position(CallbackInfoReturnable<Vec3> cir) {
-    if (portalix$path != null && portalix$path.active())
-      cir.setReturnValue(portalix$path.position());
+  @Inject(method = "interpolateTo(Lnet/minecraft/world/entity/PositionPath;FFZ)Z",
+      at = @At("HEAD"), cancellable = true)
+  private void portalix$updateTarget(
+      @Nullable PositionPath path, float yaw, float pitch, boolean hasRotation,
+      CallbackInfoReturnable<Boolean> cir) {
+    var interpolation = portalix$activeInterpolation();
+    if (interpolation == null) return;
+    interpolation.update(path, yaw, pitch, hasRotation, interpolationSteps);
+    cir.setReturnValue(true);
   }
 
-  @Inject(method = "yRot", at = @At("HEAD"), cancellable = true)
-  private void portalix$yaw(CallbackInfoReturnable<Float> cir) {
-    if (portalix$path != null && portalix$path.active()) cir.setReturnValue(portalix$path.yaw());
-  }
-
-  @Inject(method = "xRot", at = @At("HEAD"), cancellable = true)
-  private void portalix$pitch(CallbackInfoReturnable<Float> cir) {
-    if (portalix$path != null && portalix$path.active())
-      cir.setReturnValue(portalix$path.pitch());
-  }
-
-  @Inject(method = "hasActiveInterpolation", at = @At("HEAD"), cancellable = true)
-  private void portalix$active(CallbackInfoReturnable<Boolean> cir) {
-    if (portalix$path != null && portalix$path.active()) cir.setReturnValue(true);
+  @Inject(method = "target", at = @At("HEAD"), cancellable = true)
+  private void portalix$target(CallbackInfoReturnable<PositionAndRotation> cir) {
+    var interpolation = portalix$activeInterpolation();
+    if (interpolation != null) cir.setReturnValue(interpolation.target());
   }
 
   @Inject(method = "interpolate", at = @At("HEAD"), cancellable = true)
-  private void portalix$tick(CallbackInfo ci) {
-    if (portalix$path == null || !portalix$path.active()) return;
-    portalix$path.tick();
-    ci.cancel();
-    if (!portalix$path.active()) ((InterpolationHandler) (Object) this).cancel();
-  }
-
-  @Inject(method = "cancel", at = @At("HEAD"))
-  private void portalix$cancel(CallbackInfo ci) {
-    if (portalix$path != null) portalix$path.cancel();
+  private void portalix$skipNativeInterpolation(CallbackInfo ci) {
+    var interpolation = portalix$activeInterpolation();
+    if (interpolation != null
+        && (interpolation.driving() || !entity.getInterpolation().hasActiveInterpolation())) ci.cancel();
   }
 }

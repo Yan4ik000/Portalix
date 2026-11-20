@@ -1,13 +1,13 @@
 package dev.portalix.test.client;
 
 import com.google.gson.GsonBuilder;
-import com.mojang.blaze3d.GpuFormat;
-import com.mojang.blaze3d.buffers.GpuBuffer;
+import com.mojang.renderpearl.api.GpuFormat;
+import com.mojang.renderpearl.api.buffers.GpuBuffer;
 import com.mojang.blaze3d.pipeline.RenderTarget;
 import com.mojang.blaze3d.pipeline.TextureTarget;
 import com.mojang.blaze3d.platform.NativeImage;
 import com.mojang.blaze3d.systems.RenderSystem;
-import com.mojang.blaze3d.textures.FilterMode;
+import com.mojang.renderpearl.api.textures.FilterMode;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.file.Files;
@@ -55,10 +55,10 @@ final class PresentedFrameGuard {
     check();
     if (closing) { releaseWhenIdle(); return; }
     if (checkTerrain == null && thumbnail == null)
-      thumbnail = new TextureTarget("Portalix frame thumbnail", WIDTH, HEIGHT, false, GpuFormat.RGBA8_UNORM);
+      thumbnail = new TextureTarget("Portalix frame thumbnail", WIDTH, HEIGHT, GpuFormat.RGBA8_UNORM, null);
     if (checkTerrain != null && terrainThumbnail == null)
       terrainThumbnail = new TextureTarget("Portalix terrain thumbnail", WIDTH * TERRAIN_SCALE, HEIGHT * TERRAIN_SCALE,
-          false, GpuFormat.RGBA8_UNORM);
+          GpuFormat.RGBA8_UNORM, null);
     var target = checkTerrain == null ? thumbnail : terrainThumbnail;
     var pool = checkTerrain == null ? readbacks : terrainReadbacks;
     int width = target.width, height = target.height, scale = width / WIDTH;
@@ -72,9 +72,9 @@ final class PresentedFrameGuard {
     encoder.clearColorTexture(target.getColorTexture(), new Vector4f());
     try (var pass = encoder.createRenderPass(() -> "Portalix frame thumbnail",
         target.getColorTextureView(), Optional.empty(), null, OptionalDouble.empty())) {
-      pass.setPipeline(RenderPipelines.TRACY_BLIT);
+      pass.setPipeline(RenderSystem.getCompiledPipeline(RenderPipelines.TRACY_BLIT));
       RenderSystem.bindDefaultUniforms(pass);
-      pass.bindTexture("InSampler", source.getColorTextureView(),
+      pass.setUniform("InSampler", source.getColorTextureView(),
           RenderSystem.getSamplerCache().getClampToEdge(FilterMode.NEAREST));
       pass.draw(3, 1, 0, 0);
     }

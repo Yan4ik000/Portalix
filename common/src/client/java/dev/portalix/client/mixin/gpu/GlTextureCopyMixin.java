@@ -1,17 +1,17 @@
 package dev.portalix.client.mixin.gpu;
 
-import com.mojang.blaze3d.opengl.DirectStateAccess;
+import com.mojang.renderpearl.backend.opengl.DirectStateAccess;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Redirect;
 
-@Mixin(targets = "com.mojang.blaze3d.opengl.GlCommandEncoder")
+@Mixin(targets = "com.mojang.renderpearl.backend.opengl.GlCommandEncoder")
 abstract class GlTextureCopyMixin {
   @Redirect(
       method = "copyTextureToTexture",
       at = @At(
           value = "INVOKE",
-          target = "Lcom/mojang/blaze3d/opengl/DirectStateAccess;blitFrameBuffers(IIIIIIIIIIII)V"),
+          target = "Lcom/mojang/renderpearl/backend/opengl/DirectStateAccess;blitFrameBuffers(IIIIIIIIIIII)V"),
       require = 1,
       allow = 1)
   private void portalix$copyTextureRegion(

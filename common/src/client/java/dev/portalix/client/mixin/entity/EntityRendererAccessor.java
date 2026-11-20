@@ -16,7 +16,7 @@ public interface EntityRendererAccessor {
   void portalix$extractShadow(EntityRenderState state, Minecraft client, Level level);
 
   @Invoker("getBoundingBoxForCulling")
-  AABB portalix$renderBounds(Entity entity);
+  AABB portalix$renderBounds(Entity entity, float partialTick);
 
   @Invoker("getBlockLightLevel")
   int portalix$blockLight(Entity entity, BlockPos position);

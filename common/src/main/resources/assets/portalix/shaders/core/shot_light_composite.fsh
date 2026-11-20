@@ -1,8 +1,9 @@
 #version 330
+#extension GL_ARB_separate_shader_objects : require
 uniform sampler2D Background;
 uniform sampler2D Light;
-out vec4 fragColor;
-#moj_import <portalix:color_space.glsl>
+layout(location = 0) out vec4 fragColor;
+#include <portalix:color_space.glsl>
 void main() {
     ivec2 pixel = ivec2(gl_FragCoord.xy);
     vec4 background = texelFetch(Background, pixel, 0);

@@ -31,7 +31,8 @@ public abstract class PortalCloudRendererMixin {
     portalix$resource = texture;
   }
 
-  @Inject(method = "render", at = @At("HEAD"))
+  @Inject(method = "prepare(ILnet/minecraft/client/CloudStatus;FILnet/minecraft/world/phys/Vec3;JF)V",
+      at = @At("HEAD"))
   private void portalix$resource(
       int color,
       CloudStatus status,

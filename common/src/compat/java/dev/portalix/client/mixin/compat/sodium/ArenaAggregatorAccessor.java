@@ -1,6 +1,6 @@
 package dev.portalix.client.mixin.compat.sodium;
 
-import com.mojang.blaze3d.buffers.GpuBuffer;
+import com.mojang.renderpearl.api.buffers.GpuBuffer;
 import net.caffeinemc.mods.sodium.client.gpu.arena.ArenaAggregator;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Pseudo;

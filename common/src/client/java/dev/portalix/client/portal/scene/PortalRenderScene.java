@@ -17,6 +17,7 @@ import net.minecraft.client.renderer.LevelRenderer;
 import net.minecraft.client.renderer.state.level.ChunkLoadingRenderState;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.SectionPos;
+import net.minecraft.util.Util;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.chunk.status.ChunkStatus;
 import net.minecraft.world.phys.Vec3;
@@ -156,7 +157,7 @@ final class PortalRenderScene implements AutoCloseable {
         arrival,
         terrainRadius(),
         viewEffects);
-    camera.extractRenderState(rendering.state().cameraRenderState, 0);
+    camera.extractRenderState(rendering.state().cameraRenderState, DeltaTracker.ZERO);
     renderedThisFrame = false;
   }
 
@@ -211,7 +212,8 @@ final class PortalRenderScene implements AutoCloseable {
         chunk != null
             && level.isInsideBuildHeight(block.getY())
             && chunk.getSection(chunk.getSectionIndex(block.getY())).hasOnlyAir();
-    destinationReady = empty || renderer.isSectionCompiledAndVisible(block);
+    var fade = Minecraft.getInstance().gameRenderer.gameRenderState().optionsRenderState.chunkSectionFadeInTime;
+    destinationReady = empty || renderer.isSectionCompiledAndVisible(block, Util.toMillis(fade));
   }
 
   @Override

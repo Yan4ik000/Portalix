@@ -23,7 +23,7 @@ abstract class IrisFragmentColorSpaceResizeMixin {
   @Shadow private int swapTexture;
 
   @ModifyExpressionValue(method = "rebuildProgram", at = @At(value = "INVOKE", target =
-      "Lcom/mojang/blaze3d/opengl/GlStateManager;_genTexture()I"), allow = 1)
+      "Lcom/mojang/renderpearl/backend/opengl/GlStateManager;_genTexture()I"), allow = 1)
   private int portalix$trackSwapTexture(int texture) {
     return IrisScene.trackTexture(texture);
   }

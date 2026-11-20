@@ -1,6 +1,6 @@
 package dev.portalix.client.mixin.gpu;
 
-import com.mojang.blaze3d.util.TransientBlockAllocator;
+import com.mojang.renderpearl.backend.util.TransientBlockAllocator;
 import dev.portalix.client.render.TransientStagingAccess;
 import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
@@ -9,7 +9,7 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
-@Mixin(targets = "com.mojang.blaze3d.opengl.GlTransientMemory$Fallback")
+@Mixin(targets = "com.mojang.renderpearl.backend.opengl.GlTransientMemory$Fallback")
 abstract class GlTransientFallbackMixin implements TransientStagingAccess {
   @Shadow @Final private TransientBlockAllocator<?> blockAllocator;
 

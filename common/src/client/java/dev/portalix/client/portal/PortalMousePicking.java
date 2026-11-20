@@ -109,7 +109,7 @@ public final class PortalMousePicking {
             source.level(), source, from, segment.to(),
             AABB.ofSize(from, range.hitboxMargin(), range.hitboxMargin(), range.hitboxMargin())
                 .expandTowards(segment.to().subtract(from)).inflate(1),
-            EntitySelector.CAN_BE_PICKED, range.hitboxMargin(), ClipContext.Block.OUTLINE, true);
+            EntitySelector.CAN_BE_PICKED, range.hitboxMargin(), ClipContext.Block.OUTLINE, true, true);
         EntityHitResult closest = null;
         double distance = Double.POSITIVE_INFINITY;
         for (var candidate : candidates) {

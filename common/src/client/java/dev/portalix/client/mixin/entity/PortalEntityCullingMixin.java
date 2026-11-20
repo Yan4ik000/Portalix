@@ -18,22 +18,23 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 @Mixin(EntityRenderer.class)
 abstract class PortalEntityCullingMixin {
-  @Shadow protected abstract AABB getBoundingBoxForCulling(Entity entity);
+  @Shadow protected abstract AABB getBoundingBoxForCulling(Entity entity, float partialTick);
 
   @WrapOperation(method = "shouldRender", at = @At(value = "INVOKE", target =
       "Lnet/minecraft/client/renderer/entity/EntityRenderer;affectedByCulling(Lnet/minecraft/world/entity/Entity;)Z"))
   private boolean portalix$limitUnculledEntities(EntityRenderer<?, ?> renderer, Entity entity,
-      Operation<Boolean> original, @Local(argsOnly = true) Frustum frustum) {
+      Operation<Boolean> original, @Local(argsOnly = true) Frustum frustum,
+      @Local(argsOnly = true) float partialTick) {
     if (original.call(renderer, entity)) return true;
     var window = ((PortalFrustumState) frustum).portalix$terrainWindow();
     if (window == null) return false;
-    var box = getBoundingBoxForCulling(entity);
+    var box = getBoundingBoxForCulling(entity, partialTick);
     return window.classifyBox(box.minX, box.minY, box.minZ, box.maxX, box.maxY, box.maxZ)
         == org.joml.FrustumIntersection.OUTSIDE;
   }
 
   @Inject(method = "getBoundingBoxForCulling", at = @At("RETURN"), cancellable = true)
-  private void portalix$bodyBounds(Entity entity, CallbackInfoReturnable<AABB> callback) {
+  private void portalix$bodyBounds(Entity entity, float partialTick, CallbackInfoReturnable<AABB> callback) {
     if (PortalPassagePose.compact(entity))
       callback.setReturnValue(
           callback.getReturnValue().minmax(PortalPassagePose.interactionBounds(entity)));

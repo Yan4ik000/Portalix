@@ -1,40 +1,43 @@
 package dev.portalix.client.compat.minecraft;
 
-import com.mojang.blaze3d.GpuFormat;
-import com.mojang.blaze3d.PrimitiveTopology;
-import com.mojang.blaze3d.pipeline.BindGroupLayout;
-import com.mojang.blaze3d.pipeline.ColorTargetState;
-import com.mojang.blaze3d.pipeline.RenderPipeline;
-import com.mojang.blaze3d.vertex.VertexFormat;
+import com.mojang.renderpearl.api.GpuFormat;
+import com.mojang.renderpearl.api.pipeline.BindGroupLayout;
+import com.mojang.renderpearl.api.pipeline.ColorTargetState;
+import com.mojang.renderpearl.api.pipeline.PrimitiveTopology;
+import com.mojang.renderpearl.api.pipeline.RenderPipeline;
+import com.mojang.renderpearl.api.pipeline.ShaderType;
+import com.mojang.renderpearl.api.vertex.VertexFormat;
 import dev.portalix.client.platform.ClientPlatform;
 import java.util.ArrayList;
+import java.util.EnumMap;
 import java.util.List;
+import java.util.Map;
 import net.minecraft.client.renderer.ShaderDefines;
 import net.minecraft.resources.Identifier;
 
 public final class PipelineVariant {
   private final RenderPipeline source;
   private final Identifier location;
-  private Identifier vertexShader;
+  private final Map<ShaderType, Identifier> shaders;
   private ShaderDefines defines;
   private List<BindGroupLayout> layouts;
-  private ColorTargetState[] colors;
-  private VertexFormat[] bindings;
+  private final ColorTargetState[] colors;
+  private final VertexFormat[] bindings;
   private PrimitiveTopology topology;
 
   public PipelineVariant(RenderPipeline source, Identifier location) {
     this.source = source;
     this.location = location;
-    vertexShader = source.getVertexShader();
+    shaders = new EnumMap<>(source.getShaders());
     defines = source.getShaderDefines();
     layouts = source.getBindGroupLayouts();
-    colors = source.getColorTargetStates();
-    bindings = source.getVertexFormatBindings();
+    colors = source.getColorTargetStates().toArray(ColorTargetState[]::new);
+    bindings = source.getVertexFormatBindings().toArray(VertexFormat[]::new);
     topology = source.getPrimitiveTopology();
   }
 
   public PipelineVariant vertexShader(Identifier shader) {
-    vertexShader = shader;
+    shaders.put(ShaderType.VERTEX, shader);
     return this;
   }
 
@@ -53,14 +56,12 @@ public final class PipelineVariant {
   }
 
   public PipelineVariant geometry(VertexFormat format, PrimitiveTopology primitiveTopology) {
-    bindings =
-        RenderPipeline.builder().withVertexBinding(0, format).buildSnippet().vertexFormatPerBuffer();
+    bindings[0] = format;
     topology = primitiveTopology;
     return this;
   }
 
   public PipelineVariant colorFormat(GpuFormat format) {
-    colors = colors.clone();
     var color = colors[0];
     colors[0] = new ColorTargetState(color.blendFunction(), format, color.writeMask());
     return this;
@@ -78,8 +79,8 @@ public final class PipelineVariant {
     return location;
   }
 
-  public Identifier vertexShader() {
-    return vertexShader;
+  public Map<ShaderType, Identifier> shaders() {
+    return shaders;
   }
 
   public ShaderDefines defines() {

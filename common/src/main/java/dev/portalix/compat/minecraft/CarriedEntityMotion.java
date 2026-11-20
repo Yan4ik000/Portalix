@@ -12,7 +12,7 @@ public final class CarriedEntityMotion {
 
   public static void grab(Entity entity) {
     entity.setDeltaMovement(Vec3.ZERO);
-    entity.hurtMarked = true;
+    entity.syncVelocity = true;
     entity.fallDistance = 0;
     if (entity instanceof Mob mob) mob.getNavigation().stop();
     if (entity instanceof LivingEntity living) {

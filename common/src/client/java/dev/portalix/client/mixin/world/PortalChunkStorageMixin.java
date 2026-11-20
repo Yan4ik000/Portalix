@@ -94,24 +94,6 @@ abstract class PortalChunkStorageMixin implements PortalChunkStorageAccess {
     return this$0.getChunk(x, z, false) != null;
   }
 
-  @WrapOperation(
-      method = {"onChunkAdded", "onChunkRemoved", "refreshEmptySections", "onSectionEmptinessChanged"},
-      at = @At(value = "INVOKE", target = "Lit/unimi/dsi/fastutil/longs/LongOpenHashSet;add(J)Z"),
-      require = 8, allow = 8)
-  private boolean portalix$lastChange(LongOpenHashSet changes, long key, Operation<Boolean> original) {
-    int index = updatingSetsIndex;
-    if (changes == addedEmptySections[index]) {
-      removedEmptySections[index].remove(key);
-    } else if (changes == removedEmptySections[index]) {
-      addedEmptySections[index].remove(key);
-    } else if (changes == addedLoadedChunks[index]) {
-      removedLoadedChunks[index].remove(key);
-    } else if (changes == removedLoadedChunks[index]) {
-      addedLoadedChunks[index].remove(key);
-    }
-    return original.call(changes, key);
-  }
-
   @Inject(method = "onChunkAdded", at = @At("TAIL"))
   private void portalix$added(LevelChunk chunk, CallbackInfo ci) {
     ((MinecraftPortalChunks.Access) this$0).portalix$chunks().added();

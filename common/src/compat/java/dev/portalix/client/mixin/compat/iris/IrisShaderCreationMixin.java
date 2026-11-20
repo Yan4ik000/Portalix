@@ -9,7 +9,7 @@ import org.spongepowered.asm.mixin.injection.At;
 @Mixin(GlShader.class)
 abstract class IrisShaderCreationMixin {
   @ModifyExpressionValue(method = "createShader", at = @At(value = "INVOKE",
-      target = "Lcom/mojang/blaze3d/opengl/GlStateManager;glCreateShader(I)I"), allow = 1)
+      target = "Lcom/mojang/renderpearl/backend/opengl/GlStateManager;glCreateShader(I)I"), allow = 1)
   private static int portalix$trackShader(int shader) {
     return IrisScene.trackShader(shader);
   }

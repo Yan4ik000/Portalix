@@ -14,6 +14,7 @@ import java.io.IOException;
 import java.util.Arrays;
 import net.minecraft.client.Minecraft;
 import net.minecraft.resources.Identifier;
+import net.minecraft.server.packs.PackType;
 import net.minecraft.server.packs.resources.ResourceManager;
 import net.minecraft.server.packs.resources.SimplePreparableReloadListener;
 import net.minecraft.util.profiling.ProfilerFiller;
@@ -50,10 +51,17 @@ public final class ModResourceReload extends SimplePreparableReloadListener<Void
   }
 
   private static boolean vanillaShaders(ResourceManager resources, String... paths) {
-    var vanilla = Minecraft.getInstance().getVanillaPackResources();
+    var vanilla = Minecraft.getInstance().getVanillaPackResources().fullResources();
     for (String path : paths) {
-      var resource = resources.getResource(Identifier.withDefaultNamespace(path)).orElse(null);
-      if (resource == null || resource.source() != vanilla) return false;
+      var id = Identifier.withDefaultNamespace(path);
+      var resource = resources.getResource(id).orElse(null);
+      var bundled = vanilla.getResource(PackType.CLIENT_RESOURCES, id);
+      if (resource == null || bundled == null) return false;
+      try (var active = resource.open(); var original = bundled.get()) {
+        if (!Arrays.equals(active.readAllBytes(), original.readAllBytes())) return false;
+      } catch (IOException _) {
+        return false;
+      }
     }
     return true;
   }

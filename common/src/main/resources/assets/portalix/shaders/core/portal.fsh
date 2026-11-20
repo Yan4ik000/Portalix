@@ -1,8 +1,9 @@
 #version 330
-#moj_import <minecraft:dynamictransforms.glsl>
-#moj_import <minecraft:projection.glsl>
-in vec2 portalUv;
-in vec2 portalDepth;
+#extension GL_ARB_separate_shader_objects : require
+#include <minecraft:dynamictransforms.glsl>
+#include <minecraft:projection.glsl>
+layout(location = 0) in vec2 portalUv;
+layout(location = 5) in vec2 portalDepth;
 layout(location = 0) out vec4 fragColor;
 #ifdef PORTALIX_MARKER_OCCLUSION
 layout(location = 1) out vec4 markerOcclusion;
@@ -13,12 +14,12 @@ uniform sampler2D Sampler0;
 uniform sampler2D Sampler1;
 uniform sampler2D Sampler2;
 uniform sampler2D PortalScene;
-in vec3 tangentPosition;
-in vec3 bitangentPosition;
-in vec3 screenPosition;
-in vec4 noiseUv;
+layout(location = 1) in vec3 tangentPosition;
+layout(location = 2) in vec3 bitangentPosition;
+layout(location = 3) in vec3 screenPosition;
+layout(location = 4) in vec4 noiseUv;
 mat4 viewProjection;
-#moj_import <portalix:color_space.glsl>
+#include <portalix:color_space.glsl>
 #ifdef PORTALIX_IRIS_HAND
 uniform sampler2D PortalWorldDepth;
 uniform sampler2D PortalHandDepth;
@@ -28,7 +29,7 @@ uniform sampler2D PortalHandDepth;
 uniform sampler2D PortalOcclusionDepth;
 #endif
 
-#moj_import <portalix:source_portal.glsl>
+#include <portalix:source_portal.glsl>
 void main() {
 #if defined(PORTALIX_IRIS_HAND) && !defined(PORTALIX_DEPTH_APERTURE)
     ivec2 pixel = ivec2(gl_FragCoord.xy);

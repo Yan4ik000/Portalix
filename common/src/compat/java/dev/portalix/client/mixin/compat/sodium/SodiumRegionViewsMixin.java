@@ -136,11 +136,21 @@ abstract class SodiumRegionViewsMixin implements SodiumRegionViews, SodiumDynami
 
   @Inject(method = "clearAllCachedBatches", at = @At("HEAD"))
   private void portalix$geometryChanged(CallbackInfo ci) {
-    for (var view : portalix$views.values()) view.batches.values().forEach(MultiDrawBatch::clear);
+    portalix$invalidatePortalBatches();
   }
 
   @Inject(method = "clearCachedBatchFor", at = @At("HEAD"))
   private void portalix$passChanged(TerrainRenderPass pass, CallbackInfo ci) {
+    portalix$invalidatePortalBatches(pass);
+  }
+
+  @Override
+  public void portalix$invalidatePortalBatches() {
+    for (var view : portalix$views.values()) view.batches.values().forEach(MultiDrawBatch::clear);
+  }
+
+  @Override
+  public void portalix$invalidatePortalBatches(TerrainRenderPass pass) {
     for (var view : portalix$views.values()) {
       var batch = view.batches.get(pass);
       if (batch != null) batch.clear();

@@ -2,9 +2,9 @@ package dev.portalix.client.mixin.gpu;
 
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
-import com.mojang.blaze3d.buffers.GpuBuffer;
-import com.mojang.blaze3d.buffers.GpuBufferSlice;
-import com.mojang.blaze3d.systems.CommandEncoder;
+import com.mojang.renderpearl.api.buffers.GpuBuffer;
+import com.mojang.renderpearl.api.buffers.GpuBufferSlice;
+import com.mojang.renderpearl.api.commands.CommandEncoder;
 import java.nio.ByteBuffer;
 import net.minecraft.client.renderer.GlobalSettingsUniform;
 import net.minecraft.client.renderer.ProjectionMatrixBuffer;
@@ -19,7 +19,7 @@ abstract class UniformUploadMixin {
           @At(
               value = "INVOKE",
               target =
-                  "Lcom/mojang/blaze3d/systems/CommandEncoder;writeToBuffer(Lcom/mojang/blaze3d/buffers/GpuBufferSlice;Ljava/nio/ByteBuffer;)V"))
+                  "Lcom/mojang/renderpearl/api/commands/CommandEncoder;writeToBuffer(Lcom/mojang/renderpearl/api/buffers/GpuBufferSlice;Ljava/nio/ByteBuffer;)V"))
   private void portalix$queuedUpload(
       CommandEncoder encoder,
       GpuBufferSlice destination,

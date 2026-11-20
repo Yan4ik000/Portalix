@@ -5,7 +5,9 @@ import dev.portalix.test.client.mixin.PortalRenderSceneAccessor;
 import dev.portalix.test.client.mixin.PortalSceneManagerAccessor;
 import java.util.List;
 import java.util.Map;
+import net.minecraft.client.Minecraft;
 import net.minecraft.core.BlockPos;
+import net.minecraft.util.Util;
 
 final class PortalViewTerrainReadiness {
   private PortalViewTerrainReadiness() {}
@@ -19,6 +21,7 @@ final class PortalViewTerrainReadiness {
   }
 
   static List<Map<String, Object>> diagnostics(PortalLink link, List<PortalSystemFixture.Marker> markers) {
+    long fadeMillis = Util.toMillis(Minecraft.getInstance().options.chunkSectionFadeInTime().get());
     return PortalSceneManagerAccessor.portalix$scenes().entrySet().stream()
         .filter(entry -> entry.getKey().getLast().gun().equals(link.gun())).map(entry -> {
           var scene = (PortalRenderSceneAccessor) entry.getValue();
@@ -28,7 +31,7 @@ final class PortalViewTerrainReadiness {
               "markers", markers.stream().map(marker -> Map.of("material", marker.material().name(),
                   "position", BlockPos.containing(marker.bounds().getCenter()).toString(),
                   "compiledAndVisible", scene.portalix$renderer().isSectionCompiledAndVisible(
-                      BlockPos.containing(marker.bounds().getCenter())))).toList());
+                      BlockPos.containing(marker.bounds().getCenter()), fadeMillis))).toList());
         }).toList();
   }
 }

@@ -2,9 +2,9 @@ package dev.portalix.test.client.mixin;
 
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
-import com.mojang.blaze3d.systems.CommandEncoder;
-import com.mojang.blaze3d.systems.GpuSurface;
-import com.mojang.blaze3d.textures.GpuTextureView;
+import com.mojang.renderpearl.api.commands.CommandEncoder;
+import com.mojang.renderpearl.api.device.GpuSurface;
+import com.mojang.renderpearl.api.textures.GpuTextureView;
 import dev.portalix.test.client.ClientRegressionRunner;
 import dev.portalix.test.client.FrameCapture;
 import net.minecraft.client.Minecraft;
@@ -21,7 +21,7 @@ abstract class RegressionFrameCaptureMixin {
   }
 
   @WrapOperation(method = "renderFrame", at = @At(value = "INVOKE", target =
-      "Lcom/mojang/blaze3d/systems/GpuSurface;blitFromTexture(Lcom/mojang/blaze3d/systems/CommandEncoder;Lcom/mojang/blaze3d/textures/GpuTextureView;)V"), allow = 1)
+      "Lcom/mojang/renderpearl/api/device/GpuSurface;blitFromTexture(Lcom/mojang/renderpearl/api/commands/CommandEncoder;Lcom/mojang/renderpearl/api/textures/GpuTextureView;)V"), allow = 1)
   private void captureWindowImage(GpuSurface surface, CommandEncoder encoder, GpuTextureView texture, Operation<Void> original) {
     Minecraft client = (Minecraft) (Object) this;
     ClientRegressionRunner.frameRendered(client.gameRenderer.mainRenderTarget());

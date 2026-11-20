@@ -152,7 +152,6 @@ public final class ClientPortalMovement {
       pendingMoves.clear();
       pendingCrossings.clear();
     }
-    var interpolation = entity.getInterpolation();
     var remote = RemotePortalInterpolation.of(entity);
     if (remote != null && !owner
         && (!entity.isLocalInstanceAuthoritative()
@@ -162,7 +161,7 @@ public final class ClientPortalMovement {
       return;
     }
     if (remote != null) remote.finishAccepted();
-    if (interpolation != null) interpolation.cancel();
+    entity.getInterpolation().cancel();
     boolean acknowledged = PortalEntityMovement.acknowledgePredictions(entity, crossings);
     boolean predicted = acknowledged && EntityPortalState.of(entity).hasPredictions();
     if (owner && !acknowledged) {

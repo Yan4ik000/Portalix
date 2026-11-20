@@ -19,8 +19,9 @@ abstract class TerrainTaskMeshMixin {
   private CompiledSectionMesh portalix$task(
       TranslucencyPointOfView view,
       SectionCompiler.Results results,
+      long startTime,
       Operation<CompiledSectionMesh> original) {
-    var mesh = original.call(view, results);
+    var mesh = original.call(view, results, startTime);
     ((SectionMeshTaskAccess) mesh)
         .portalix$task(((SectionTaskAccessor) this).portalix$cancelled());
     return mesh;

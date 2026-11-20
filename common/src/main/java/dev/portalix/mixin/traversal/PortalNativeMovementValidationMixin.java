@@ -13,7 +13,6 @@ import dev.portalix.server.portal.PlayerPortalMoveState;
 import java.util.List;
 import net.minecraft.network.Connection;
 import net.minecraft.network.protocol.game.ClientboundMoveVehiclePacket;
-import net.minecraft.network.protocol.game.ServerboundMovePlayerPacket;
 import net.minecraft.network.protocol.game.ServerboundMoveVehiclePacket;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerChunkCache;
@@ -56,17 +55,17 @@ abstract class PortalNativeMovementValidationMixin extends ServerCommonPacketLis
   }
 
   @Inject(
-      method = "handleMovePlayer",
-      at = @At(value = "INVOKE", target =
-          "Lnet/minecraft/server/network/ServerGamePacketListenerImpl;clampHorizontal(D)D", ordinal = 0),
+      method = "handlePlayerPositionChange",
+      at = @At("HEAD"),
       cancellable = true, require = 1, allow = 1)
-  private void portalix$playerMovementBudget(ServerboundMovePlayerPacket packet, CallbackInfo ci) {
+  private void portalix$playerMovementBudget(
+      double x, double y, double z, float yaw, float pitch, boolean onGround,
+      boolean horizontalCollision, CallbackInfo ci) {
     var replay = PlayerPortalMoveState.of(player);
     if (player.isPassenger() || player.isSleeping()) return;
     boolean started = replay.movementStarted();
     if (!started && !replay.continuesMovement(player)) return;
-    var target = new Vec3(clampHorizontal(packet.getX(player.getX())),
-        clampVertical(packet.getY(player.getY())), clampHorizontal(packet.getZ(player.getZ())));
+    var target = new Vec3(clampHorizontal(x), clampVertical(y), clampHorizontal(z));
     boolean fallFlying = player.isFallFlying();
     boolean checkDistance = player.level().tickRateManager().runsNormally()
         && shouldCheckPlayerMovement(fallFlying);
@@ -89,8 +88,9 @@ abstract class PortalNativeMovementValidationMixin extends ServerCommonPacketLis
     var vehicle = player.getRootVehicle();
     boolean started = replay.movementStarted();
     if (!started && !replay.continuesMovement(vehicle)) return;
-    var target = new Vec3(clampHorizontal(packet.position().x),
-        clampVertical(packet.position().y), clampHorizontal(packet.position().z));
+    Vec3 position = packet.movingTo().position();
+    var target = new Vec3(clampHorizontal(position.x),
+        clampVertical(position.y), clampHorizontal(position.z));
     if (!replay.beginNativeMovement(Util.getMillis(), vehicle.getDeltaMovement(),
         target.distanceTo(vehicle.position()), false, !isSingleplayerOwner())) {
       player.connection.send(ClientboundMoveVehiclePacket.fromEntity(vehicle));
@@ -106,7 +106,7 @@ abstract class PortalNativeMovementValidationMixin extends ServerCommonPacketLis
       "Lnet/minecraft/server/level/ServerPlayer;getDeltaMovement()Lnet/minecraft/world/phys/Vec3;")
   @Definition(id = "lengthSqr", method = "Lnet/minecraft/world/phys/Vec3;lengthSqr()D")
   @Expression("this.player.getDeltaMovement().lengthSqr()")
-  @ModifyExpressionValue(method = "handleMovePlayer", at = @At("MIXINEXTRAS:EXPRESSION"),
+  @ModifyExpressionValue(method = "handlePlayerPositionChange", at = @At("MIXINEXTRAS:EXPRESSION"),
       require = 1, allow = 1)
   private double portalix$trustedPlayerImpulse(double original,
       @Share("nativeImpulse") LocalDoubleRef impulse) {
@@ -133,7 +133,7 @@ abstract class PortalNativeMovementValidationMixin extends ServerCommonPacketLis
   }
 
   @WrapOperation(
-      method = "handleMovePlayer",
+      method = "handlePlayerPositionChange",
       at = @At(value = "INVOKE", ordinal = 1, target =
           "Lnet/minecraft/server/level/ServerChunkCache;move(Lnet/minecraft/server/level/ServerPlayer;)V"),
       require = 1, allow = 1)
@@ -154,7 +154,7 @@ abstract class PortalNativeMovementValidationMixin extends ServerCommonPacketLis
   }
 
   @WrapOperation(
-      method = {"handleMovePlayer", "handleMoveVehicle"},
+      method = {"handlePlayerPositionChange", "handleMoveVehicle"},
       at = @At(value = "INVOKE", target =
           "Lnet/minecraft/server/network/ServerGamePacketListenerImpl;handlePlayerKnownMovement(Lnet/minecraft/world/phys/Vec3;)V"),
       require = 2, allow = 2)

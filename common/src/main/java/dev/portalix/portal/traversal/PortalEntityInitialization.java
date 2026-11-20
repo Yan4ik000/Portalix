@@ -63,8 +63,7 @@ public final class PortalEntityInitialization {
       case EntityPortalInitPayload.FishingTether tether -> {
         if (!(entity instanceof FishingHook hook)) return;
         ProjectilePortalMovement.initializeTether(hook, tether.route(), ownerCrossings);
-        var interpolation = hook.getInterpolation();
-        if (interpolation != null) interpolation.cancel();
+        hook.getInterpolation().cancel();
       }
     }
     EntityPortalState.of(entity).initializeCrossingSequence(packet.event());

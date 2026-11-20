@@ -4,10 +4,11 @@ import com.llamalad7.mixinextras.injector.ModifyExpressionValue;
 import com.llamalad7.mixinextras.injector.wrapmethod.WrapMethod;
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
-import com.mojang.blaze3d.buffers.GpuBufferSlice;
 import com.mojang.blaze3d.pipeline.RenderTarget;
-import com.mojang.blaze3d.textures.GpuTextureView;
+import com.mojang.renderpearl.api.buffers.GpuBufferSlice;
+import com.mojang.renderpearl.api.textures.GpuTextureView;
 import dev.portalix.client.PortalixClient;
+import dev.portalix.client.gun.model.GunMeshFeatureRenderer;
 import dev.portalix.client.mixin.entity.EntityRendererAccessor;
 import dev.portalix.client.portal.camera.PortalCameraController;
 import dev.portalix.client.portal.clip.PortalClipping;
@@ -22,18 +23,17 @@ import net.minecraft.client.DeltaTracker;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.renderer.GameRenderer;
+import net.minecraft.client.renderer.ProjectionMatrixBuffer;
+import net.minecraft.client.renderer.extract.LevelExtractor;
 import net.minecraft.client.renderer.fog.FogData;
 import net.minecraft.client.renderer.fog.FogRenderer;
-import net.minecraft.client.renderer.ProjectionMatrixBuffer;
-import net.minecraft.client.renderer.entity.EntityRenderDispatcher;
-import net.minecraft.client.renderer.extract.LevelExtractor;
 import net.minecraft.client.renderer.state.level.CameraRenderState;
+import net.minecraft.client.renderer.state.level.PlayerRenderState;
 import net.minecraft.core.BlockPos;
 import net.minecraft.util.LightCoordsUtil;
-import net.minecraft.world.entity.Entity;
 import org.joml.Matrix4f;
-import org.joml.Matrix4fc;
 import org.spongepowered.asm.mixin.Mixin;
+import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
@@ -60,27 +60,31 @@ public abstract class PortalGameRendererMixin {
 
   @WrapMethod(method = "renderItemInHand")
   private void portalix$cameraLocalHand(
-      CameraRenderState camera, float partial, Matrix4fc rotation, Operation<Void> original) {
-    PortalClipping.without(() -> original.call(camera, partial, rotation));
+      CameraRenderState camera, PlayerRenderState player, GpuTextureView depth, Operation<Void> original) {
+    var avatar = player.avatarRenderState;
+    if (avatar == null) {
+      PortalClipping.without(() -> original.call(camera, player, depth));
+      return;
+    }
+    int light = avatar.lightCoords;
+    avatar.lightCoords = portalix$handLight(light);
+    try {
+      PortalClipping.without(() -> original.call(camera, player, depth));
+    } finally {
+      avatar.lightCoords = light;
+    }
   }
 
-  @WrapOperation(
-      method = "renderItemInHand",
-      at =
-          @At(
-              value = "INVOKE",
-              target =
-                  "Lnet/minecraft/client/renderer/entity/EntityRenderDispatcher;getPackedLightCoords(Lnet/minecraft/world/entity/Entity;F)I"))
-  private int portalix$handLight(
-      EntityRenderDispatcher dispatcher,
-      Entity entity,
-      float partial,
-      Operation<Integer> original) {
-    if (!PortalCameraController.active() && PortalEntityCollisions.intersectingPortal(entity) == null)
-      return original.call(dispatcher, entity, partial);
+  @Unique
+  private int portalix$handLight(int light) {
+    var client = Minecraft.getInstance();
+    var entity = client.player;
+    if (entity == null
+        || !PortalCameraController.active() && PortalEntityCollisions.intersectingPortal(entity) == null)
+      return light;
     var view = PortalCameraController.currentView();
-    if (view == null) return original.call(dispatcher, entity, partial);
-    var renderer = (EntityRendererAccessor) dispatcher.getRenderer(entity);
+    if (view == null) return light;
+    var renderer = (EntityRendererAccessor) client.getEntityRenderDispatcher().getRenderer(entity);
     var probe = BlockPos.containing(view.position());
     return LightCoordsUtil.pack(
         renderer.portalix$blockLight(entity, probe), renderer.portalix$skyLight(entity, probe));
@@ -124,7 +128,7 @@ public abstract class PortalGameRendererMixin {
           @At(
               value = "INVOKE",
               target =
-                  "Lnet/minecraft/client/renderer/ProjectionMatrixBuffer;getBuffer(Lorg/joml/Matrix4f;)Lcom/mojang/blaze3d/buffers/GpuBufferSlice;"),
+                  "Lnet/minecraft/client/renderer/ProjectionMatrixBuffer;getBuffer(Lorg/joml/Matrix4f;)Lcom/mojang/renderpearl/api/buffers/GpuBufferSlice;"),
       allow = 1)
   private GpuBufferSlice portalix$projection(
       ProjectionMatrixBuffer buffer,
@@ -163,11 +167,12 @@ public abstract class PortalGameRendererMixin {
   }
 
   @Inject(method = "render", at = @At("TAIL"))
-  private void portalix$clipFrame(DeltaTracker delta, boolean advance, CallbackInfo ci) {
+  private void portalix$clipFrame(CallbackInfo ci) {
     if (Minecraft.getInstance().level != null) PortalixClient.shotEffects().endFrame();
     PortalEntityScenes.endFrame();
     PortalClipping.endFrame();
     PortalSurfaceRenderer.endFrame();
+    GunMeshFeatureRenderer.endFrame();
   }
 
   @Inject(method = "close", at = @At("TAIL"))

@@ -1,7 +1,7 @@
 package dev.portalix.fabric.client;
 
 import com.google.common.base.Suppliers;
-import com.mojang.blaze3d.pipeline.RenderPipeline;
+import com.mojang.renderpearl.api.pipeline.RenderPipeline;
 import dev.portalix.client.compat.minecraft.PipelineVariant;
 import dev.portalix.client.gun.model.GunMeshFeatureRenderer;
 import dev.portalix.client.gun.render.GunRenderEvents;
@@ -93,8 +93,7 @@ public final class FabricClientPlatform implements ClientPlatform {
     FabricPipeline(PipelineVariant variant) {
       super(
           variant.location(),
-          variant.vertexShader(),
-          variant.source().getFragmentShader(),
+          variant.shaders(),
           variant.defines(),
           variant.layouts(),
           variant.colors(),
@@ -103,6 +102,7 @@ public final class FabricClientPlatform implements ClientPlatform {
           variant.source().isCull(),
           variant.bindings(),
           variant.topology(),
+          variant.source().pushConstantSize(),
           variant.source().getSortKey());
       guiDrawMode = variant.source().usePipelineDrawModeForGui();
     }

@@ -156,8 +156,6 @@ final class PortalSystemFixture implements AutoCloseable {
     requireServerThread();
     clearArrangement();
     player.setGameMode(GameType.CREATIVE);
-    player.getAbilities().flying = true;
-    player.onUpdateAbilities();
     player.setDeltaMovement(Vec3.ZERO);
     player.setShiftKeyDown(false);
     player.setSprinting(false);
@@ -193,6 +191,9 @@ final class PortalSystemFixture implements AutoCloseable {
     Vec3 feet = eye.add(0, -player.getEyeHeight(), 0);
     Vec3 aim = eye.add(entry.normal().scale(-5));
     teleport(feet, aim);
+    // An abilities packet processed before teleporting can cancel flight at the old grounded position.
+    player.getAbilities().flying = true;
+    player.onUpdateAbilities();
     long generation = PortalTopology.links(level).stream().filter(link -> link.gun().equals(gunId))
         .findFirst().orElseThrow().generation();
     current = new Arrangement(entry, exit, feet, aim, markers, generation);

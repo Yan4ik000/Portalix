@@ -2,7 +2,7 @@ package dev.portalix.client.mixin.compat.sodium;
 
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
-import com.mojang.blaze3d.buffers.GpuBuffer;
+import com.mojang.renderpearl.api.buffers.GpuBuffer;
 import dev.portalix.client.compat.sodium.SodiumSharedArenaRetirement;
 import net.caffeinemc.mods.sodium.client.gpu.arena.SharedBufferArena;
 import org.spongepowered.asm.mixin.Mixin;
@@ -22,7 +22,7 @@ abstract class SodiumSharedArenaMixin implements SodiumSharedArenaRetirement {
 
   @WrapOperation(
       method = "deleteShared",
-      at = @At(value = "INVOKE", target = "Lcom/mojang/blaze3d/buffers/GpuBuffer;close()V"))
+      at = @At(value = "INVOKE", target = "Lcom/mojang/renderpearl/api/buffers/GpuBuffer;close()V"))
   private void portalix$returnRetiredBuffer(GpuBuffer buffer, Operation<Void> operation) {
     if (portalix$recycleOnRetirement) {
       var parent = ((BufferArenaAccessor) this).portalix$parent();

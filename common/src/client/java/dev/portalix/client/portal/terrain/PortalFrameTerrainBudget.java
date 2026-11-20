@@ -34,7 +34,8 @@ public final class PortalFrameTerrainBudget {
         : averageFrameNanos + (long) ((duration - averageFrameNanos) * .05);
     int fps = client.getFramerateLimitTracker().getFramerateLimit();
     if (client.options.enableVsync().get()) {
-      int refresh = client.getWindow().getRefreshRate();
+      var mode = client.getWindow().getActiveVideoMode();
+      int refresh = mode == null ? 0 : Math.round(mode.getRefreshRate());
       if (refresh > 0) fps = fps > 0 ? Math.min(fps, refresh) : refresh;
     }
     // Like Sodium's upload allowance, preparation receives a tenth of the target frame.

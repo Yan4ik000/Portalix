@@ -23,6 +23,7 @@ import net.minecraft.client.renderer.LevelRenderer;
 import net.minecraft.client.renderer.culling.Frustum;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.SectionPos;
+import net.minecraft.util.Util;
 import net.minecraft.world.item.DyeColor;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.phys.AABB;
@@ -81,10 +82,11 @@ final class PortalViewRangeCase {
     var view = course.view();
     switch (step) {
       case REFERENCE -> {
+        long fadeMillis = Util.toMillis(client.options.chunkSectionFadeInTime().get());
         if (client.player.position().distanceTo(course.referenceFeet()) > .1
             || !resident() || !client.levelRenderer.hasRenderedAllSections()
-            || !client.levelRenderer.isSectionCompiledAndVisible(BlockPos.containing(course.edge().getCenter()))
-            || !client.levelRenderer.isSectionCompiledAndVisible(BlockPos.containing(course.far().getCenter()))) {
+            || !client.levelRenderer.isSectionCompiledAndVisible(BlockPos.containing(course.edge().getCenter()), fadeMillis)
+            || !client.levelRenderer.isSectionCompiledAndVisible(BlockPos.containing(course.far().getCenter()), fadeMillis)) {
           referenceTicks = 0;
           return false;
         }

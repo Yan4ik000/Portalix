@@ -4,10 +4,11 @@ import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
 import dev.portalix.client.portal.camera.PortalCameraEnvironment;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.renderer.ScreenEffectRenderer;
+import net.minecraft.client.player.LocalPlayer;
+import net.minecraft.client.renderer.culling.Frustum;
+import net.minecraft.client.renderer.extract.LevelExtractor;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.entity.EntityFluidInteraction;
-import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.block.state.BlockState;
 import net.neoforged.neoforge.common.NeoForgeMod;
 import net.neoforged.neoforge.fluids.FluidType;
@@ -17,19 +18,19 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
-@Mixin(ScreenEffectRenderer.class)
+@Mixin(LevelExtractor.class)
 abstract class PortalScreenEffectsMixin {
   @Inject(method = "getViewBlockingStateAndPos", at = @At("HEAD"), cancellable = true)
   private static void portalix$blockingBlock(
-      Player player, CallbackInfoReturnable<Pair<BlockState, BlockPos>> cir) {
+      LocalPlayer player, Frustum frustum, CallbackInfoReturnable<Pair<BlockState, BlockPos>> cir) {
     if (PortalCameraEnvironment.applies(player)) {
-      var block = PortalCameraEnvironment.blockingBlock(player);
+      var block = PortalCameraEnvironment.blockingBlock(player, frustum.getNearPlaneBounds());
       cir.setReturnValue(block == null ? null : Pair.of(block.state(), block.position()));
     }
   }
 
   @WrapOperation(
-      method = "submit",
+      method = "extractPlayerState",
       at = @At(
           value = "INVOKE",
           target = "Lnet/minecraft/world/entity/EntityFluidInteraction;getFirstEyeInFluid()Lnet/neoforged/neoforge/fluids/FluidType;"))

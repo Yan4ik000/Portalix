@@ -2,16 +2,19 @@ package dev.portalix.client.mixin.compat.sodium;
 
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
+import com.mojang.renderpearl.api.pipeline.RenderPipeline;
 import dev.portalix.client.compat.iris.IrisShaders;
 import dev.portalix.client.compat.sodium.SharedSodiumTerrain;
 import dev.portalix.client.compat.sodium.SodiumPrimaryView;
 import dev.portalix.client.compat.sodium.SodiumRegionViews;
+import dev.portalix.client.compat.sodium.SodiumTerrainPipelines;
 import dev.portalix.client.compat.sodium.SodiumViewCulling;
 import dev.portalix.client.compat.sodium.SodiumViewSortTask;
 import dev.portalix.client.portal.scene.PortalSceneManager;
 import dev.portalix.client.portal.scene.SceneChunkEventAccess;
 import dev.portalix.client.portal.terrain.PortalFrameTerrainBudget;
 import it.unimi.dsi.fastutil.longs.LongCollection;
+import java.util.function.Consumer;
 import net.caffeinemc.mods.sodium.client.render.chunk.RenderSectionManager;
 import net.caffeinemc.mods.sodium.client.render.chunk.UniformBufferManager;
 import net.caffeinemc.mods.sodium.client.render.chunk.map.ChunkTracker;
@@ -36,7 +39,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 @Pseudo
 @Mixin(targets = "net.caffeinemc.mods.sodium.client.render.SodiumWorldRenderer", remap = false)
-abstract class SodiumSceneChunksMixin implements SodiumPrimaryView {
+abstract class SodiumSceneChunksMixin implements SodiumPrimaryView, SodiumTerrainPipelines {
   @Shadow private ClientLevel level;
   @Shadow private RenderSectionManager renderSectionManager;
   @Shadow private int renderDistance;
@@ -127,6 +130,13 @@ abstract class SodiumSceneChunksMixin implements SodiumPrimaryView {
   @Override
   public void portalix$invalidateOcclusion() {
     if (renderSectionManager != null) renderSectionManager.markGraphDirty();
+  }
+
+  @Override
+  public void portalix$visitTerrainPipelines(Consumer<RenderPipeline> visitor) {
+    if (renderSectionManager != null) {
+      ((SodiumTerrainPipelines) renderSectionManager.getChunkRenderer()).portalix$visitTerrainPipelines(visitor);
+    }
   }
 
   @Override

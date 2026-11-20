@@ -30,7 +30,6 @@ final class PortalShotParticleRenderer {
           collector,
           POSE,
           ParticleRenderTypes.linearSpritecard(texture, 1, false),
-          texture,
           (pose, builder) -> {
             if (collection.program.rope) rope(pose, builder, collection, camera);
             else {

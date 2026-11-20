@@ -11,12 +11,10 @@ import dev.portalix.portal.traversal.PortalCollisionWorld;
 import dev.portalix.portal.traversal.PortalEntityMovement;
 import dev.portalix.portal.traversal.PortalPassagePose;
 import dev.portalix.server.portal.PlayerPortalMoveState;
-import dev.portalix.test.mixin.ServerGamePacketListenerImplAccessor;
 import java.util.List;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.core.registries.Registries;
-import net.minecraft.network.protocol.game.ServerboundAcceptTeleportationPacket;
 import net.minecraft.network.protocol.game.ServerboundPlayerLoadedPacket;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.util.Util;
@@ -333,10 +331,7 @@ final class PlayerTraversalRegression {
     var player = world.player;
     var connection = player.connection;
     connection.handleAcceptPlayerLoad(new ServerboundPlayerLoadedPacket());
-    if (ServerPlayerMotion.awaitingTeleport(player)) {
-      connection.handleAcceptTeleportPacket(new ServerboundAcceptTeleportationPacket(
-          ((ServerGamePacketListenerImplAccessor) connection).portalix$teleportId()));
-    }
+    MovementPacketRegression.acceptTeleport(player);
     Vec3 floor = new Vec3(152.5, 101, 152.5);
     world.clear(floor.add(0, 3, 0), 4);
     world.block(BlockPos.containing(floor).below(), Blocks.STONE.defaultBlockState());

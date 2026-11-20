@@ -1,6 +1,6 @@
 package dev.portalix.client.platform;
 
-import com.mojang.blaze3d.pipeline.RenderPipeline;
+import com.mojang.renderpearl.api.pipeline.RenderPipeline;
 import dev.portalix.client.compat.minecraft.PipelineVariant;
 import java.util.ServiceLoader;
 import java.util.function.Supplier;

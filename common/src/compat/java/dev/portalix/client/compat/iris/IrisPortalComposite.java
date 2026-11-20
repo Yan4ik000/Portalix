@@ -1,17 +1,18 @@
 package dev.portalix.client.compat.iris;
 
-import com.mojang.blaze3d.GpuFormat;
-import com.mojang.blaze3d.PrimitiveTopology;
-import com.mojang.blaze3d.pipeline.BindGroupLayout;
-import com.mojang.blaze3d.pipeline.ColorTargetState;
-import com.mojang.blaze3d.pipeline.DepthStencilState;
-import com.mojang.blaze3d.pipeline.RenderPipeline;
 import com.mojang.blaze3d.pipeline.RenderTarget;
-import com.mojang.blaze3d.platform.CompareOp;
 import com.mojang.blaze3d.systems.RenderSystem;
-import com.mojang.blaze3d.textures.FilterMode;
-import com.mojang.blaze3d.textures.GpuTexture;
-import com.mojang.blaze3d.textures.GpuTextureView;
+import com.mojang.renderpearl.api.GpuFormat;
+import com.mojang.renderpearl.api.pipeline.BindGroupLayout;
+import com.mojang.renderpearl.api.pipeline.ColorTargetState;
+import com.mojang.renderpearl.api.pipeline.CompareOp;
+import com.mojang.renderpearl.api.pipeline.DepthStencilState;
+import com.mojang.renderpearl.api.pipeline.PrimitiveTopology;
+import com.mojang.renderpearl.api.pipeline.RenderPipeline;
+import com.mojang.renderpearl.api.pipeline.UniformType;
+import com.mojang.renderpearl.api.textures.FilterMode;
+import com.mojang.renderpearl.api.textures.GpuTexture;
+import com.mojang.renderpearl.api.textures.GpuTextureView;
 import dev.portalix.PortalixMod;
 import dev.portalix.client.ModResourceReload;
 import dev.portalix.client.compat.ShaderBackend.PortalDepthTextures;
@@ -33,7 +34,8 @@ public final class IrisPortalComposite {
               .withLocation(PortalixMod.id("pipeline/portal_restore_depth"))
               .withVertexShader("core/screenquad")
               .withFragmentShader(PortalixMod.id("core/portal_restore_depth"))
-              .withBindGroupLayout(BindGroupLayout.builder().withSampler("WorldDepth").build())
+              .withBindGroupLayout(BindGroupLayout.builder()
+                  .withUniform("WorldDepth", UniformType.COMBINED_IMAGE_SAMPLER).build())
               .withPrimitiveTopology(PrimitiveTopology.TRIANGLES)
               .withColorTargetState(
                   new ColorTargetState(Optional.empty(), GpuFormat.RGBA8_UNORM, 0))
@@ -115,8 +117,9 @@ public final class IrisPortalComposite {
                   Optional.empty(),
                   depth,
                   OptionalDouble.empty())) {
-        pass.setPipeline(IrisEffectTarget.pipeline(RESTORE_DEPTH, color.texture().getFormat()));
-        pass.bindTexture(
+        pass.setPipeline(RenderSystem.getCompiledPipeline(
+            IrisEffectTarget.pipeline(RESTORE_DEPTH, color.texture().getFormat())));
+        pass.setUniform(
             "WorldDepth",
             occlusionDepth,
             RenderSystem.getSamplerCache().getClampToEdge(FilterMode.NEAREST));

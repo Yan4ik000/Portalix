@@ -1,5 +1,6 @@
 package dev.portalix.client.mixin.traversal;
 
+import com.llamalad7.mixinextras.injector.wrapmethod.WrapMethod;
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
 import com.llamalad7.mixinextras.sugar.Local;
@@ -10,7 +11,9 @@ import dev.portalix.portal.traversal.PortalEntityMovement;
 import java.util.Collection;
 import java.util.List;
 import java.util.Set;
+import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientPacketListener;
+import net.minecraft.network.protocol.game.ClientboundBundlePacket;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.PositionMoveRotation;
 import net.minecraft.world.entity.Relative;
@@ -22,6 +25,13 @@ import org.spongepowered.asm.mixin.injection.At;
 
 @Mixin(ClientPacketListener.class)
 abstract class PortalRemotePositionMixin {
+  @WrapMethod(method = "handleBundlePacket")
+  private void portalix$movementBundle(ClientboundBundlePacket packet, Operation<Void> original) {
+    if (Minecraft.getInstance().packetProcessor().isSameThread())
+      RemotePortalInterpolation.inPacketBundle(() -> original.call(packet));
+    else original.call(packet);
+  }
+
   @WrapOperation(
       method = {
           "handleMoveEntity(Lnet/minecraft/network/protocol/game/ClientboundMoveEntityPacket;)V",
@@ -60,15 +70,16 @@ abstract class PortalRemotePositionMixin {
       Operation<PositionMoveRotation> original, @Local(argsOnly = true) Set<Relative> relatives) {
     if (!relatives.isEmpty()) ClientPortalMovement.restoreTeleportFrame(entity);
     boolean predicted = EntityPortalState.of(entity).hasPredictions();
-    boolean interpolating = entity.isInterpolating();
+    boolean interpolating = entity.isInterpolating()
+        || entity.getInterpolation() instanceof RemotePortalInterpolation.Access access
+            && access.portalix$activeInterpolation() != null;
     // Relative packets use the native interpolation target, independently of the displayed pose.
     var nativeBaseline = original.call(entity);
     var remote = RemotePortalInterpolation.of(entity);
     if (remote != null) remote.finishAccepted();
     ClientPortalMovement.corrected(entity);
     PortalEntityMovement.cancelPredictions(entity);
-    var interpolation = entity.getInterpolation();
-    if (interpolation != null) interpolation.cancel();
+    entity.getInterpolation().cancel();
     EntityPortalState.of(entity).resetCamera();
     var corrected = original.call(entity);
     if (predicted || !interpolating) return corrected;

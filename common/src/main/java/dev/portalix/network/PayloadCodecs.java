@@ -6,6 +6,7 @@ import dev.portalix.item.PortalixVariant;
 import dev.portalix.portal.PortalLink;
 import dev.portalix.portal.PortalLinkId;
 import io.netty.buffer.ByteBuf;
+import java.util.List;
 import net.minecraft.core.UUIDUtil;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.network.FriendlyByteBuf;
@@ -21,6 +22,9 @@ public final class PayloadCodecs {
       ByteBufCodecs.VAR_LONG, PortalLinkId::entrance,
       ByteBufCodecs.VAR_LONG, PortalLinkId::exit,
       PortalLinkId::new);
+  public static final StreamCodec<FriendlyByteBuf, List<PortalLink>> PORTAL_LINKS =
+      StreamCodec.of(PayloadCodecs::writePortalLink, PayloadCodecs::readPortalLink)
+          .apply(ByteBufCodecs.list());
 
   private PayloadCodecs() {}
 

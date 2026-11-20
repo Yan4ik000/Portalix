@@ -10,5 +10,9 @@ public interface SodiumRegionViews {
 
   void portalix$invalidateView(TerrainRenderPass pass);
 
+  void portalix$invalidatePortalBatches();
+
+  void portalix$invalidatePortalBatches(TerrainRenderPass pass);
+
   void portalix$releaseView(LevelRenderer renderer);
 }

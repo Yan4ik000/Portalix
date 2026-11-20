@@ -2,14 +2,11 @@ package dev.portalix.client.mixin.gpu;
 
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
-import com.mojang.blaze3d.buffers.GpuBuffer;
-import com.mojang.blaze3d.buffers.GpuBufferSlice;
-import com.mojang.blaze3d.textures.GpuSampler;
-import com.mojang.blaze3d.textures.GpuTextureView;
-import com.mojang.blaze3d.vulkan.VulkanBindGroupLayout;
-import com.mojang.blaze3d.vulkan.VulkanRenderPass;
-import com.mojang.blaze3d.vulkan.VulkanRenderPipeline;
+import com.mojang.renderpearl.api.pipeline.BindGroupLayout.UniformDescription;
+import com.mojang.renderpearl.backend.vulkan.VulkanRenderPass;
+import com.mojang.renderpearl.backend.vulkan.VulkanRenderPipeline;
 import it.unimi.dsi.fastutil.ints.IntArrayList;
+import it.unimi.dsi.fastutil.objects.ReferenceList;
 import java.util.ArrayList;
 import java.util.BitSet;
 import java.util.List;
@@ -31,8 +28,8 @@ abstract class VulkanDescriptorBindingsMixin {
   @Unique private boolean portalix$publishingAll;
   @Unique private VulkanRenderPipeline portalix$boundPipeline;
   @Unique private BitSet portalix$dirty;
-  @Unique private List<VulkanBindGroupLayout.Entry> portalix$entries;
-  @Unique private ArrayList<VulkanBindGroupLayout.Entry> portalix$partialEntries;
+  @Unique private List<UniformDescription> portalix$entries;
+  @Unique private ArrayList<UniformDescription> portalix$partialEntries;
   @Unique private IntArrayList portalix$bindings;
 
   @Inject(method = "setPipeline", at = @At("HEAD"))
@@ -40,42 +37,18 @@ abstract class VulkanDescriptorBindingsMixin {
     portalix$fullPush = true;
   }
 
-  @Inject(method = "bindTexture", at = @At("RETURN"), allow = 2)
-  private void portalix$textureChanged(
-      String name, GpuTextureView texture, GpuSampler sampler, CallbackInfo ci) {
-    portalix$markBinding(name);
-  }
-
-  @Inject(method = "setUniform(Ljava/lang/String;Lcom/mojang/blaze3d/buffers/GpuBuffer;)V",
-      at = @At("RETURN"), allow = 1)
-  private void portalix$uniformChanged(String name, GpuBuffer value, CallbackInfo ci) {
-    portalix$markBinding(name);
-  }
-
-  @Inject(method = "setUniform(Ljava/lang/String;Lcom/mojang/blaze3d/buffers/GpuBufferSlice;)V",
-      at = @At("RETURN"), allow = 1)
-  private void portalix$uniformSliceChanged(String name, GpuBufferSlice value, CallbackInfo ci) {
-    portalix$markBinding(name);
-  }
-
-  @Unique
-  private void portalix$markBinding(String name) {
-    anyDescriptorDirty = true;
+  @Inject(method = "setUniform", at = @At("RETURN"))
+  private void portalix$uniformChanged(int index, Object value, CallbackInfo ci) {
     if (portalix$fullPush || pipeline != portalix$boundPipeline) return;
-    var entries = pipeline.layout().entries();
-    for (int i = 0; i < entries.size(); i++) {
-      if (entries.get(i).name().equals(name)) {
-        if (portalix$dirty == null) portalix$dirty = new BitSet(entries.size());
-        portalix$dirty.set(i);
-      }
-    }
+    if (portalix$dirty == null) portalix$dirty = new BitSet(pipeline.uniforms().size());
+    portalix$dirty.set(index);
   }
 
   @Inject(method = "pushDescriptors", at = @At("HEAD"))
   private void portalix$selectBindings(CallbackInfo ci) {
     portalix$updating = anyDescriptorDirty;
     if (!portalix$updating) return;
-    var entries = pipeline.layout().entries();
+    var entries = pipeline.uniforms();
     portalix$publishingAll = portalix$fullPush || pipeline != portalix$boundPipeline;
     if (portalix$publishingAll) {
       portalix$entries = entries;
@@ -102,10 +75,16 @@ abstract class VulkanDescriptorBindingsMixin {
           @At(
               value = "INVOKE",
               target =
-                  "Lcom/mojang/blaze3d/vulkan/VulkanBindGroupLayout;entries()Ljava/util/List;"))
-  private List<VulkanBindGroupLayout.Entry> portalix$changedEntries(
-      VulkanBindGroupLayout layout, Operation<List<VulkanBindGroupLayout.Entry>> original) {
+                  "Lcom/mojang/renderpearl/backend/vulkan/VulkanRenderPipeline;uniforms()Ljava/util/List;"))
+  private List<UniformDescription> portalix$changedEntries(
+      VulkanRenderPipeline pipeline, Operation<List<UniformDescription>> original) {
     return portalix$entries;
+  }
+
+  @WrapOperation(method = "pushDescriptors", at = @At(value = "INVOKE",
+      target = "Lit/unimi/dsi/fastutil/objects/ReferenceList;get(I)Ljava/lang/Object;"), allow = 3)
+  private Object portalix$boundUniform(ReferenceList<?> uniforms, int index, Operation<Object> original) {
+    return original.call(uniforms, portalix$publishingAll ? index : portalix$bindings.getInt(index));
   }
 
   @WrapOperation(

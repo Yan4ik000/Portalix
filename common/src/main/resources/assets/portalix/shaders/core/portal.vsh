@@ -1,14 +1,15 @@
 #version 330
-#moj_import <minecraft:dynamictransforms.glsl>
-#moj_import <minecraft:projection.glsl>
-in vec3 Position;
-in vec2 UV0;
-out vec2 portalUv;
-out vec3 tangentPosition;
-out vec3 bitangentPosition;
-out vec3 screenPosition;
-out vec4 noiseUv;
-out vec2 portalDepth;
+#extension GL_ARB_separate_shader_objects : require
+#include <minecraft:dynamictransforms.glsl>
+#include <minecraft:projection.glsl>
+layout(location = 0) in vec3 Position;
+layout(location = 1) in vec2 UV0;
+layout(location = 0) out vec2 portalUv;
+layout(location = 1) out vec3 tangentPosition;
+layout(location = 2) out vec3 bitangentPosition;
+layout(location = 3) out vec3 screenPosition;
+layout(location = 4) out vec4 noiseUv;
+layout(location = 5) out vec2 portalDepth;
 vec4 portalix_UnclippedPosition;
 void main() {
     gl_Position = ProjMat * ModelViewMat * vec4(Position, 1);

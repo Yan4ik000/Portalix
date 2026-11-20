@@ -1,7 +1,7 @@
 package dev.portalix.client.compat.iris;
 
-import com.mojang.blaze3d.shaders.ShaderType;
 import com.mojang.blaze3d.systems.RenderSystem;
+import com.mojang.renderpearl.api.pipeline.ShaderType;
 import dev.portalix.client.portal.clip.PortalClipShaders;
 import dev.portalix.client.portal.clip.PortalClipShaders.ClipAbi;
 import dev.portalix.client.portal.clip.PortalShaderInterface;

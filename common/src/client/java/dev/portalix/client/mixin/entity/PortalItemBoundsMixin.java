@@ -2,7 +2,9 @@ package dev.portalix.client.mixin.entity;
 
 import dev.portalix.client.platform.ClientPlatform;
 import dev.portalix.client.portal.entity.ItemModelBounds;
+import java.util.List;
 import java.util.function.Supplier;
+import net.minecraft.client.color.item.ItemTintSource;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.renderer.item.CuboidItemModelWrapper;
 import net.minecraft.client.renderer.item.ItemModelResolver;
@@ -27,8 +29,13 @@ abstract class PortalItemBoundsMixin {
   @Shadow @Final private Supplier<Vector3fc[]> extents;
   @Shadow @Final private ModelRenderProperties properties;
   @Shadow @Final private Matrix4fc transformation;
-  @Shadow @Final private QuadCollection quads;
   @Unique private Supplier<Vector3fc[]> portalix$extents;
+
+  @Inject(method = "<init>", at = @At("RETURN"))
+  private void portalix$modelExtents(List<ItemTintSource> tints, QuadCollection quads,
+      ModelRenderProperties properties, Matrix4fc transformation, CallbackInfo ci) {
+    portalix$extents = ClientPlatform.INSTANCE.itemExtents(quads, extents);
+  }
 
   @Inject(method = "update", at = @At("HEAD"), cancellable = true)
   private void portalix$boundsOnly(
@@ -43,7 +50,6 @@ abstract class PortalItemBoundsMixin {
     if (!(state instanceof ItemModelBounds)) return;
     state.appendModelIdentityElement(this);
     var layer = state.newLayer();
-    if (portalix$extents == null) portalix$extents = ClientPlatform.INSTANCE.itemExtents(quads, extents);
     layer.setExtents(portalix$extents);
     layer.setLocalTransform(transformation);
     properties.applyToLayer(layer, context);

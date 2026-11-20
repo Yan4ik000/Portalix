@@ -4,7 +4,7 @@
     "has_the_recipe": {
       "trigger": "minecraft:recipe_unlocked",
       "conditions": {
-        "recipe": "portalix:green_portalix"
+        "recipes": "portalix:green_portalix"
       }
     },
     "has_ingredient_0": {

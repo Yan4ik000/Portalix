@@ -1,6 +1,7 @@
 {
   "required": true,
   "package": "dev.portalix.neoforge.mixin",
+  "plugin": "dev.portalix.client.mixin.PortalClientMixinPlugin",
   "compatibilityLevel": "JAVA_${java_version}",
   "mixinextras": { "minVersion": "0.5.5" },
   "mixins": [
@@ -15,7 +16,9 @@
     "PortalChunkAttachmentsMixin",
     "PortalChunkLoadEventMixin",
     "PortalAttachmentSyncMixin",
-    "PortalScreenEffectsMixin"
+    "PortalScreenEffectsMixin",
+    "PortalFluidScreenEffectsMixin",
+    "compat.sodium.SodiumBlockEntityExtractionMixin"
   ],
   "injectors": {
     "defaultRequire": 1

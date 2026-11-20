@@ -20,7 +20,7 @@ abstract class IrisCenterDepthHistoryMixin implements IrisViewHistory {
   @Shadow private boolean everRetrieved;
 
   @ModifyExpressionValue(method = "<init>", at = @At(value = "INVOKE", target =
-      "Lcom/mojang/blaze3d/opengl/GlStateManager;_genTexture()I"), require = 2, allow = 2)
+      "Lcom/mojang/renderpearl/backend/opengl/GlStateManager;_genTexture()I"), require = 2, allow = 2)
   private int portalix$trackDepthSample(int texture) {
     return IrisScene.trackTexture(texture);
   }
@@ -44,7 +44,7 @@ abstract class IrisCenterDepthHistoryMixin implements IrisViewHistory {
 
   @Unique
   private void portalix$clearDepth() {
-    // Iris 1.11.4 stores the raw reversed-Z depth in this texture.
+    // The center depth sampler stores the raw reversed-Z depth in this texture.
     int previous = GL11C.glGetInteger(GL11C.GL_TEXTURE_BINDING_2D);
     GL11C.glBindTexture(GL11C.GL_TEXTURE_2D, altTexture);
     GL11C.glTexSubImage2D(GL11C.GL_TEXTURE_2D, 0, 0, 0, 1, 1,

@@ -1,8 +1,8 @@
 package dev.portalix.client.compat.iris;
 
-import com.mojang.blaze3d.opengl.GlStateManager;
 import com.mojang.blaze3d.pipeline.RenderTarget;
 import com.mojang.blaze3d.pipeline.TextureTarget;
+import com.mojang.renderpearl.backend.opengl.GlStateManager;
 import dev.portalix.client.compat.RenderScope;
 import dev.portalix.client.compat.ShaderBackend;
 import dev.portalix.client.mixin.compat.iris.IrisRenderingPipelineAccessor;
@@ -118,7 +118,8 @@ public final class IrisScene implements ShaderBackend.Scene {
       if (compact) {
         var main = Minecraft.getInstance().gameRenderer.mainRenderTarget();
         pool.prewarmTarget = new TextureTarget(
-            "Portal shader preparation", 1, 1, true, main.getColorTexture().getFormat());
+            "Portal shader preparation", 1, 1, main.getColorTexture().getFormat(),
+            main.getDepthTexture().getFormat());
       }
       for (int i = 0; i < IrisShaders.MAX_PORTAL_VIEWS; i++) {
         var pipeline = pool.create(compact ? Creation.PREWARM : Creation.PORTAL);

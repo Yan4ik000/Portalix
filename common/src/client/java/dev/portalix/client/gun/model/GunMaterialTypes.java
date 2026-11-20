@@ -1,22 +1,22 @@
 package dev.portalix.client.gun.model;
 
-import com.mojang.blaze3d.GpuFormat;
-import com.mojang.blaze3d.PrimitiveTopology;
-import com.mojang.blaze3d.pipeline.BlendFunction;
-import com.mojang.blaze3d.pipeline.ColorTargetState;
-import com.mojang.blaze3d.pipeline.DepthStencilState;
-import com.mojang.blaze3d.pipeline.RenderPipeline;
-import com.mojang.blaze3d.pipeline.RenderPipeline.Snippet;
-import com.mojang.blaze3d.platform.BlendFactor;
-import com.mojang.blaze3d.platform.CompareOp;
+import com.mojang.renderpearl.api.GpuFormat;
+import com.mojang.renderpearl.api.pipeline.PrimitiveTopology;
+import com.mojang.renderpearl.api.pipeline.BlendFunction;
+import com.mojang.renderpearl.api.pipeline.ColorTargetState;
+import com.mojang.renderpearl.api.pipeline.DepthStencilState;
+import com.mojang.renderpearl.api.pipeline.RenderPipeline;
+import com.mojang.renderpearl.api.pipeline.RenderPipeline.Snippet;
+import com.mojang.renderpearl.api.pipeline.BlendFactor;
+import com.mojang.renderpearl.api.pipeline.CompareOp;
 import dev.portalix.PortalixMod;
 import dev.portalix.client.compat.minecraft.GunVertexAbi;
-import dev.portalix.client.render.ParticleRenderTypes;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
 import net.minecraft.client.renderer.BindGroupLayouts;
 import net.minecraft.client.renderer.RenderPipelines;
+import net.minecraft.client.renderer.oit.OitPipelineSet;
 import net.minecraft.client.renderer.rendertype.RenderSetup;
 import net.minecraft.client.renderer.rendertype.RenderType;
 import net.minecraft.resources.Identifier;
@@ -29,6 +29,7 @@ public final class GunMaterialTypes {
               .withFragmentShader(PortalixMod.id("core/gun_icon"))
               .withShaderDefine("NO_OVERLAY")
               .withShaderDefine("NO_CARDINAL_LIGHTING")
+              .withColorTargetState(ColorTargetState.DEFAULT)
               .withCull(false)
               .build());
   private static final Map<Identifier, RenderType> icons = new HashMap<>();
@@ -37,10 +38,19 @@ public final class GunMaterialTypes {
           RenderPipeline.builder(new Snippet[] {RenderPipelines.ENTITY_SNIPPET})
               .withLocation(PortalixMod.id("pipeline/world"))
               .withBindGroupLayout(BindGroupLayouts.SAMPLER1)
+              .withColorTargetState(ColorTargetState.DEFAULT)
               .withCull(false)
               .build());
   private static final Map<Identifier, RenderType> worlds = new HashMap<>();
   private static final Map<Identifier, RenderType> emissiveTypes = new HashMap<>();
+  private static final RenderPipeline ADDITIVE = RenderPipelines.register(additiveEntity()
+      .withLocation(PortalixMod.id("pipeline/additive"))
+      .withColorTargetState(
+          new ColorTargetState(new BlendFunction(BlendFactor.SRC_ALPHA, BlendFactor.ONE)))
+      .withDepthStencilState(new DepthStencilState(CompareOp.GREATER_THAN_OR_EQUAL, false))
+      .build());
+  private static final OitPipelineSet OIT_ADDITIVE = OitPipelineSet.builder(
+      "portalix_gun_additive", additiveEntity().withShaderDefine("OIT_ADDITIVE")).build();
   private static final Map<Identifier, RenderType> additiveTypes = new HashMap<>();
   private static final RenderPipeline INDICATOR =
       RenderPipelines.register(
@@ -48,7 +58,8 @@ public final class GunMaterialTypes {
               .withLocation(PortalixMod.id("pipeline/gun_indicator"))
               .withVertexShader(PortalixMod.id("core/gun_indicator"))
               .withFragmentShader(PortalixMod.id("core/gun_indicator"))
-              .withBindGroupLayout(BindGroupLayouts.MATRICES_PROJECTION)
+              .withBindGroupLayout(BindGroupLayouts.PROJECTION)
+              .withBindGroupLayout(BindGroupLayouts.DYNAMIC_TRANSFORMS)
               .withBindGroupLayout(BindGroupLayouts.SAMPLER0)
               .withVertexBinding(0, GunVertexAbi.FORMAT)
               .withPrimitiveTopology(PrimitiveTopology.QUADS)
@@ -86,20 +97,16 @@ public final class GunMaterialTypes {
         t ->
             RenderType.create(
                 "portalix_emissive",
-                entitySetup(RenderPipelines.EYES, t).sortOnUpload().createRenderSetup()));
+                entitySetup(RenderPipelines.EYES, t).setOitPipelines(RenderPipelines.OIT_EYES)
+                    .sortOnUpload().createRenderSetup()));
   }
 
   static RenderType additive(Identifier texture) {
     return additiveTypes.computeIfAbsent(
         texture,
-        t -> {
-          RenderType source = ParticleRenderTypes.additive(t);
-          return RenderType.create(
-              "portalix_gun_additive",
-              entitySetup(source.pipeline(), t)
-                  .setOutputTarget(source.outputTarget())
-                  .createRenderSetup());
-        });
+        t -> RenderType.create(
+            "portalix_gun_additive",
+            entitySetup(ADDITIVE, t).setOitPipelines(OIT_ADDITIVE).createRenderSetup()));
   }
 
   static RenderType indicator(Identifier texture) {
@@ -115,6 +122,13 @@ public final class GunMaterialTypes {
         .withTexture("Sampler0", texture)
         .useOverlay()
         .useLightmap();
+  }
+
+  private static RenderPipeline.Builder additiveEntity() {
+    return RenderPipeline.builder(RenderPipelines.ENTITY_EMISSIVE_SNIPPET)
+        .withShaderDefine("NO_OVERLAY")
+        .withShaderDefine("NO_CARDINAL_LIGHTING")
+        .withCull(false);
   }
 
   public static void clear() {

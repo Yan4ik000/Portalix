@@ -9,33 +9,53 @@ import dev.portalix.portal.traversal.EntityPortalState;
 import dev.portalix.portal.traversal.PortalEntityMovement;
 import dev.portalix.portal.traversal.PortalEntityMovement.Crossing;
 import dev.portalix.portal.traversal.PortalPassagePose;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.List;
 import net.minecraft.client.player.LocalPlayer;
+import net.minecraft.core.PositionAndRotation;
 import net.minecraft.util.Mth;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.InterpolationHandler;
 import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.entity.PositionPath;
+import net.minecraft.world.entity.SteppedInterpolationHandler;
 import net.minecraft.world.entity.vehicle.minecart.AbstractMinecart;
 import net.minecraft.world.entity.vehicle.minecart.NewMinecartBehavior;
 import net.minecraft.world.phys.Vec3;
+import org.jspecify.annotations.Nullable;
 
 public final class RemotePortalInterpolation {
+  private static final ScopedValue<Object> PACKET_BUNDLE = ScopedValue.newInstance();
   private final Entity entity;
   private final PortalInterpolationPath path = new PortalInterpolationPath();
   private final List<PortalInterpolationPath.TimedCrossing> vehicleCrossings = new ArrayList<>();
+  private final ArrayDeque<Arrival> arrivals = new ArrayDeque<>(1);
   private Vec3 target;
   private float yaw;
   private float pitch;
   private float scale;
-  private int steps;
+  private double steps;
+  private boolean playingArrival;
+  private boolean forwarding;
 
   public RemotePortalInterpolation(Entity entity) {
     this.entity = entity;
   }
 
+  public static void inPacketBundle(Runnable handler) {
+    ScopedValue.where(PACKET_BUNDLE, new Object()).run(handler);
+  }
+
   public interface Access {
     RemotePortalInterpolation portalix$interpolation();
+
+    @Nullable RemotePortalInterpolation portalix$existingInterpolation();
+
+    default @Nullable RemotePortalInterpolation portalix$activeInterpolation() {
+      var interpolation = portalix$existingInterpolation();
+      return interpolation != null && interpolation.intercepting() ? interpolation : null;
+    }
 
     int portalix$length();
   }
@@ -63,38 +83,68 @@ public final class RemotePortalInterpolation {
   }
 
   public boolean active() {
+    return driving() || !arrivals.isEmpty();
+  }
+
+  public boolean driving() {
     return steps > 0;
   }
 
-  public Vec3 position() {
-    return target;
+  public boolean intercepting() {
+    return active() && !forwarding;
   }
 
-  public float yaw() {
-    return yaw;
-  }
-
-  public float pitch() {
-    return pitch;
+  public PositionAndRotation target() {
+    return arrivals.isEmpty() ? PositionAndRotation.of(target, yaw, pitch) : arrivals.getLast().target;
   }
 
   public List<Crossing> pendingCrossings() {
-    return path.crossings();
+    if (arrivals.isEmpty()) return path.crossings();
+    var pending = new ArrayList<>(path.crossings());
+    var later = arrivals.iterator();
+    if (driving()) later.next();
+    later.forEachRemaining(arrival -> pending.addAll(arrival.crossings));
+    return List.copyOf(pending);
   }
 
   public void receive(EntityPortalCrossingPayload packet, List<Crossing> crossings) {
     var interpolation = entity.getInterpolation();
-    if (!active() && interpolation != null) interpolation.cancel();
+    boolean continueArrival = playingArrival && interpolation.hasActiveInterpolation();
+    if (!active() && !continueArrival) interpolation.cancel();
     int length =
         interpolation instanceof Access access
             ? access.portalix$length()
             : NewMinecartBehavior.POS_ROT_LERP_TICKS;
     resetMinecart();
-    path.append(crossings);
-    scale = packet.poseScale();
-    target(packet.position(), packet.yaw(), packet.pitch(), length);
-    if (!(entity instanceof LocalPlayer)) entity.lerpHeadTo(packet.headYaw(), length);
-    entity.lerpMotion(path.sourceVector(packet.velocity()));
+    if (interpolation instanceof SteppedInterpolationHandler) {
+      var arrival = new Arrival(packet, crossings, length);
+      arrivals.addLast(arrival);
+      if (arrivals.size() == 1 && !continueArrival) start(arrival);
+    } else {
+      path.append(crossings);
+      scale = packet.poseScale();
+      target(packet.position(), packet.yaw(), packet.pitch(), length);
+    }
+    if (!(entity instanceof LocalPlayer))
+      entity.lerpHeadTo(packet.headYaw(), Math.max(1, Mth.ceil(length / tickSpeed())));
+    entity.lerpMotion(sourceMotion(packet.velocity()));
+  }
+
+  public void update(@Nullable PositionPath position, float yRot, float xRot,
+      boolean hasRotation, int length) {
+    if (arrivals.isEmpty()) {
+      target(position == null ? target : position.endPosition(),
+          hasRotation ? yRot : yaw, hasRotation ? xRot : pitch, length);
+    } else {
+      arrivals.getLast().update(position, yRot, xRot, hasRotation);
+    }
+  }
+
+  private void start(Arrival arrival) {
+    playingArrival = false;
+    path.append(arrival.crossings);
+    var landing = arrival.landing;
+    target(landing.position(), landing.yRot(), landing.xRot(), arrival.length);
   }
 
   public void target(Vec3 position, float yRot, float xRot, int length) {
@@ -105,15 +155,17 @@ public final class RemotePortalInterpolation {
   }
 
   public float headYaw(float finalYaw) {
-    return active() ? path.sourceAngles(finalYaw, 0).yaw() : finalYaw;
+    return active() ? PortalInterpolationPath.sourceAngles(pendingCrossings(), finalYaw, 0).yaw() : finalYaw;
   }
 
   public Vec3 sourceMotion(Vec3 motion) {
-    return active() ? path.sourceVector(motion) : motion;
+    return arrivals.isEmpty() ? path.sourceVector(motion)
+        : PortalInterpolationPath.sourceVector(pendingCrossings(), motion);
   }
 
   public void scale(float value) {
-    scale = value;
+    if (arrivals.isEmpty()) scale = value;
+    else arrivals.getLast().scale = value;
   }
 
   public void finishAccepted() {
@@ -121,9 +173,7 @@ public final class RemotePortalInterpolation {
       var remote = of(passenger);
       if (remote != null) remote.finishAccepted();
     }
-    while (!path.isEmpty()) {
-      var crossing = path.first();
-      path.removeFirst();
+    for (var crossing : pendingCrossings()) {
       var position = crossing.afterFeet().add(
           crossing.link().transform().vector(entity.position().subtract(crossing.beforeFeet())));
       cross(crossing, position, 1, false);
@@ -132,22 +182,45 @@ public final class RemotePortalInterpolation {
   }
 
   public void cancel() {
+    if (forwarding || !active() && !playingArrival) return;
     if (active()) {
-      PortalPassagePose.set(entity, scale);
+      PortalPassagePose.set(entity, arrivals.isEmpty() ? scale : arrivals.getLast().scale);
       resetMinecart();
     }
     steps = 0;
+    playingArrival = false;
     path.clear();
+    arrivals.clear();
     vehicleCrossings.clear();
   }
 
   public void tick() {
+    if (!driving()) {
+      if (!playingArrival && arrivals.isEmpty()) return;
+      var interpolation = entity.getInterpolation();
+      if (interpolation.hasActiveInterpolation()) {
+        if (arrivals.isEmpty() || vehicleCrossings.isEmpty()) return;
+        finishRiderPlayback(interpolation);
+      }
+      playingArrival = false;
+      if (arrivals.isEmpty()) return;
+      start(arrivals.getFirst());
+      if (vehicleCrossings.isEmpty()) return;
+    }
     EntityPortalState.of(entity).cameraHistory().discardThrough(entity.tickCount - 1);
-    double alpha = 1.0 / steps;
+    double elapsed = Math.min(steps, tickSpeed());
+    double alpha = elapsed / steps;
     var vehicle = entity.isPassenger() ? of(entity.getVehicle()) : null;
     boolean following = vehicle != null && (vehicle.active() || !vehicleCrossings.isEmpty());
     if (following) {
       for (var passage : vehicleCrossings) {
+        if (path.isEmpty() && arrivals.size() > 1) {
+          finish();
+          if (!driving()) {
+            finishRiderPlayback(entity.getInterpolation());
+            start(arrivals.getFirst());
+          }
+        }
         if (!path.isEmpty() && path.first().link().equals(passage.crossing().link())) {
           var crossing = path.first();
           path.removeFirst();
@@ -174,10 +247,51 @@ public final class RemotePortalInterpolation {
       entity.setXRot((float) Mth.lerp(alpha, entity.getXRot(), angles.pitch()));
     }
     if (following && !path.isEmpty()) steps = Math.max(1, vehicle.steps);
-    else if (--steps == 0) {
-      path.clear();
+    else if ((steps -= Math.min(steps, elapsed)) == 0) finish();
+  }
+
+  private float tickSpeed() {
+    return entity.getInterpolation() instanceof SteppedInterpolationHandler
+        ? entity.level().getRelativeTickSpeed() : 1;
+  }
+
+  private void finish() {
+    path.clear();
+    steps = 0;
+    if (arrivals.isEmpty()) {
       PortalPassagePose.set(entity, scale);
       resetMinecart();
+      return;
+    }
+
+    var arrival = arrivals.removeFirst();
+    PortalPassagePose.set(entity, arrival.scale);
+    var interpolation = entity.getInterpolation();
+    // Tracking resets its history at each crossing. The buffered paths belong to this exit frame.
+    forwarding = true;
+    try {
+      for (var update : arrival.updates)
+        interpolation.interpolateTo(update.position, update.yaw, update.pitch, update.hasRotation);
+      playingArrival = interpolation.hasActiveInterpolation();
+    } finally {
+      forwarding = false;
+    }
+    if (!playingArrival && !arrivals.isEmpty()) start(arrivals.getFirst());
+  }
+
+  private void finishRiderPlayback(InterpolationHandler interpolation) {
+    forwarding = true;
+    try {
+      // The seat supplies position; finish the old frame's turns before following the vehicle.
+      var target = interpolation.target();
+      if (target != null && !(entity instanceof LocalPlayer)) {
+        entity.setYRot(target.yRot());
+        entity.setXRot(target.xRot());
+      }
+      interpolation.cancel();
+      playingArrival = false;
+    } finally {
+      forwarding = false;
     }
   }
 
@@ -239,4 +353,38 @@ public final class RemotePortalInterpolation {
     if (entity instanceof MotionAccess motion) motion.portalix$transformMotion(transform);
     PortalPassagePose.set(entity, crossing.poseScale());
   }
+
+  private static final class Arrival {
+    private final List<Crossing> crossings;
+    private final PositionAndRotation landing;
+    private final int length;
+    private final List<PositionUpdate> updates = new ArrayList<>();
+    private PositionAndRotation target;
+    private float scale;
+    private @Nullable Object landingBundle = PACKET_BUNDLE.isBound() ? PACKET_BUNDLE.get() : null;
+
+    Arrival(EntityPortalCrossingPayload packet, List<Crossing> crossings, int length) {
+      this.crossings = crossings;
+      this.length = length;
+      landing = PositionAndRotation.of(packet.position(), packet.yaw(), packet.pitch());
+      target = landing;
+      scale = packet.poseScale();
+    }
+
+    void update(@Nullable PositionPath position, float yaw, float pitch, boolean hasRotation) {
+      if (landingBundle != null) {
+        boolean bundledLanding = PACKET_BUNDLE.isBound() && landingBundle == PACKET_BUNDLE.get();
+        landingBundle = null;
+        // The tracker samples the crossing bundle's landing again after its history was cleared.
+        if (bundledLanding && position instanceof PositionPath.Stepped stepped && stepped.steps().size() == 1
+            && stepped.steps().getFirst().tickOffset() == 1 && stepped.endPosition().equals(landing.position())
+            && (!hasRotation || yaw == landing.yRot() && pitch == landing.xRot())) return;
+      }
+      updates.add(new PositionUpdate(position, yaw, pitch, hasRotation));
+      target = PositionAndRotation.of(position == null ? target.position() : position.endPosition(),
+          hasRotation ? yaw : target.yRot(), hasRotation ? pitch : target.xRot());
+    }
+  }
+
+  private record PositionUpdate(@Nullable PositionPath position, float yaw, float pitch, boolean hasRotation) {}
 }

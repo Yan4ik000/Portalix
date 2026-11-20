@@ -1,11 +1,12 @@
 #version 330
+#extension GL_ARB_separate_shader_objects : require
 
-#moj_import <minecraft:dynamictransforms.glsl>
+#include <minecraft:dynamictransforms.glsl>
 
 uniform sampler2D Sampler0;
-in vec3 fromIndicator;
-in vec2 texCoord;
-out vec4 fragColor;
+layout(location = 0) in vec3 fromIndicator;
+layout(location = 1) in vec2 texCoord;
+layout(location = 0) out vec4 fragColor;
 
 void main() {
     float light = 1.0 - smoothstep(0.0, 3.4, length(fromIndicator));

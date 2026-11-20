@@ -1,16 +1,18 @@
 package dev.portalix.client.compat.minecraft;
 
-import com.mojang.blaze3d.GpuFormat;
 import com.mojang.blaze3d.ProjectionType;
-import com.mojang.blaze3d.buffers.GpuBuffer;
 import com.mojang.blaze3d.pipeline.RenderTarget;
 import com.mojang.blaze3d.pipeline.TextureTarget;
 import com.mojang.blaze3d.resource.CrossFrameResourcePool;
+import com.mojang.blaze3d.resource.RenderTargetDescriptor.TextureProperties;
 import com.mojang.blaze3d.resource.RenderTargetDescriptor;
 import com.mojang.blaze3d.systems.RenderSystem;
-import com.mojang.blaze3d.textures.GpuTextureView;
+import com.mojang.renderpearl.api.GpuFormat;
+import com.mojang.renderpearl.api.buffers.GpuBuffer;
+import com.mojang.renderpearl.api.textures.GpuTextureView;
 import dev.portalix.api.PortalEndpoint;
 import dev.portalix.client.compat.PortalTerrainBackend;
+import dev.portalix.client.compat.iris.IrisEffectTarget;
 import dev.portalix.client.compat.iris.IrisPortalScene;
 import dev.portalix.client.compat.iris.IrisShaders;
 import dev.portalix.client.mixin.scene.GameRendererAccessor;
@@ -87,7 +89,7 @@ public final class MinecraftSceneRenderer implements AutoCloseable {
             1);
     ((LevelRendererAccessor) renderer).portalix$state(state);
     extractor = new LevelExtractor(client, state, renderer);
-    target = new TextureTarget("Portal", 1, 1, true, GpuFormat.RGBA8_UNORM);
+    target = new TextureTarget("Portal", 1, 1, GpuFormat.RGBA8_UNORM, GpuFormat.D32_FLOAT);
   }
 
   public LevelRenderState state() {
@@ -188,6 +190,7 @@ public final class MinecraftSceneRenderer implements AutoCloseable {
 
   public void extract(DeltaTracker delta, PortalSceneCamera camera, boolean visible) {
     try (var dispatcherScope = new SceneDispatcherScope(renderer);
+        var outputScope = IrisEffectTarget.override(null);
         var irisScope = iris.extract()) {
       PortalTerrainBackend.attach(renderer, terrainOwner);
       if (!levelAttached) {
@@ -232,30 +235,23 @@ public final class MinecraftSceneRenderer implements AutoCloseable {
     Minecraft client = Minecraft.getInstance();
     var access = (LevelRendererAccessor) renderer;
     var outline = access.portalix$outlineTarget();
-    var descriptor =
-        new RenderTargetDescriptor(
-            width, height, true, new Vector4f(), GpuFormat.RGBA8_UNORM);
     if (target.width != width || target.height != height) {
       var previous = target;
-      target = resources.acquire(descriptor);
+      target = resources.acquire(targetDescriptor(width, height, previous));
       releaseTarget(previous);
       retargetSky(renderer, target);
     }
     if (outline.width != width || outline.height != height) {
-      access.portalix$outlineTarget(resources.acquire(descriptor));
+      access.portalix$outlineTarget(resources.acquire(targetDescriptor(width, height, outline)));
       releaseTarget(outline);
     }
     var oldProjection = RenderSystem.getProjectionMatrixBuffer();
     var oldProjectionType = RenderSystem.getProjectionType();
     var oldFog = RenderSystem.getShaderFog();
     var oldGlobals = RenderSystem.getGlobalSettingsUniform();
-    var oldColor = RenderSystem.outputColorTextureOverride;
-    var oldDepth = RenderSystem.outputDepthTextureOverride;
     var dispatcher = renderer.entityRenderDispatcher();
     try (var dispatcherScope = new SceneDispatcherScope(renderer);
         var irisScope = iris.begin()) {
-      RenderSystem.outputColorTextureOverride = null;
-      RenderSystem.outputDepthTextureOverride = null;
       CameraRenderState state = this.state.cameraRenderState;
       var options = client.gameRenderer.gameRenderState().optionsRenderState;
       globals.update(
@@ -263,7 +259,7 @@ public final class MinecraftSceneRenderer implements AutoCloseable {
           target.height,
           options.glintStrength,
           level.getGameTime(),
-          delta,
+          delta.getGameTimeDeltaPartialTick(false),
           options.menuBackgroundBlurriness,
           camera.position(),
           options.textureFiltering == TextureFilteringMethod.RGSS);
@@ -277,12 +273,11 @@ public final class MinecraftSceneRenderer implements AutoCloseable {
       fog.updateBuffer(state.fogData);
       renderer.render(
           resources,
-          delta,
           ((GameRendererAccessor) client.gameRenderer).portalix$renderBlockOutline(),
           state,
-          state.viewRotationMatrix,
           fog.getBuffer(FogRenderer.FogMode.WORLD),
           state.fogData.color,
+          true,
           true);
       renderer.endFrame();
       fog.endFrame();
@@ -291,20 +286,18 @@ public final class MinecraftSceneRenderer implements AutoCloseable {
       RenderSystem.setProjectionMatrix(oldProjection, oldProjectionType);
       RenderSystem.setShaderFog(oldFog);
       RenderSystem.setGlobalSettingsUniform(oldGlobals);
-      RenderSystem.outputColorTextureOverride = oldColor;
-      RenderSystem.outputDepthTextureOverride = oldDepth;
     }
   }
 
   private void releaseTarget(RenderTarget target) {
-    resources.release(
-        new RenderTargetDescriptor(
-            target.width,
-            target.height,
-            true,
-            new Vector4f(),
-            target.getColorTexture().getFormat()),
-        target);
+    resources.release(targetDescriptor(target.width, target.height, target), target);
+  }
+
+  private static RenderTargetDescriptor targetDescriptor(int width, int height, RenderTarget target) {
+    var depth = target.getDepthTexture();
+    return new RenderTargetDescriptor(
+        width, height, new TextureProperties(new Vector4f(), target.getColorTexture().getFormat()),
+        depth == null ? null : new TextureProperties(new Vector4f(), depth.getFormat()));
   }
 
   @Override

@@ -89,6 +89,7 @@ public final class EntityMotion {
   public static void prepareTracking(Entity entity) {
     entity.syncPosition = true;
     entity.needsSync = true;
+    entity.getInterpolation().interpolationTracker().clear();
     if (entity instanceof AbstractMinecart minecart
         && minecart.getBehavior() instanceof NewMinecartBehavior behavior)
       behavior.lerpSteps.clear();
@@ -128,15 +129,10 @@ public final class EntityMotion {
   }
 
   public static void snap(Entity entity, Vec3 position, float yaw, float pitch, Vec3 velocity) {
-    cancelInterpolation(entity);
+    entity.getInterpolation().cancel();
     entity.snapTo(position, yaw, pitch);
     entity.setDeltaMovement(velocity);
     entity.setOldPosAndRot();
-  }
-
-  private static void cancelInterpolation(Entity entity) {
-    var interpolation = entity.getInterpolation();
-    if (interpolation != null) interpolation.cancel();
   }
 
   private static void history(Entity entity, Vec3 tickFeet, Vec3 renderFeet) {

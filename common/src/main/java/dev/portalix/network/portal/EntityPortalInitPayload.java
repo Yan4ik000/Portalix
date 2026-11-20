@@ -65,9 +65,9 @@ public record EntityPortalInitPayload(int entityId, UUID entityUuid, long event,
       }
       case FishingTether tether -> {
         buffer.writeByte(1);
-        buffer.writeCollection(tether.route(), PayloadCodecs::writePortalLink);
+        PayloadCodecs.PORTAL_LINKS.encode(buffer, tether.route());
         buffer.writeVarLong(tether.completedOwnerMove());
-        buffer.writeCollection(tether.activeOwnerCrossings(), PayloadCodecs::writePortalLink);
+        PayloadCodecs.PORTAL_LINKS.encode(buffer, tether.activeOwnerCrossings());
       }
     }
   }
@@ -76,8 +76,8 @@ public record EntityPortalInitPayload(int entityId, UUID entityUuid, long event,
     int id = buffer.readUnsignedByte();
     return switch (id) {
       case 0 -> new Rotation(buffer.readQuaternion());
-      case 1 -> new FishingTether(buffer.readList(PayloadCodecs::readPortalLink), buffer.readVarLong(),
-          buffer.readList(PayloadCodecs::readPortalLink));
+      case 1 -> new FishingTether(PayloadCodecs.PORTAL_LINKS.decode(buffer), buffer.readVarLong(),
+          PayloadCodecs.PORTAL_LINKS.decode(buffer));
       default -> throw new IllegalArgumentException("Unknown entity portal initial state: " + id);
     };
   }

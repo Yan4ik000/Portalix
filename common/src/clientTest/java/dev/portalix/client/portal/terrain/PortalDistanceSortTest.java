@@ -3,7 +3,7 @@ package dev.portalix.client.portal.terrain;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import com.mojang.blaze3d.IndexType;
+import com.mojang.renderpearl.api.pipeline.IndexType;
 import com.mojang.blaze3d.vertex.CompactVectorArray;
 import com.mojang.blaze3d.vertex.MeshData;
 import java.nio.ByteBuffer;

@@ -3,7 +3,7 @@ package dev.portalix.client.mixin.compat.iris;
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
 import com.llamalad7.mixinextras.sugar.Local;
-import com.mojang.blaze3d.vertex.VertexFormat;
+import com.mojang.renderpearl.api.vertex.VertexFormat;
 import dev.portalix.client.compat.iris.IrisPortalShaders;
 import net.irisshaders.iris.pipeline.programs.PartialShader;
 import net.irisshaders.iris.pipeline.programs.ShaderCreator;
@@ -21,7 +21,7 @@ abstract class IrisClipShaderMixin {
           @At(
               value = "INVOKE",
               target =
-                  "Lnet/irisshaders/iris/pipeline/programs/ShaderCreator;link(Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Lcom/mojang/blaze3d/vertex/VertexFormat;Z)Lnet/irisshaders/iris/pipeline/programs/PartialShader;"))
+                  "Lnet/irisshaders/iris/pipeline/programs/ShaderCreator;link(Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Lcom/mojang/renderpearl/api/vertex/VertexFormat;Z)Lnet/irisshaders/iris/pipeline/programs/PartialShader;"))
   private static PartialShader portalix$clip(
       String name,
       String vertex,

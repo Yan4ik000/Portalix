@@ -1,62 +1,29 @@
 package dev.portalix.client.render;
 
-import com.mojang.blaze3d.GpuFormat;
-import com.mojang.blaze3d.pipeline.BlendFunction;
-import com.mojang.blaze3d.pipeline.ColorTargetState;
-import com.mojang.blaze3d.pipeline.DepthStencilState;
-import com.mojang.blaze3d.pipeline.RenderPipeline;
-import com.mojang.blaze3d.pipeline.RenderPipeline.Snippet;
-import com.mojang.blaze3d.platform.BlendFactor;
-import com.mojang.blaze3d.platform.CompareOp;
+import com.mojang.renderpearl.api.GpuFormat;
+import com.mojang.renderpearl.api.pipeline.BlendFunction;
+import com.mojang.renderpearl.api.pipeline.ColorTargetState;
+import com.mojang.renderpearl.api.pipeline.DepthStencilState;
+import com.mojang.renderpearl.api.pipeline.RenderPipeline;
+import com.mojang.renderpearl.api.pipeline.BlendFactor;
+import com.mojang.renderpearl.api.pipeline.CompareOp;
+import com.mojang.renderpearl.api.pipeline.PrimitiveTopology;
 import com.mojang.blaze3d.vertex.DefaultVertexFormat;
 import dev.portalix.PortalixMod;
 import java.util.HashMap;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
-import net.minecraft.client.Minecraft;
+import net.minecraft.client.renderer.BindGroupLayouts;
 import net.minecraft.client.renderer.RenderPipelines;
-import net.minecraft.client.renderer.rendertype.OutputTarget;
+import net.minecraft.client.renderer.oit.OitPipelineSet;
 import net.minecraft.client.renderer.rendertype.RenderSetup;
 import net.minecraft.client.renderer.rendertype.RenderType;
 import net.minecraft.resources.Identifier;
 
 public final class ParticleRenderTypes {
-  private static final RenderPipeline ADDITIVE =
-      RenderPipelines.register(
-          RenderPipeline.builder(new Snippet[] {RenderPipelines.ENTITY_EMISSIVE_SNIPPET})
-              .withLocation(PortalixMod.id("pipeline/additive"))
-              .withShaderDefine("NO_OVERLAY")
-              .withShaderDefine("NO_CARDINAL_LIGHTING")
-              .withColorTargetState(
-                  new ColorTargetState(new BlendFunction(BlendFactor.SRC_ALPHA, BlendFactor.ONE)))
-              .withDepthStencilState(new DepthStencilState(CompareOp.GREATER_THAN_OR_EQUAL, false))
-              .withCull(false)
-              .build());
-  private static final Map<Identifier, RenderType> additiveTypes = new HashMap<>();
   private static final Map<SourceRenderKey, RenderType> sourceTypes = new HashMap<>();
-  private static final Map<SourcePipelineKey, RenderPipeline> sourcePipelines = new HashMap<>();
-  private static final Map<RenderType, RenderType> offscreenTypes = new HashMap<>();
-  private static final OutputTarget PARTICLES_TARGET =
-      new OutputTarget(
-          "portalix_particles",
-          () -> {
-            Minecraft client = Minecraft.getInstance();
-            var target = client.levelRenderer.particlesTarget();
-            return target != null ? target : client.gameRenderer.mainRenderTarget();
-          });
-
-  public static RenderType particle(RenderType renderType, Identifier texture) {
-    return offscreenTypes.computeIfAbsent(
-        renderType,
-        type ->
-            RenderType.create(
-                "portalix_shot_particle",
-                RenderSetup.builder(type.pipeline())
-                    .withTexture("Sampler0", texture)
-                    .setOutputTarget(PARTICLES_TARGET)
-                    .createRenderSetup()));
-  }
+  private static final Map<SourcePipelineKey, ParticlePipelines> sourcePipelines = new HashMap<>();
 
   public static RenderType source(Identifier texture, int overbright, boolean ignoreDepth) {
     return source(texture, overbright, ignoreDepth, SourceMode.ADDITIVE, false);
@@ -83,60 +50,55 @@ public final class ParticleRenderTypes {
 
   private static RenderType createSourceType(SourceRenderKey key) {
     var pipelineKey = new SourcePipelineKey(key.overbright, key.ignoreDepth, key.mode, key.linear);
-    var pipeline =
+    var pipelines =
         sourcePipelines.computeIfAbsent(pipelineKey, ParticleRenderTypes::createSourcePipeline);
+    var setup = RenderSetup.builder(pipelines.classic).withTexture("Sampler0", key.texture);
+    setup.setOitPipelines(pipelines.oit);
     return RenderType.create(
         "portalix_native_particle",
-        RenderSetup.builder(pipeline).withTexture("Sampler0", key.texture).createRenderSetup());
+        setup.createRenderSetup());
   }
 
-  private static RenderPipeline createSourcePipeline(SourcePipelineKey key) {
-    return RenderPipelines.register(
-        RenderPipeline.builder(new Snippet[] {RenderPipelines.ENTITY_EMISSIVE_SNIPPET})
-            .withLocation(
-                PortalixMod.id(
-                    "pipeline/source_particle_"
-                        + key.overbright
-                        + (key.ignoreDepth ? "_noz" : "")
-                        + "_"
-                        + key.mode.name().toLowerCase(Locale.ROOT)
-                        + (key.linear ? "_linear" : "")))
-            .withFragmentShader(PortalixMod.id("core/source_particle"))
-            .withVertexShader(PortalixMod.id("core/source_particle"))
-            .withVertexBinding(0, DefaultVertexFormat.POSITION_TEX_COLOR)
-            .withShaderDefine("NO_OVERLAY")
-            .withShaderDefine("NO_CARDINAL_LIGHTING")
-            .withShaderDefine("SOURCE_OVERBRIGHT", key.overbright)
-            .withShaderDefine("SOURCE_SPRITECARD", key.mode != SourceMode.ADDITIVE ? 1 : 0)
-            .withShaderDefine("SOURCE_TINTED", key.mode == SourceMode.TINTED ? 1 : 0)
-            .withShaderDefine("SOURCE_LINEAR_OUTPUT", key.linear ? 1 : 0)
-            .withColorTargetState(
-                new ColorTargetState(
-                    Optional.of(new BlendFunction(BlendFactor.SRC_ALPHA, BlendFactor.ONE)),
-                    key.linear ? GpuFormat.RGBA16_FLOAT : GpuFormat.RGBA8_UNORM,
-                    ColorTargetState.WRITE_ALL))
+  private static ParticlePipelines createSourcePipeline(SourcePipelineKey key) {
+    String name = "source_particle_" + key.overbright + (key.ignoreDepth ? "_noz" : "")
+        + "_" + key.mode.name().toLowerCase(Locale.ROOT) + (key.linear ? "_linear" : "");
+    var builder = RenderPipeline.builder()
+        .withFragmentShader(PortalixMod.id("core/source_particle"))
+        .withVertexShader(PortalixMod.id("core/source_particle"))
+        .withVertexBinding(0, DefaultVertexFormat.POSITION_TEX_COLOR)
+        .withPrimitiveTopology(PrimitiveTopology.QUADS)
+        .withBindGroupLayout(BindGroupLayouts.DYNAMIC_TRANSFORMS)
+        .withBindGroupLayout(BindGroupLayouts.SAMPLER0)
+        .withShaderDefine("SOURCE_OVERBRIGHT", key.overbright)
+        .withShaderDefine("SOURCE_SPRITECARD", key.mode != SourceMode.ADDITIVE ? 1 : 0)
+        .withShaderDefine("SOURCE_TINTED", key.mode == SourceMode.TINTED ? 1 : 0)
+        .withShaderDefine("SOURCE_LINEAR_OUTPUT", key.linear ? 1 : 0)
+        .withCull(false);
+    var colorTarget = new ColorTargetState(
+        Optional.of(new BlendFunction(BlendFactor.SRC_ALPHA, BlendFactor.ONE)),
+        key.linear ? GpuFormat.RGBA16_FLOAT : GpuFormat.RGBA8_UNORM,
+        ColorTargetState.WRITE_ALL);
+    var oitBuilder = OitPipelineSet.builder(
+        "portalix_" + name, builder.withShaderDefine("OIT_ADDITIVE"));
+    if (key.ignoreDepth) oitBuilder.withoutDepthTest();
+    if (key.linear) oitBuilder.withAccumulateModifier(accumulate -> accumulate.withColorTargetState(colorTarget));
+    var classic = RenderPipelines.register(builder
+            .withLocation(PortalixMod.id("pipeline/" + name))
+            .withBindGroupLayout(BindGroupLayouts.PROJECTION)
+            .withColorTargetState(colorTarget)
             .withDepthStencilState(
                 new DepthStencilState(
                     key.ignoreDepth ? CompareOp.ALWAYS_PASS : CompareOp.GREATER_THAN_OR_EQUAL,
                     false))
-            .withCull(false)
             .build());
-  }
-
-  public static RenderType additive(Identifier texture) {
-    return additiveTypes.computeIfAbsent(
-        texture,
-        t ->
-            RenderType.create(
-                "portalix_additive",
-                RenderSetup.builder(ADDITIVE).withTexture("Sampler0", t).createRenderSetup()));
+    return new ParticlePipelines(classic, oitBuilder.build());
   }
 
   public static void clear() {
-    offscreenTypes.clear();
-    additiveTypes.clear();
     sourceTypes.clear();
   }
+
+  private record ParticlePipelines(RenderPipeline classic, OitPipelineSet oit) {}
 
   private record SourceRenderKey(
       Identifier texture, int overbright, boolean ignoreDepth, SourceMode mode, boolean linear) {}

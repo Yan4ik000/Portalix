@@ -32,12 +32,6 @@ python3 tests/test_matrix.py --packaged
 
 The matrix includes native, Sodium and Sodium + Iris on OpenGL, as well as native and Sodium on Vulkan, for both loaders. Iris profiles use Complementary Unbound with HIGH settings.
 
-In a Linux Wayland session, if displaying the Xwayland window hangs inside GLFW, select native Wayland for the current run:
-
-```sh
-JDK_JAVA_OPTIONS='-DMC_DEBUG_ENABLED=true -DMC_DEBUG_PREFER_WAYLAND=true' python3 tests/test_matrix.py --packaged
-```
-
 ## Scenarios
 
 Server groups: `placement`, `traversal`, `player_traversal`, `projectiles`, `combat`, `carry`, `chunks`, `content`. They check portal placement and reset, ordinary movement, projectile flight and impacts, combat, carrying objects, remote world loading, entity persistence, crafting and drops.

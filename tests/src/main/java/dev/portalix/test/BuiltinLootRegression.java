@@ -22,7 +22,7 @@ final class BuiltinLootRegression {
     var vanilla = server.getPackRepository().getPack("vanilla");
     check(vanilla != null, "The vanilla datapack is unavailable");
     // GameTest enables experimental packs, including a mineshaft override from trade_rebalance.
-    try (var resources = new MultiPackResourceManager(PackType.SERVER_DATA, List.of(vanilla.open()))) {
+    try (var resources = new MultiPackResourceManager(PackType.SERVER_DATA, vanilla.open().toList())) {
       var loaded = ReloadableServerRegistries.reload(server.registries(), List.of(), resources, Runnable::run).join();
       var table = loaded.lookupWithUpdatedTags().lookupOrThrow(Registries.LOOT_TABLE)
           .getOrThrow(BuiltInLootTables.ABANDONED_MINESHAFT).value();

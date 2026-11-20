@@ -2,12 +2,14 @@ package dev.portalix.client.mixin.entity;
 
 import com.llamalad7.mixinextras.injector.wrapmethod.WrapMethod;
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
+import com.mojang.renderpearl.api.commands.RenderPass;
 import dev.portalix.client.portal.clip.PortalClipping;
 import dev.portalix.client.portal.entity.PortalEntityClipping;
 import java.util.List;
 import net.minecraft.client.renderer.feature.FeatureFrameContext;
 import net.minecraft.client.renderer.feature.FeatureRendererMap;
 import net.minecraft.client.renderer.feature.submit.SubmitNode;
+import net.minecraft.client.renderer.oit.OitStage;
 import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
@@ -24,11 +26,13 @@ abstract class PortalFeatureGroupMixin implements PortalEntityClipping.Group {
   @WrapMethod(method = "execute")
   private void portalix$clip(
       FeatureFrameContext context,
+      OitStage stage,
+      RenderPass pass,
       FeatureRendererMap renderers,
       List<SubmitNode> submits,
       Operation<Void> original) {
     PortalClipping.withEntity(
         PortalEntityClipping.mask(submits.get(fromInclusive)),
-        () -> original.call(context, renderers, submits));
+        () -> original.call(context, stage, pass, renderers, submits));
   }
 }

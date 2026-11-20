@@ -7,6 +7,7 @@ import java.util.List;
 import java.util.UUID;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.network.RegistryFriendlyByteBuf;
+import net.minecraft.network.codec.ByteBufCodecs;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
 import net.minecraft.world.phys.Vec3;
@@ -31,12 +32,15 @@ public record EntityPortalCrossingPayload(
 
   public static final Type<EntityPortalCrossingPayload> TYPE =
       new Type<>(PortalixMod.id("portal_entity_crossing"));
+  private static final StreamCodec<FriendlyByteBuf, List<Crossing>> CROSSINGS =
+      StreamCodec.of(EntityPortalCrossingPayload::writeCrossing, EntityPortalCrossingPayload::readCrossing)
+          .apply(ByteBufCodecs.list());
   public static final StreamCodec<RegistryFriendlyByteBuf, EntityPortalCrossingPayload> CODEC =
       CustomPacketPayload.codec(
           (payload, buffer) -> {
             buffer.writeVarInt(payload.entityId);
             buffer.writeUUID(payload.entityUuid);
-            buffer.writeCollection(payload.crossings, EntityPortalCrossingPayload::writeCrossing);
+            CROSSINGS.encode(buffer, payload.crossings);
             Vec3.STREAM_CODEC.encode(buffer, payload.position);
             Vec3.STREAM_CODEC.encode(buffer, payload.velocity);
             buffer.writeFloat(payload.yaw);
@@ -50,7 +54,7 @@ public record EntityPortalCrossingPayload(
               new EntityPortalCrossingPayload(
                   buffer.readVarInt(),
                   buffer.readUUID(),
-                  buffer.readList(EntityPortalCrossingPayload::readCrossing),
+                  CROSSINGS.decode(buffer),
                   Vec3.STREAM_CODEC.decode(buffer),
                   Vec3.STREAM_CODEC.decode(buffer),
                   buffer.readFloat(),

@@ -11,14 +11,14 @@ class IrisEffectTargetTest {
   void capturedGroupKeepsPreparedDrawsAfterTheFeatureListIsCleared() {
     var preparation = new ArrayList<>(List.of("first", "second"));
     var rendered = new ArrayList<String>();
-    var replay = IrisEffectTarget.captureDraws(() -> {
-      for (var draw : preparation) IrisEffectTarget.deferDraw(() -> rendered.add(draw));
+    IrisEffectTarget.handPass(() -> {
+      for (var draw : preparation) assertTrue(IrisEffectTarget.enqueue(() -> rendered.add(draw)));
+      preparation.clear();
+      assertTrue(rendered.isEmpty());
+      IrisEffectTarget.drawHandEffects();
     });
-    preparation.clear();
-    assertTrue(rendered.isEmpty());
-    assertNotNull(replay);
-    replay.run();
+    IrisEffectTarget.handPass(IrisEffectTarget::drawHandEffects);
     assertEquals(List.of("first", "second"), rendered);
-    assertNull(IrisEffectTarget.captureDraws(() -> {}));
+    assertFalse(IrisEffectTarget.enqueue(() -> rendered.add("outside the hand pass")));
   }
 }

@@ -1,13 +1,14 @@
 #version 330
-#moj_import <minecraft:dynamictransforms.glsl>
-#moj_import <minecraft:projection.glsl>
-in vec3 Position;
-in vec2 UV0;
-in vec4 Color;
-out vec2 texCoord;
-out vec4 vertexColor;
-out vec4 projected;
-out vec3 worldPosition;
+#extension GL_ARB_separate_shader_objects : require
+#include <minecraft:dynamictransforms.glsl>
+#include <minecraft:projection.glsl>
+layout(location = 0) in vec3 Position;
+layout(location = 1) in vec2 UV0;
+layout(location = 2) in vec4 Color;
+layout(location = 0) out vec2 texCoord;
+layout(location = 1) out vec4 vertexColor;
+layout(location = 2) out vec4 projected;
+layout(location = 3) out vec3 worldPosition;
 void main() {
     vec3 world = (TextureMat * vec4(Position * TextureMat[3].w, 0)).xyz + ModelOffset;
     worldPosition = world;

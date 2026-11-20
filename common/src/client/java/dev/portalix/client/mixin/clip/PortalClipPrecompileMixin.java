@@ -1,39 +1,33 @@
 package dev.portalix.client.mixin.clip;
 
-import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
-import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
-import com.mojang.blaze3d.pipeline.CompiledRenderPipeline;
-import com.mojang.blaze3d.pipeline.RenderPipeline;
-import com.mojang.blaze3d.shaders.ShaderSource;
-import com.mojang.blaze3d.systems.GpuDevice;
+import com.llamalad7.mixinextras.injector.ModifyExpressionValue;
+import com.mojang.renderpearl.api.pipeline.RenderPipeline;
+import dev.portalix.client.compat.TerrainIntegration;
 import dev.portalix.client.portal.clip.PortalClipPipelineCache;
+import java.util.ArrayList;
+import java.util.List;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.renderer.RenderPipelines;
 import net.minecraft.client.renderer.ShaderManager;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
-import org.spongepowered.asm.mixin.injection.Inject;
-import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 @Mixin(ShaderManager.class)
 abstract class PortalClipPrecompileMixin {
-  @Inject(method = "apply", at = @At("HEAD"))
-  private void portalix$reload(CallbackInfo ci) {
-    PortalClipPipelineCache.clear();
-  }
-
-  @WrapOperation(
-      method = "apply",
-      at =
-          @At(
-              value = "INVOKE",
-              target =
-                  "Lcom/mojang/blaze3d/systems/GpuDevice;precompilePipeline(Lcom/mojang/blaze3d/pipeline/RenderPipeline;Lcom/mojang/blaze3d/shaders/ShaderSource;)Lcom/mojang/blaze3d/pipeline/CompiledRenderPipeline;"))
-  private CompiledRenderPipeline portalix$precompileClip(
-      GpuDevice device,
-      RenderPipeline pipeline,
-      ShaderSource sources,
-      Operation<CompiledRenderPipeline> original) {
-    var ordinary = original.call(device, pipeline, sources);
-    var clipped = original.call(device, PortalClipPipelineCache.clipped(pipeline), sources);
-    return clipped.isValid() ? ordinary : clipped;
+  @ModifyExpressionValue(method = "lambda$reload$1", at = @At(value = "INVOKE",
+      target = "Lnet/minecraft/client/renderer/RenderPipelines;optionalPipelines()Ljava/util/List;"))
+  private static List<RenderPipeline> portalix$optionalClippedPipelines(List<RenderPipeline> optional) {
+    var required = RenderPipelines.requiredPipelines();
+    var pipelines = new ArrayList<RenderPipeline>(optional.size() * 2 + required.size());
+    pipelines.addAll(optional);
+    var terrain = TerrainIntegration.INSTANCE;
+    var renderer = Minecraft.getInstance().levelRenderer;
+    if (terrain != null && renderer != null) terrain.visitTerrainPipelines(renderer, pipelines::add);
+    int ordinaryCount = pipelines.size();
+    // The current terrain renderer can still draw behind the resource reload overlay.
+    PortalClipPipelineCache.retainVariantsFor(pipelines.subList(optional.size(), ordinaryCount));
+    for (var pipeline : required) pipelines.add(PortalClipPipelineCache.clipped(pipeline));
+    for (int i = 0; i < ordinaryCount; i++) pipelines.add(PortalClipPipelineCache.clipped(pipelines.get(i)));
+    return pipelines;
   }
 }

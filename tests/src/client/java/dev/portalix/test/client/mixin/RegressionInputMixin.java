@@ -10,9 +10,8 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 @Mixin(InputConstants.class)
 abstract class RegressionInputMixin {
-  @Inject(method = {"setupKeyboardCallbacks", "setupMouseCallbacks", "grabOrReleaseMouse"},
-      at = @At("HEAD"), cancellable = true)
-  private static void isolatePhysicalInput(CallbackInfo callback) {
+  @Inject(method = {"grabMouse", "releaseMouse"}, at = @At("HEAD"), cancellable = true)
+  private static void isolatePhysicalCursor(CallbackInfo callback) {
     if (ClientRegressionRunner.active()) callback.cancel();
   }
 

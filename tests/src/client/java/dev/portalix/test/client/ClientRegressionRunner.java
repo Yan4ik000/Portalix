@@ -6,6 +6,7 @@ import com.mojang.blaze3d.pipeline.RenderTarget;
 import com.mojang.blaze3d.systems.RenderSystem;
 import dev.portalix.client.compat.iris.IrisShaders;
 import dev.portalix.platform.ModPresence;
+import dev.portalix.test.client.mixin.WindowAccessor;
 import java.io.IOException;
 import java.io.PrintWriter;
 import java.io.StringWriter;
@@ -176,7 +177,7 @@ public final class ClientRegressionRunner {
         var presented = FrameCapture.presentation();
         failureContext = java.util.Map.of("stage", stage.name(),
             "surfaceAcquired", client.windowSurface().isAcquired(),
-            "minimized", window.isMinimized(), "focused", window.isFocused(),
+            "minimized", window.isIconified(), "focused", window.isFocused(),
             "width", window.getWidth(), "height", window.getHeight(),
             "lastPresentedFrame", presented.frameId(),
             "lastPresentedAgoMs", (FrameCapture.monotonicNanos() - presented.nanos()) / 1e6);
@@ -347,7 +348,8 @@ public final class ClientRegressionRunner {
       shaderProfile = environment.profile();
       SHADER_SETTINGS.putAll(environment.settings());
     }
-    ClientAssertions.check(!client.getWindow().isFullscreen(), "Tests require windowed mode");
+    ClientAssertions.check(!((WindowAccessor) (Object) client.getWindow()).portalix$isFullscreen(),
+        "Tests require windowed mode");
     ClientAssertions.check(!client.options.enableVsync().get(), "VSync must be disabled");
     ClientAssertions.check(client.options.framerateLimit().get() >= 260, "Frame cap must be unlimited");
     ClientAssertions.check(client.options.renderDistance().get() == renderDistance()

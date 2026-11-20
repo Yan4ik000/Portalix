@@ -65,7 +65,10 @@ public final class PortalEntityMovement {
     var level = subject.level();
     var start = subject.position();
     try {
-      subject.move(mover, displacement);
+      // A client-controlled vehicle cannot simulate its own travel on the server.
+      MoverType nativeMover = mover == MoverType.SELF && !subject.canSimulateMovement()
+          ? MoverType.PLAYER : mover;
+      subject.move(nativeMover, displacement);
       if (state.lastMove == null && subject.level() == level) {
         PortalPassengerGroup.positionPassengers(subject);
         ServerPlayerMotion.replayedSegment(subject, subject.position().subtract(start));

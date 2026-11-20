@@ -1,5 +1,5 @@
-#moj_import <minecraft:dynamictransforms.glsl>
-#moj_import <minecraft:projection.glsl>
+#include <minecraft:dynamictransforms.glsl>
+#include <minecraft:projection.glsl>
 
 // Basis columns keep unit length; their w values hold depth range, UV scale, and aperture state.
 // The last column holds the camera-relative portal center and opening scale.

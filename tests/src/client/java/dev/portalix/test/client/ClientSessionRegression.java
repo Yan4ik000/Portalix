@@ -3,8 +3,8 @@ package dev.portalix.test.client;
 import static dev.portalix.test.client.ClientAssertions.check;
 
 import com.mojang.authlib.GameProfile;
-import com.mojang.blaze3d.textures.GpuTexture;
-import com.mojang.blaze3d.textures.GpuTextureView;
+import com.mojang.renderpearl.api.textures.GpuTexture;
+import com.mojang.renderpearl.api.textures.GpuTextureView;
 import dev.portalix.carry.CarryBindings;
 import dev.portalix.client.ClientNetworking;
 import dev.portalix.client.PortalixClient;

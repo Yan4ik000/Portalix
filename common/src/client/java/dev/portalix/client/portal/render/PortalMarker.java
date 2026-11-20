@@ -1,17 +1,18 @@
 package dev.portalix.client.portal.render;
 
-import com.mojang.blaze3d.PrimitiveTopology;
-import com.mojang.blaze3d.pipeline.BindGroupLayout;
-import com.mojang.blaze3d.pipeline.BlendFunction;
-import com.mojang.blaze3d.pipeline.ColorTargetState;
-import com.mojang.blaze3d.pipeline.DepthStencilState;
-import com.mojang.blaze3d.pipeline.RenderPipeline;
-import com.mojang.blaze3d.platform.CompareOp;
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.systems.ScissorState;
-import com.mojang.blaze3d.textures.FilterMode;
-import com.mojang.blaze3d.textures.GpuTextureView;
 import com.mojang.blaze3d.vertex.DefaultVertexFormat;
+import com.mojang.renderpearl.api.pipeline.BindGroupLayout;
+import com.mojang.renderpearl.api.pipeline.BlendFunction;
+import com.mojang.renderpearl.api.pipeline.ColorTargetState;
+import com.mojang.renderpearl.api.pipeline.CompareOp;
+import com.mojang.renderpearl.api.pipeline.DepthStencilState;
+import com.mojang.renderpearl.api.pipeline.PrimitiveTopology;
+import com.mojang.renderpearl.api.pipeline.RenderPipeline;
+import com.mojang.renderpearl.api.pipeline.UniformType;
+import com.mojang.renderpearl.api.textures.FilterMode;
+import com.mojang.renderpearl.api.textures.GpuTextureView;
 import dev.portalix.PortalixMod;
 import dev.portalix.api.PortalEndpoint;
 import dev.portalix.client.compat.ShaderBackend;
@@ -23,7 +24,6 @@ import net.minecraft.client.renderer.BindGroupLayouts;
 import net.minecraft.client.renderer.RenderPipelines;
 import net.minecraft.client.renderer.StagedVertexBuffer;
 import net.minecraft.client.renderer.feature.FeatureFrameContext;
-import net.minecraft.client.renderer.rendertype.OutputTarget;
 import net.minecraft.client.renderer.rendertype.PreparedRenderType;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.phys.Vec3;
@@ -51,7 +51,8 @@ public record PortalMarker(PortalEndpoint endpoint, Identifier texture, Vec3 cam
         .withLocation(PortalixMod.id("pipeline/" + name))
         .withVertexShader("core/position_tex")
         .withFragmentShader(PortalixMod.id("core/portal_marker"))
-        .withBindGroupLayout(BindGroupLayouts.MATRICES_PROJECTION)
+        .withBindGroupLayout(BindGroupLayouts.PROJECTION)
+        .withBindGroupLayout(BindGroupLayouts.DYNAMIC_TRANSFORMS)
         .withBindGroupLayout(BindGroupLayouts.SAMPLER0)
         .withVertexBinding(0, DefaultVertexFormat.POSITION_TEX)
         .withPrimitiveTopology(PrimitiveTopology.QUADS)
@@ -61,10 +62,11 @@ public record PortalMarker(PortalEndpoint endpoint, Identifier texture, Vec3 cam
         .withCull(false);
     if (iris)
       builder.withShaderDefine("PORTALIX_IRIS_HAND").withBindGroupLayout(BindGroupLayout.builder()
-          .withSampler("PortalWorldDepth").withSampler("PortalHandDepth").build());
+          .withUniform("PortalWorldDepth", UniformType.COMBINED_IMAGE_SAMPLER)
+          .withUniform("PortalHandDepth", UniformType.COMBINED_IMAGE_SAMPLER).build());
     if (occlusion)
       builder.withShaderDefine("PORTALIX_MARKER_OCCLUSION").withBindGroupLayout(
-          BindGroupLayout.builder().withSampler("PortalSurfaceDepth").build());
+          BindGroupLayout.builder().withUniform("PortalSurfaceDepth", UniformType.COMBINED_IMAGE_SAMPLER).build());
     return RenderPipelines.register(builder.build());
   }
 
@@ -78,7 +80,7 @@ public record PortalMarker(PortalEndpoint endpoint, Identifier texture, Vec3 cam
     var binding = new PreparedRenderType.Texture("Sampler0", image.getTextureView(),
         RenderSystem.getSamplerCache().getClampToEdge(FilterMode.LINEAR));
     var depth = IrisShaders.active() ? ShaderBackend.INSTANCE.portalDepthTextures(false) : null;
-    return new PreparedRenderType(depth == null ? PIPELINE : IRIS_PIPELINE, OutputTarget.MAIN_TARGET,
+    return new PreparedRenderType("Portal marker", depth == null ? PIPELINE : IRIS_PIPELINE, null,
         RenderSystem.getDynamicUniforms().writeTransform(RenderSystem.getModelViewMatrixCopy()),
         new ScissorState(RenderSystem.getScissorStateForRenderTypeDraws()),
         depth == null ? List.of(binding) : List.of(binding, depth.world(), depth.hand()));
@@ -88,14 +90,13 @@ public record PortalMarker(PortalEndpoint endpoint, Identifier texture, Vec3 cam
     return pipeline == PIPELINE || pipeline == IRIS_PIPELINE;
   }
 
-  static void drawWithOcclusion(PreparedRenderType marker, StagedVertexBuffer.ExecuteInfo geometry,
-      GpuTextureView portalDepth) {
+  static PreparedRenderType withOcclusion(PreparedRenderType marker, GpuTextureView portalDepth) {
     var textures = new ArrayList<>(marker.textures());
     textures.add(new PreparedRenderType.Texture("PortalSurfaceDepth", portalDepth,
         RenderSystem.getSamplerCache().getClampToEdge(FilterMode.NEAREST)));
     var pipeline = marker.pipeline() == PIPELINE ? MASKED_PIPELINE : IRIS_MASKED_PIPELINE;
-    new PreparedRenderType(pipeline, marker.outputTarget(), marker.dynamicTransforms(),
-        marker.scissorState(), textures).drawFromBuffer(geometry);
+    return new PreparedRenderType(marker.name(), pipeline, null, marker.dynamicTransforms(),
+        marker.scissorState(), textures);
   }
 
   StagedVertexBuffer.Draw appendGeometry(StagedVertexBuffer staged) {

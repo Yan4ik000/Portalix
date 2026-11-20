@@ -14,11 +14,11 @@ import dev.portalix.portal.geometry.PortalEllipse;
 import java.util.List;
 import net.minecraft.client.Camera;
 import net.minecraft.client.DeltaTracker;
-import net.minecraft.client.renderer.fog.FogData;
-import net.minecraft.client.renderer.fog.FogRenderer;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.renderer.culling.Frustum;
+import net.minecraft.client.renderer.fog.FogData;
+import net.minecraft.client.renderer.fog.FogRenderer;
 import net.minecraft.client.renderer.state.level.CameraRenderState;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.SectionPos;
@@ -291,8 +291,8 @@ public final class PortalSceneCamera extends Camera {
   }
 
   @Override
-  public void extractRenderState(CameraRenderState state, float partialTick) {
-    super.extractRenderState(state, partialTick);
+  public void extractRenderState(CameraRenderState state, DeltaTracker delta) {
+    super.extractRenderState(state, delta);
     state.initialized = true;
     state.isPanoramicMode = false;
     state.isFrustumCaptured = false;

@@ -1,13 +1,11 @@
 package dev.portalix.client.compat;
 
-import dev.portalix.platform.ModPresence;
 import java.util.ServiceLoader;
 
 final class OptionalRenderServices {
   private OptionalRenderServices() {}
 
-  static <T> T load(Class<T> service, String mod) {
-    if (!ModPresence.INSTANCE.isLoaded(mod)) return null;
+  static <T> T require(Class<T> service, String mod) {
     var providers = ServiceLoader.load(service).iterator();
     if (!providers.hasNext())
       throw new IllegalStateException("Missing Portalix render integration for " + mod);

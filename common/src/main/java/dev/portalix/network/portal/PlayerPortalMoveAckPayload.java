@@ -20,12 +20,12 @@ public record PlayerPortalMoveAckPayload(long sequence, boolean accepted, float 
             buffer.writeBoolean(payload.accepted);
             buffer.writeFloat(payload.poseScale);
             buffer.writeVarLong(payload.resumeLoadingAt);
-            buffer.writeCollection(payload.crossings, PayloadCodecs::writePortalLink);
+            PayloadCodecs.PORTAL_LINKS.encode(buffer, payload.crossings);
           },
           buffer ->
               new PlayerPortalMoveAckPayload(
                   buffer.readVarLong(), buffer.readBoolean(), buffer.readFloat(), buffer.readVarLong(),
-                  buffer.readList(PayloadCodecs::readPortalLink)));
+                  PayloadCodecs.PORTAL_LINKS.decode(buffer)));
 
   public PlayerPortalMoveAckPayload {
     crossings = List.copyOf(crossings);

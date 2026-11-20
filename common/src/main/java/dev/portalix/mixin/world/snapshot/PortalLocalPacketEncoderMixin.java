@@ -18,7 +18,7 @@ abstract class PortalLocalPacketEncoderMixin extends MessageToByteEncoder<Object
     var buffer = super.allocateBuffer(context, packet, direct);
     if (context.channel() instanceof LocalChannel
         && packet instanceof ClientboundLevelChunkWithLightPacket chunk) {
-      var palettes = ((ChunkPaletteSnapshots) chunk.getChunkData()).portalix$palettes();
+      var palettes = ((ChunkPaletteSnapshots) chunk.chunkData()).portalix$palettes();
       if (palettes != null) return new LocalPaletteBuffer(buffer, palettes);
     }
     return buffer;

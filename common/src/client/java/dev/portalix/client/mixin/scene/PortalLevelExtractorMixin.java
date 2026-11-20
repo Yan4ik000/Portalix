@@ -9,13 +9,15 @@ import dev.portalix.client.portal.entity.PortalEntityScenes;
 import dev.portalix.client.portal.scene.PortalSceneManager;
 import net.minecraft.client.Camera;
 import net.minecraft.client.DeltaTracker;
+import net.minecraft.client.Minecraft;
 import net.minecraft.client.SectionUpdateTracker;
 import net.minecraft.client.multiplayer.ClientChunkCache;
 import net.minecraft.client.multiplayer.ClientLevel;
-import net.minecraft.client.renderer.culling.Frustum;
 import net.minecraft.client.renderer.SectionOcclusionGraph;
+import net.minecraft.client.renderer.culling.Frustum;
 import net.minecraft.client.renderer.extract.LevelExtractor;
 import net.minecraft.client.renderer.state.level.LevelRenderState;
+import net.minecraft.client.renderer.state.level.PlayerRenderState;
 import net.minecraft.core.SectionPos;
 import net.minecraft.server.packs.resources.ResourceManager;
 import net.minecraft.world.entity.Entity;
@@ -40,6 +42,8 @@ public abstract class PortalLevelExtractorMixin {
       double x,
       double y,
       double z,
+      float partialTicks,
+      long chunkFadeDuration,
       CallbackInfoReturnable<Boolean> cir) {
     if (PortalEntityScenes.isManaged(entity)) cir.setReturnValue(false);
   }
@@ -85,6 +89,18 @@ public abstract class PortalLevelExtractorMixin {
                   "Lnet/minecraft/client/renderer/extract/LevelExtractor;extractVisibleEntities(Lnet/minecraft/client/Camera;Lnet/minecraft/client/renderer/culling/Frustum;Lnet/minecraft/client/DeltaTracker;Lnet/minecraft/client/renderer/state/level/LevelRenderState;)V"))
   private Frustum portalix$entityWindow(Frustum ordinary) {
     return PortalSceneManager.entityFrustum(ordinary);
+  }
+
+  @WrapOperation(method = "extract", at = @At(value = "INVOKE", target =
+      "Lnet/minecraft/client/renderer/extract/LevelExtractor;extractPlayerState(Lnet/minecraft/client/Camera;Lnet/minecraft/client/DeltaTracker;FLnet/minecraft/client/renderer/state/level/PlayerRenderState;)V"),
+      require = 1, allow = 1)
+  private void portalix$playerState(LevelExtractor extractor, Camera camera, DeltaTracker delta,
+      float partial, PlayerRenderState state, Operation<Void> original) {
+    if (PortalSceneManager.isPortalView()) {
+      state.hasPlayer = Minecraft.getInstance().player != null;
+    } else {
+      original.call(extractor, camera, delta, partial, state);
+    }
   }
 
   @Inject(method = "extract", at = @At("HEAD"))

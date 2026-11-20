@@ -1,5 +1,6 @@
 package dev.portalix.client.mixin;
 
+import dev.portalix.client.compat.iris.IrisShaders;
 import dev.portalix.platform.ModPresence;
 import java.util.List;
 import java.util.Set;
@@ -11,13 +12,16 @@ public final class PortalClientMixinPlugin implements IMixinConfigPlugin {
   @Override
   public boolean shouldApplyMixin(String targetClassName, String mixinClassName) {
     if (mixinClassName.startsWith("dev.portalix.client.mixin.compat.iris.")) {
-      return ModPresence.INSTANCE.isLoaded("iris");
+      return IrisShaders.available();
     }
     if (mixinClassName.startsWith("dev.portalix.client.mixin.terrain.vanilla.")) {
       return !ModPresence.INSTANCE.isLoaded("sodium");
     }
-    return !mixinClassName.startsWith("dev.portalix.client.mixin.compat.sodium.")
-        || ModPresence.INSTANCE.isLoaded("sodium");
+    if (mixinClassName.startsWith("dev.portalix.client.mixin.compat.sodium.")
+        || mixinClassName.startsWith("dev.portalix.neoforge.mixin.compat.sodium.")) {
+      return ModPresence.INSTANCE.isLoaded("sodium");
+    }
+    return true;
   }
 
   @Override

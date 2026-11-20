@@ -2,7 +2,7 @@ package dev.portalix.client.portal.scene;
 
 import com.mojang.blaze3d.pipeline.RenderTarget;
 import com.mojang.blaze3d.systems.RenderSystem;
-import com.mojang.blaze3d.textures.GpuTextureView;
+import com.mojang.renderpearl.api.textures.GpuTextureView;
 import dev.portalix.api.PortalEndpoint;
 import dev.portalix.client.ClientNetworking;
 import dev.portalix.client.compat.PortalTerrainBackend;
