@@ -35,12 +35,7 @@ public final class PortalSurfaceMesh {
 
   public static List<Vertex> mesh(PortalEndpoint portal, Vec3 camera, Matrix4fc projection) {
     var polygon = new ArrayList<Vertex>();
-    for (int corner = 0; corner < 4; corner++) {
-      float u = corner == 0 || corner == 3 ? 0 : 1;
-      float v = corner < 2 ? 0 : 1;
-      var point = point(portal, u, v).subtract(camera);
-      polygon.add(new Vertex(point, u, v));
-    }
+    for (int index = 0; index < 4; index++) polygon.add(corner(portal, camera, index));
     var planes =
         List.of(
             new Vector4f(0, 0, 0, 1),
@@ -70,6 +65,12 @@ public final class PortalSurfaceMesh {
       polygon = clipped;
     }
     return List.copyOf(polygon);
+  }
+
+  static Vertex corner(PortalEndpoint portal, Vec3 origin, int index) {
+    float u = index == 0 || index == 3 ? 0 : 1;
+    float v = index < 2 ? 0 : 1;
+    return new Vertex(point(portal, u, v).subtract(origin), u, v);
   }
 
   public static Vec3 point(PortalEndpoint portal, float u, float v) {

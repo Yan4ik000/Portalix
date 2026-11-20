@@ -8,7 +8,6 @@ import dev.portalix.client.compat.minecraft.PipelineVariant;
 import dev.portalix.client.compat.sodium.SodiumShaderAbi;
 import dev.portalix.client.portal.render.PortalScreenRegion;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 import net.caffeinemc.mods.sodium.client.render.chunk.vertex.format.ChunkMeshFormats;
 import net.irisshaders.iris.Iris;
@@ -20,7 +19,6 @@ import net.irisshaders.iris.pipeline.IrisRenderingPipeline;
 import net.irisshaders.iris.shaderpack.materialmap.WorldRenderingSettings;
 import net.minecraft.client.renderer.RenderPipelines;
 import net.minecraft.client.renderer.ShaderDefines;
-import net.minecraft.client.renderer.rendertype.PreparedRenderType;
 import net.minecraft.world.item.Item;
 import org.joml.Matrix4f;
 
@@ -153,8 +151,8 @@ public final class IrisShaderBackend implements ShaderBackend {
   }
 
   @Override
-  public List<PreparedRenderType.Texture> handTextures(boolean opensDepth) {
-    return IrisPortalComposite.handTextures(opensDepth);
+  public PortalDepthTextures portalDepthTextures(boolean opensDepth) {
+    return IrisPortalComposite.portalDepthTextures(opensDepth);
   }
 
   @Override

@@ -3,7 +3,10 @@
 #moj_import <minecraft:projection.glsl>
 in vec2 portalUv;
 in vec2 portalDepth;
-out vec4 fragColor;
+layout(location = 0) out vec4 fragColor;
+#ifdef PORTALIX_MARKER_OCCLUSION
+layout(location = 1) out vec4 markerOcclusion;
+#endif
 
 #ifndef PORTALIX_DEPTH_APERTURE
 uniform sampler2D Sampler0;
@@ -67,5 +70,8 @@ void main() {
         }
     }
     fragColor = vec4(linearToSrgb(clamp(mix(base, rimColor, clamp(rim.x, 0.0, 1.0)), 0.0, 1.0)), 1.0);
+#ifdef PORTALIX_MARKER_OCCLUSION
+    markerOcclusion = vec4(gl_FragDepth, 0.0, 0.0, 1.0);
+#endif
 #endif
 }

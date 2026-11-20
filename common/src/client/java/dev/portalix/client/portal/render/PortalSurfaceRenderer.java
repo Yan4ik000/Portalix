@@ -10,6 +10,8 @@ import com.mojang.blaze3d.pipeline.DepthStencilState;
 import com.mojang.blaze3d.pipeline.RenderPipeline;
 import com.mojang.blaze3d.pipeline.RenderTarget;
 import com.mojang.blaze3d.platform.CompareOp;
+import com.mojang.blaze3d.systems.RenderPass.RenderArea;
+import com.mojang.blaze3d.systems.RenderPassDescriptor;
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.textures.FilterMode;
 import com.mojang.blaze3d.textures.GpuTexture;
@@ -51,13 +53,18 @@ import org.joml.Matrix4f;
 import org.joml.Vector3f;
 import org.joml.Vector4f;
 
-public final class PortalSurfaceRenderer implements FeatureRenderer<PortalSurfaceRenderer.Submit> {
-  public static final FeatureRendererType<Submit> TYPE =
+public final class PortalSurfaceRenderer implements FeatureRenderer<PortalSurfaceRenderer.Node> {
+  public static final FeatureRendererType<Node> TYPE =
       FeatureRendererType.create("portalix_portal");
   private static final RenderPipeline PIPELINE =
       RenderPipelines.register(surfacePipeline("portal").build());
   private static final RenderPipeline IRIS_HAND_PIPELINE =
       RenderPipelines.register(handSurfacePipeline("portal_iris_hand").build());
+  private static final RenderPipeline MARKER_OCCLUSION_PIPELINE =
+      RenderPipelines.register(markerOcclusionPipeline(surfacePipeline("portal_with_marker_occlusion")));
+  private static final RenderPipeline IRIS_MARKER_OCCLUSION_PIPELINE =
+      RenderPipelines.register(
+          markerOcclusionPipeline(handSurfacePipeline("portal_iris_hand_with_marker_occlusion")));
   private static final RenderPipeline APERTURE_PIPELINE =
       RenderPipelines.register(
           portalPipeline(
@@ -103,7 +110,16 @@ public final class PortalSurfaceRenderer implements FeatureRenderer<PortalSurfac
                 .build());
   }
 
+  private static RenderPipeline markerOcclusionPipeline(RenderPipeline.Builder builder) {
+    return builder
+        .withShaderDefine("PORTALIX_MARKER_OCCLUSION")
+        .withColorTargetState(1, new ColorTargetState(
+            Optional.of(BlendFunction.TRANSLUCENT), GpuFormat.R32_FLOAT, ColorTargetState.WRITE_ALL))
+        .build();
+  }
+
   private final Map<RenderTarget, Background> backgrounds = new IdentityHashMap<>();
+  private GpuTextureView markerDepth;
   private final Map<Object, ParticleGeometry> particleGeometry = new IdentityHashMap<>();
   private final List<GpuBuffer> particleBuffers = new ArrayList<>();
   private final ByteBufferBuilder particleStorage = new ByteBufferBuilder(4096);
@@ -119,6 +135,7 @@ public final class PortalSurfaceRenderer implements FeatureRenderer<PortalSurfac
     IrisEffectTarget.clear();
     for (PortalSurfaceRenderer renderer : INSTANCES) {
       renderer.releaseBackgrounds();
+      renderer.releaseMarkerDepth();
       renderer.particleGeometry.values().forEach(ParticleGeometry::close);
       renderer.particleGeometry.clear();
       renderer.particleBuffers.forEach(GpuBuffer::close);
@@ -158,13 +175,41 @@ public final class PortalSurfaceRenderer implements FeatureRenderer<PortalSurfac
     backgrounds.clear();
   }
 
+  private void releaseMarkerDepth() {
+    if (markerDepth == null) return;
+    var texture = markerDepth.texture();
+    markerDepth.close();
+    texture.close();
+    markerDepth = null;
+  }
+
+  private GpuTextureView markerDepth(PortalMarker.Frame frame, GpuTextureView color) {
+    if (frame.portalDepth == null) {
+      int width = color.getWidth(0), height = color.getHeight(0);
+      var device = RenderSystem.getDevice();
+      if (markerDepth == null
+          || markerDepth.getWidth(0) != width || markerDepth.getHeight(0) != height) {
+        releaseMarkerDepth();
+        var texture = device.createTexture(
+            "Portal marker occlusion",
+            GpuTexture.USAGE_RENDER_ATTACHMENT | GpuTexture.USAGE_TEXTURE_BINDING | GpuTexture.USAGE_COPY_DST,
+            GpuFormat.R32_FLOAT, width, height, 1, 1);
+        markerDepth = device.createTextureView(texture);
+      }
+      device.createCommandEncoder().clearColorTexture(markerDepth.texture(), new Vector4f());
+      frame.portalDepth = markerDepth;
+    }
+    return frame.portalDepth;
+  }
+
   private record PreparedDraw(
       PreparedRenderType renderType,
       StagedVertexBuffer.Draw geometry,
       PortalParticleMesh.Batch particles) {}
 
   private record PreparedGroup(
-      List<PreparedDraw> draws, Background background, PortalScreenRegion backgroundRegion) {}
+      List<PreparedDraw> draws, Background background, PortalScreenRegion backgroundRegion,
+      PortalMarker.Frame markers) {}
 
   private final class ParticleGeometry implements AutoCloseable {
     GpuBuffer vertices;
@@ -289,6 +334,13 @@ public final class PortalSurfaceRenderer implements FeatureRenderer<PortalSurfac
               .build());
 
 
+  public sealed interface Node extends SubmitNode permits Submit, PortalMarker {
+    @Override
+    default FeatureRendererType<Node> featureType() {
+      return TYPE;
+    }
+  }
+
   public record Submit(
       PortalEndpoint endpoint,
       boolean orange,
@@ -299,18 +351,14 @@ public final class PortalSurfaceRenderer implements FeatureRenderer<PortalSurfac
       boolean surface,
       boolean active,
       Vec3 camera,
-      List<PortalParticleMesh.Batch> particles)
-      implements SubmitNode {
-    @Override
-    public FeatureRendererType<Submit> featureType() {
-      return TYPE;
-    }
-  }
+      List<PortalParticleMesh.Batch> particles,
+      PortalMarker.Frame markers)
+      implements Node {}
 
   @Override
-  public void prepareGroup(FeatureFrameContext context, List<Submit> submits, boolean outline) {
+  public void prepareGroup(FeatureFrameContext context, List<Node> submits, boolean outline) {
     if (IrisShaders.shadowPass()) {
-      groups.add(new PreparedGroup(List.of(), null, null));
+      groups.add(new PreparedGroup(List.of(), null, null, null));
       return;
     }
     Background background = null;
@@ -319,7 +367,14 @@ public final class PortalSurfaceRenderer implements FeatureRenderer<PortalSurfac
     Matrix4f viewProjection = null;
     StagedVertexBuffer staged = context.stagedVertexBuffer();
     List<PreparedDraw> draws = new ArrayList<>();
-    for (Submit submit : submits) {
+    PortalMarker.Frame markers = null;
+    for (var node : submits) {
+      if (node instanceof PortalMarker marker) {
+        markers = marker.frame();
+        draws.add(new PreparedDraw(marker.prepare(context), marker.appendGeometry(staged), null));
+        continue;
+      }
+      var submit = (Submit) node;
       var endpoint = submit.endpoint;
       Vec3 right = endpoint.right();
       Vec3 up = endpoint.up();
@@ -337,6 +392,7 @@ public final class PortalSurfaceRenderer implements FeatureRenderer<PortalSurfac
         mesh = PortalSurfaceMesh.mesh(endpoint, submit.camera, viewProjection);
       }
       if (mesh.size() >= 3) {
+        if (bundledShaders) markers = submit.markers;
         if (background == null) background = prepareBackground();
         int width = background.texture.getWidth(0), height = background.texture.getHeight(0);
         var region = bundledShaders
@@ -368,10 +424,10 @@ public final class PortalSurfaceRenderer implements FeatureRenderer<PortalSurfac
                             + "-color.png"));
         boolean tintedRim = submit.variant.usesTintedRim();
         int rgb = tintedRim ? submit.variant.rimColor(submit.orange) : 0;
-        var handTextures =
+        var depthTextures =
             IrisShaders.active() && !PortalSceneManager.isPortalView()
-                ? ShaderBackend.INSTANCE.handTextures(scene != null)
-                : List.<PreparedRenderType.Texture>of();
+                ? ShaderBackend.INSTANCE.portalDepthTextures(scene != null)
+                : null;
         var textures =
             new ArrayList<>(
                 List.of(
@@ -389,10 +445,11 @@ public final class PortalSurfaceRenderer implements FeatureRenderer<PortalSurfac
                         "PortalScene",
                         scene == null ? background.view : scene.texture(),
                         RenderSystem.getSamplerCache().getClampToEdge(FilterMode.LINEAR))));
-        textures.addAll(handTextures);
+        if (depthTextures != null)
+          Collections.addAll(textures, depthTextures.world(), depthTextures.hand(), depthTextures.occlusion());
         var surface =
             new PreparedRenderType(
-                handTextures.isEmpty() ? PIPELINE : IRIS_HAND_PIPELINE,
+                depthTextures == null ? PIPELINE : IRIS_HAND_PIPELINE,
                 OutputTarget.MAIN_TARGET,
                 RenderSystem.getDynamicUniforms()
                     .writeTransform(
@@ -421,7 +478,7 @@ public final class PortalSurfaceRenderer implements FeatureRenderer<PortalSurfac
             staged.appendDraw(DefaultVertexFormat.POSITION_TEX_COLOR, PrimitiveTopology.TRIANGLES);
         buildSurface(mesh, staged.getVertexBuilder(geometry));
         draws.add(new PreparedDraw(surface, geometry, null));
-        if (!handTextures.isEmpty() && scene != null)
+        if (depthTextures != null && scene != null)
           ShaderBackend.INSTANCE.aperture(
               region, () -> drawAperture(surface, staged.getExecuteInfo(geometry)));
       }
@@ -485,7 +542,7 @@ public final class PortalSurfaceRenderer implements FeatureRenderer<PortalSurfac
         }
       }
     }
-    groups.add(new PreparedGroup(draws, background, backgroundRegion));
+    groups.add(new PreparedGroup(draws, background, backgroundRegion, markers));
   }
 
   private Background prepareBackground() {
@@ -502,7 +559,7 @@ public final class PortalSurfaceRenderer implements FeatureRenderer<PortalSurfac
 
   @Override
   public void executeGroup(
-      FeatureFrameContext context, int groupIndex, List<Submit> submits, boolean outline) {
+      FeatureFrameContext context, int groupIndex, List<Node> submits, boolean outline) {
     if (IrisShaders.shadowPass()) return;
     var group = groups.get(groupIndex);
     if (group.draws.isEmpty()) return;
@@ -565,8 +622,49 @@ public final class PortalSurfaceRenderer implements FeatureRenderer<PortalSurfac
             .computeIfAbsent(draw.particles.persistentKey(), ignored -> new ParticleGeometry())
             .draw(draw.particles, particleStorage, draw.renderType);
       } else {
-        if (draw.geometry != null) draw.renderType.drawFromBuffer(draw.geometry);
+        if (draw.geometry == null) continue;
+        var pipeline = draw.renderType.pipeline();
+        var markers = group.markers;
+        if (markers != null && markers.portalDepth != null && PortalMarker.isMarker(pipeline)) {
+          PortalMarker.drawWithOcclusion(draw.renderType, draw.geometry, markers.portalDepth);
+        } else if (markers != null && markers.submitted
+            && (pipeline == PIPELINE || pipeline == IRIS_HAND_PIPELINE)) {
+          drawSurfaceWithMarkerDepth(draw, markers);
+        } else {
+          draw.renderType.drawFromBuffer(draw.geometry);
+        }
       }
+    }
+  }
+
+  private void drawSurfaceWithMarkerDepth(SurfaceDraw draw, PortalMarker.Frame markers) {
+    var surface = draw.renderType;
+    var target = surface.outputTarget().getRenderTarget();
+    var color = RenderSystem.outputColorTextureOverride;
+    if (color == null) color = target.getColorTextureView();
+    var depth = RenderSystem.outputDepthTextureOverride;
+    if (depth == null) depth = target.getDepthTextureView();
+    // Record only the fragments that pass the same tests as the visible portal surface.
+    var descriptor = RenderPassDescriptor.create(() -> "Portal surface with marker occlusion")
+        .withColorAttachment(color)
+        .withColorAttachment(markerDepth(markers, color))
+        .withDepthAttachment(depth)
+        .withRenderArea(new RenderArea(0, 0, color.getWidth(0), color.getHeight(0)));
+    var pipeline =
+        surface.pipeline() == PIPELINE ? MARKER_OCCLUSION_PIPELINE : IRIS_MARKER_OCCLUSION_PIPELINE;
+    var geometry = draw.geometry;
+    try (var pass = RenderSystem.getDevice().createCommandEncoder().createRenderPass(descriptor)) {
+      pass.setPipeline(IrisEffectTarget.pipeline(pipeline, color.texture().getFormat()));
+      var scissor = surface.scissorState();
+      if (scissor.enabled())
+        pass.enableScissor(scissor.x(), scissor.y(), scissor.width(), scissor.height());
+      RenderSystem.bindDefaultUniforms(pass);
+      pass.setUniform("DynamicTransforms", surface.dynamicTransforms());
+      for (var texture : surface.textures())
+        pass.bindTexture(texture.name(), texture.textureView(), texture.sampler());
+      pass.setVertexBuffer(0, geometry.vertexBuffer().slice());
+      pass.setIndexBuffer(geometry.indexBuffer(), geometry.indexType());
+      pass.drawIndexed(geometry.indexCount(), 1, geometry.firstIndex(), geometry.baseVertex(), 0);
     }
   }
 
@@ -603,6 +701,7 @@ public final class PortalSurfaceRenderer implements FeatureRenderer<PortalSurfac
   @Override
   public void close() {
     releaseBackgrounds();
+    releaseMarkerDepth();
     particleGeometry.values().forEach(ParticleGeometry::close);
     particleGeometry.clear();
     particleBuffers.forEach(GpuBuffer::close);

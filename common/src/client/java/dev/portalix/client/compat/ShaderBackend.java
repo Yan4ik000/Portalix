@@ -4,7 +4,6 @@ import com.mojang.blaze3d.pipeline.RenderPipeline;
 import com.mojang.blaze3d.vertex.VertexFormat;
 import dev.portalix.client.compat.iris.IrisDrawContext;
 import dev.portalix.client.portal.render.PortalScreenRegion;
-import java.util.List;
 import net.minecraft.client.renderer.rendertype.PreparedRenderType;
 import net.minecraft.world.item.Item;
 import org.joml.Matrix4f;
@@ -31,10 +30,13 @@ public interface ShaderBackend {
   RenderScope beginEffect();
   void clearEffects();
   void endFrame();
-  List<PreparedRenderType.Texture> handTextures(boolean opensDepth);
+  PortalDepthTextures portalDepthTextures(boolean opensDepth);
   void aperture(PortalScreenRegion region, Runnable draw);
   void submit(Runnable draw);
   void clearComposite();
+
+  record PortalDepthTextures(PreparedRenderType.Texture world, PreparedRenderType.Texture hand,
+      PreparedRenderType.Texture occlusion) {}
 
   interface Scene extends AutoCloseable {
     void invalidateHistory();

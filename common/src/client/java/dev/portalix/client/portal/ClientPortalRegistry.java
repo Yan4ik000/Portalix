@@ -3,9 +3,12 @@ package dev.portalix.client.portal;
 import dev.portalix.api.PortalEndpoint;
 import dev.portalix.api.PortalInstance;
 import dev.portalix.client.gun.sound.SoundVoiceLimiter;
+import dev.portalix.client.portal.render.PortalMarker;
 import dev.portalix.client.portal.render.PortalOpeningAnimation;
 import dev.portalix.client.portal.scene.PortalSceneManager;
 import dev.portalix.client.render.ParticleView;
+import dev.portalix.gun.GunPermissions;
+import dev.portalix.item.PortalixIdentity;
 import dev.portalix.network.portal.PortalStatePayload;
 import dev.portalix.portal.PortalLink;
 import dev.portalix.portal.PortalTopology;
@@ -160,8 +163,13 @@ public final class ClientPortalRegistry {
 
   public void submit(ParticleView view, OrderedSubmitNodeCollector collection) {
     double now = time();
-    for (PortalVisual portal : portals.values()) portal.submit(now, view, collection);
-    for (PortalVisual portal : closing) portal.submit(now, view, collection);
+    UUID heldGun = null;
+    if (!PortalSceneManager.isPortalView() && !client.gui.hud.isHidden() && GunPermissions.canUse(client.player))
+      heldGun = PortalixIdentity.get(client.player.getMainHandItem());
+    var markers = heldGun == null ? null : new PortalMarker.Frame();
+    for (var entry : portals.entrySet())
+      entry.getValue().submit(now, view, collection, markers, entry.getKey().gun().equals(heldGun));
+    for (PortalVisual portal : closing) portal.submit(now, view, collection, null, false);
   }
 
   public void clear() {

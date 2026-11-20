@@ -7,6 +7,7 @@ import dev.portalix.client.particle.PortalParticleEffect;
 import dev.portalix.client.particle.PortalParticleMesh;
 import dev.portalix.client.platform.ClientPlatform.Phase;
 import dev.portalix.client.platform.ClientPlatform;
+import dev.portalix.client.portal.render.PortalMarker;
 import dev.portalix.client.portal.render.PortalOpeningAnimation;
 import dev.portalix.client.portal.render.PortalSurfaceRenderer;
 import dev.portalix.client.render.ParticleView;
@@ -19,6 +20,7 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.OrderedSubmitNodeCollector;
 import net.minecraft.client.resources.sounds.SoundInstance;
 import net.minecraft.core.BlockPos;
+import net.minecraft.resources.Identifier;
 import net.minecraft.server.level.ParticleStatus;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
@@ -30,6 +32,7 @@ final class PortalVisual {
   final long identity;
   final boolean orange;
   private final PortalixVariant variant;
+  private final Identifier markerTexture;
   private final PortalOpeningAnimation animation;
   private final PortalParticleEffect particles;
   private final AABB bounds;
@@ -44,6 +47,7 @@ final class PortalVisual {
     identity = member.identity();
     this.orange = orange;
     variant = member.variant();
+    markerTexture = PortalMarker.texture(variant, orange);
     animation = new PortalOpeningAnimation(born, false);
     particles = new PortalParticleEffect(variant, orange, identity, born, now);
 
@@ -85,9 +89,15 @@ final class PortalVisual {
     } else stopAmbient();
   }
 
-  void submit(double now, ParticleView view, OrderedSubmitNodeCollector collection) {
+  void submit(double now, ParticleView view, OrderedSubmitNodeCollector collection,
+      PortalMarker.Frame markers, boolean showMarker) {
     var camera = view.position();
-    if (!loaded() || !view.frustum().test(bounds)) return;
+    if (client.level == null || !endpoint.dimension().equals(client.level.dimension())
+        || !view.frustum().test(bounds)) return;
+    if (showMarker)
+      ClientPlatform.INSTANCE.submit(collection, Phase.AFTER_TERRAIN,
+          markers.marker(endpoint, markerTexture, camera));
+    if (!footprintLoaded()) return;
     particles.advance(now);
     var geometry =
         mesh.build(
@@ -113,7 +123,8 @@ final class PortalVisual {
               true,
               true,
               camera,
-              List.of()));
+              List.of(),
+              markers));
     if (!geometry.isEmpty())
       ClientPlatform.INSTANCE.submit(collection,
           Phase.AFTER_TERRAIN,
@@ -127,12 +138,11 @@ final class PortalVisual {
               false,
               closed < 0,
               camera,
-              geometry));
+              geometry,
+              null));
   }
 
-  private boolean loaded() {
-    if (client.level == null || !endpoint.dimension().equals(client.level.dimension()))
-      return false;
+  private boolean footprintLoaded() {
     for (BlockPos pos : footprint) {
       if (!client.level.getChunkSource().hasChunk(pos.getX() >> 4, pos.getZ() >> 4)) return false;
     }

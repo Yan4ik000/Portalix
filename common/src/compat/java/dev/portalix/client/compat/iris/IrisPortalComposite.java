@@ -14,6 +14,7 @@ import com.mojang.blaze3d.textures.GpuTexture;
 import com.mojang.blaze3d.textures.GpuTextureView;
 import dev.portalix.PortalixMod;
 import dev.portalix.client.ModResourceReload;
+import dev.portalix.client.compat.ShaderBackend.PortalDepthTextures;
 import dev.portalix.client.mixin.compat.iris.IrisRenderingPipelineAccessor;
 import dev.portalix.client.portal.render.PortalScreenRegion;
 import java.util.ArrayList;
@@ -125,7 +126,7 @@ public final class IrisPortalComposite {
     }
   }
 
-  public static List<PreparedRenderType.Texture> handTextures(boolean opensDepth) {
+  public static PortalDepthTextures portalDepthTextures(boolean opensDepth) {
     var pipeline = (IrisRenderingPipelineAccessor) Iris.getPipelineManager().getPipelineNullable();
     var targets = pipeline.portalix$targets();
     var world = targets.getDepthTextureNoHand();
@@ -150,7 +151,7 @@ public final class IrisPortalComposite {
       occlusionDepth = RenderSystem.getDevice().createTextureView(occlusion);
     }
     var sampler = RenderSystem.getSamplerCache().getClampToEdge(FilterMode.NEAREST);
-    return List.of(
+    return new PortalDepthTextures(
         new PreparedRenderType.Texture("PortalWorldDepth", worldDepth, sampler),
         new PreparedRenderType.Texture("PortalHandDepth", handDepth, sampler),
         new PreparedRenderType.Texture(
