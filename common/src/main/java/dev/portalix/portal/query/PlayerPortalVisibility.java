@@ -48,8 +48,17 @@ public final class PlayerPortalVisibility {
     return tick < resumeLoadingAt;
   }
 
+  public boolean loadingTransitionActive(long tick) {
+    return resumeLoadingAt != 0 && tick - resumeLoadingAt < PortalViewTransition.LOAD_RAMP_TICKS;
+  }
+
+  public int loadingRadius(long tick, int playerDistance, int limit) {
+    return resumeLoadingAt == 0 ? limit : PortalViewTransition.loadingRadius(
+        tick - resumeLoadingAt, PortalViewLimits.preview(playerDistance), limit);
+  }
+
   public int trackingDistance(long tick, int distance) {
-    return delayingLoading(tick) ? PortalViewLimits.preview(distance) : distance;
+    return loadingRadius(tick, distance, distance);
   }
 
   public void ready(PortalLink link) {

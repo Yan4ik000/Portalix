@@ -31,6 +31,9 @@ import org.joml.Matrix4f;
 final class PortalViewRangeCase {
   private enum Step { REFERENCE, POSITION, OPEN, ENTER, RESTORE, RETURN, REENTER, HOT_HOLD, LEAVE, CONTRACT, DRAIN, DONE }
 
+  private static final int SETTLED_TICK = PortalViewTransition.LOAD_DELAY_TICKS
+      + (int) Math.ceil(PortalViewTransition.LOAD_RAMP_TICKS) + 5;
+
   private final Minecraft client;
   private final ScenarioFrames frames;
   private final PortalSystemFixture fixture;
@@ -135,7 +138,7 @@ final class PortalViewRangeCase {
         if (crossed(route)) { input.stop(); step = Step.RESTORE; }
       }
       case RESTORE -> {
-        if (restoredFrames < 10 || latestColdTick < PortalViewTransition.LOAD_DELAY_TICKS + 20) return false;
+        if (restoredFrames < 10 || latestColdTick < SETTLED_TICK) return false;
         client.options.keyDown.setDown(true);
         step = Step.RETURN;
       }
@@ -250,7 +253,7 @@ final class PortalViewRangeCase {
         if (held) hotFrames++;
       } else if (count == 4 && !destination) {
         if (held) departureFrames++;
-        else if (elapsed >= PortalViewTransition.LOAD_DELAY_TICKS + 20) {
+        else if (elapsed >= SETTLED_TICK) {
           check(distantChroma < referenceFar * .28, "Far terrain remained visible after contraction");
           contractedFrames++;
         } else if (distantChroma >= referenceFar * .28 && distantChroma <= referenceFar * .55) contractingFrames++;

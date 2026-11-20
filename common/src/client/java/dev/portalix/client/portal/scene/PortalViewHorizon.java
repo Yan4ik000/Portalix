@@ -83,7 +83,7 @@ public final class PortalViewHorizon {
   private static double horizonFadeTicks() {
     double seconds = Minecraft.getInstance().options.chunkSectionFadeInTime().get();
     // Already compiled terrain still needs a horizon transition when section fading is disabled.
-    return (seconds > 0 ? seconds : 0.75) * 20;
+    return (seconds > 0 ? seconds * 20 : PortalViewTransition.DEFAULT_FADE_TICKS) * PortalViewTransition.SLOWDOWN;
   }
 
   private static double remoteRadius(PortalEndpoint exit, double tick, int limit) {

@@ -14,7 +14,7 @@ import net.minecraft.world.level.ChunkPos;
 
 /** Already delivered terrain kept available for another crossing, independent of portal identities. */
 final class PortalWarmTerrain {
-  private static final int RELEASES_PER_TICK = 16;
+  private static final int RELEASES_PER_TICK = (int) Math.round(16 / PortalViewTransition.SLOWDOWN);
   private final LongLinkedOpenHashSet retiring = new LongLinkedOpenHashSet();
   private long lastRelease = Long.MIN_VALUE;
   private final Long2ObjectOpenHashMap<Departure> columns = new Long2ObjectOpenHashMap<>();

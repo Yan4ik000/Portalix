@@ -2,7 +2,6 @@ package dev.portalix.mixin.world.tracking;
 
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
-import dev.portalix.portal.PortalViewLimits;
 import dev.portalix.portal.query.PlayerPortalVisibility;
 import dev.portalix.world.chunk.LoadingObserverTracker;
 import dev.portalix.world.chunk.PortalChunkObservers;
@@ -63,7 +62,7 @@ abstract class PortalLoadingObserversMixin implements PortalLoadingObservers {
 
   @Override
   public void portalix$loadingDelayChanged(ServerPlayer player) {
-    if (PlayerPortalVisibility.of(player).delayingLoading(player.level().getGameTime()))
+    if (PlayerPortalVisibility.of(player).resumeLoadingAt() != 0)
       portalix$crossingPlayers.add(player);
     else portalix$crossingPlayers.remove(player);
     portalix$checkedTick = Long.MIN_VALUE;
@@ -89,26 +88,24 @@ abstract class PortalLoadingObserversMixin implements PortalLoadingObservers {
     var candidates = portalix$crossingPlayers.iterator();
     while (candidates.hasNext()) {
       var player = candidates.next();
-      if (player.isRemoved() || player.level().getChunkSource().chunkMap.getDistanceManager() != (Object) this
-          || !PlayerPortalVisibility.of(player).delayingLoading(now)) {
+      var chunkMap = player.level().getChunkSource().chunkMap;
+      if (player.isRemoved() || chunkMap.getDistanceManager() != (Object) this
+          || !PlayerPortalVisibility.of(player).loadingTransitionActive(now)) {
         candidates.remove();
         continue;
       }
       long center = player.getLastSectionPos().chunk().pack();
       var players = playersPerChunk.get(center);
       if (players == null || !players.contains(player) || next.containsKey(center)) continue;
-      var map = (ChunkMapAccessor) player.level().getChunkSource().chunkMap;
+      var map = (ChunkMapAccessor) chunkMap;
       int limit = map.portalix$serverViewDistance();
-      int weight = limit;
+      int radius = 0;
       for (var observer : players) {
-        if (!PlayerPortalVisibility.of(observer).delayingLoading(now)) {
-          weight = 0;
-          break;
-        }
         int distance = map.portalix$playerViewDistance(observer);
-        weight = Math.min(weight, limit - PortalViewLimits.preview(distance));
+        radius = Math.max(radius, PlayerPortalVisibility.of(observer).loadingRadius(now, distance, limit));
+        if (radius == limit) break;
       }
-      if (weight > 0) next.put(center, weight);
+      if (radius < limit) next.put(center, limit - radius);
     }
     if (!next.equals(portalix$delayed)) portalix$delayed = next.isEmpty() ? Long2IntMaps.EMPTY_MAP : next;
     return portalix$delayed;
