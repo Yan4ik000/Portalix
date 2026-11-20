@@ -35,19 +35,12 @@ final class SourcePortalRibbon {
     float radius = ParticleSpline.position(a.radius, b.radius, c.radius, d.radius, t);
     var left = new Vector3f(position).add(new Vector3f(normal).mul(radius * -.5F));
     var right = position.add(normal.mul(radius * .5F));
-    Vector3f color = linear(b.color).lerp(linear(c.color), t);
-    float alpha = packed(b.alpha) * (1 - t) + packed(c.alpha) * t;
+    Vector3f color =
+        SourceParticleColor.linearColor(b.color).lerp(SourceParticleColor.linearColor(c.color), t);
+    float alpha =
+        SourceParticleColor.packedAlpha(b.alpha) * (1 - t)
+            + SourceParticleColor.packedAlpha(c.alpha) * t;
     return new Sample(left, right, color, alpha);
   }
 
-  private static float packed(float value) {
-    return SourceParticleColor.packedColor(Math.clamp(value, 0, 1));
-  }
-
-  private static Vector3f linear(Vector3f color) {
-    return new Vector3f(
-        SourceParticleColor.linearColor(color.x),
-        SourceParticleColor.linearColor(color.y),
-        SourceParticleColor.linearColor(color.z));
-  }
 }

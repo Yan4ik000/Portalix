@@ -118,16 +118,7 @@ final class PortalShotParticleRenderer {
         float toAlpha = SourceParticleColor.packedColor(to.alpha * to.alpha2);
         alphas[index] = fromAlpha + (toAlpha - fromAlpha) * t;
         colors[index] =
-            new Vector3f(
-                    SourceParticleColor.linearColor(from.rgb.x),
-                    SourceParticleColor.linearColor(from.rgb.y),
-                    SourceParticleColor.linearColor(from.rgb.z))
-                .lerp(
-                    new Vector3f(
-                        SourceParticleColor.linearColor(to.rgb.x),
-                        SourceParticleColor.linearColor(to.rgb.y),
-                        SourceParticleColor.linearColor(to.rgb.z)),
-                    t);
+            SourceParticleColor.linearColor(from.rgb).lerp(SourceParticleColor.linearColor(to.rgb), t);
       }
     }
     PortalShotParticleSystem.Particle last = particles.getLast();
@@ -137,11 +128,7 @@ final class PortalShotParticleRenderer {
         new Vector3f(controls[index / collection.program.subdivisions])
             .sub(controls[index / collection.program.subdivisions - 1]);
     alphas[index] = SourceParticleColor.packedColor(last.alpha * last.alpha2);
-    colors[index] =
-        new Vector3f(
-            SourceParticleColor.linearColor(last.rgb.x),
-            SourceParticleColor.linearColor(last.rgb.y),
-            SourceParticleColor.linearColor(last.rgb.z));
+    colors[index] = SourceParticleColor.linearColor(last.rgb);
     for (int i = 0; i < count; i++) {
       Vector3f side = edges[i].cross(new Vector3f(points[i]).negate());
       edges[i] = side.lengthSquared() > 0.0F ? side.normalize() : side;

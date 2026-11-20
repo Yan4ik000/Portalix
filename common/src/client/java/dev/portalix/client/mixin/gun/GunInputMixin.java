@@ -1,11 +1,11 @@
 package dev.portalix.client.mixin.gun;
 
-import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
-import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
+import com.llamalad7.mixinextras.expression.Definition;
+import com.llamalad7.mixinextras.expression.Expression;
+import com.llamalad7.mixinextras.injector.ModifyExpressionValue;
 import dev.portalix.client.PortalixClient;
 import dev.portalix.gun.GunPermissions;
 import dev.portalix.network.gun.GunCommand;
-import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.player.LocalPlayer;
 import org.spongepowered.asm.mixin.Mixin;
@@ -23,16 +23,33 @@ public abstract class GunInputMixin {
     return GunPermissions.canUse(player);
   }
 
-  @WrapOperation(
+  @Definition(id = "keyAttack", field = "Lnet/minecraft/client/Options;keyAttack:Lnet/minecraft/client/KeyMapping;")
+  @Definition(id = "consumeClick", method = "Lnet/minecraft/client/KeyMapping;consumeClick()Z")
+  @Expression("?.keyAttack.consumeClick()")
+  @ModifyExpressionValue(
       method = "handleKeybinds",
-      at = @At(value = "INVOKE", target = "Lnet/minecraft/client/KeyMapping;consumeClick()Z"))
-  private boolean portalix$fireClick(KeyMapping key, Operation<Boolean> original) {
-    boolean clicked = original.call(key);
-    Minecraft mc = Minecraft.getInstance();
-    if (clicked && portalix$canUseGun() && (key == mc.options.keyAttack || key == mc.options.keyUse)) {
-      PortalixClient.ensureSession(mc);
-      PortalixClient.input()
-          .firePressed(key == mc.options.keyAttack ? GunCommand.FIRE_BLUE : GunCommand.FIRE_ORANGE);
+      at = @At("MIXINEXTRAS:EXPRESSION"),
+      require = 2, allow = 2)
+  private boolean portalix$firePrimary(boolean clicked) {
+    return portalix$fireClick(clicked, GunCommand.FIRE_BLUE);
+  }
+
+  @Definition(id = "keyUse", field = "Lnet/minecraft/client/Options;keyUse:Lnet/minecraft/client/KeyMapping;")
+  @Definition(id = "consumeClick", method = "Lnet/minecraft/client/KeyMapping;consumeClick()Z")
+  @Expression("?.keyUse.consumeClick()")
+  @ModifyExpressionValue(
+      method = "handleKeybinds",
+      at = @At("MIXINEXTRAS:EXPRESSION"),
+      require = 2, allow = 2)
+  private boolean portalix$fireSecondary(boolean clicked) {
+    return portalix$fireClick(clicked, GunCommand.FIRE_ORANGE);
+  }
+
+  @Unique
+  private static boolean portalix$fireClick(boolean clicked, GunCommand command) {
+    if (clicked && portalix$canUseGun()) {
+      PortalixClient.ensureSession(Minecraft.getInstance());
+      PortalixClient.input().firePressed(command);
     }
     return clicked;
   }

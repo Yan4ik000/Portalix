@@ -2,6 +2,7 @@ package dev.portalix.client.particle;
 
 import static dev.portalix.client.particle.SourceParticleKinematics.remap;
 
+import dev.portalix.gun.GunFireTiming;
 import dev.portalix.item.PortalixVariant;
 import dev.portalix.resource.ModAssetLoader;
 import java.util.ArrayList;
@@ -19,6 +20,7 @@ final class PortalShotParticleSystem {
               .getAsJsonObject("systems"));
   final List<Collection> collections = new ArrayList<>();
   final float stopTime;
+  private final float launchDelay;
   private final Vec3 start;
   private final Vec3 end;
   private final Vec3 auxiliary;
@@ -36,7 +38,8 @@ final class PortalShotParticleSystem {
     this.start = start;
     this.end = end;
     auxiliary = start.add(launchDirection.normalize().scale(start.distanceTo(end)));
-    stopTime = Math.max(LAUNCH_DELAY + MIN_TRAVEL_TIME, arrivalTime);
+    stopTime = Math.max((float) GunFireTiming.TICK_SECONDS, arrivalTime);
+    launchDelay = Math.clamp(stopTime - MIN_TRAVEL_TIME, 0.0F, LAUNCH_DELAY);
     color = SourceParticleColor.gunPalette(variant, orange);
     tintScale =
         variant == PortalixVariant.ORANGE && orange
@@ -46,7 +49,7 @@ final class PortalShotParticleSystem {
   }
 
   Vec3 controlPoint(float time) {
-    float progress = Math.clamp((time - LAUNCH_DELAY) / (stopTime - LAUNCH_DELAY), 0.0F, 1.0F);
+    float progress = Math.clamp((time - launchDelay) / (stopTime - launchDelay), 0.0F, 1.0F);
     double remaining = 1.0 - progress;
     return start
         .scale(remaining)
@@ -84,7 +87,7 @@ final class PortalShotParticleSystem {
 
     Collection(PortalShotParticleProgram.Child child) {
       program = child.program();
-      delay = child.delay();
+      delay = child.delay() * (launchDelay / LAUNCH_DELAY);
       seed = System.identityHashCode(this) + (int) (System.nanoTime() / 1_000_000L);
       lockRandom = new SimdRandom(seed);
     }
@@ -143,11 +146,8 @@ final class PortalShotParticleSystem {
           emit(births, origins);
         }
       }
-      for (int i = 0; i < program.operators.size(); i++) {
-        var operator = program.operators.get(i);
-        operator.action().apply(this, local, dt, cp, previousCp, i * 17);
-        if (operator.decay()) particles.removeIf(particle -> local - particle.birth >= particle.life);
-      }
+      for (int i = 0; i < program.operators.size(); i++)
+        program.operators.get(i).apply(this, local, dt, cp, previousCp, i * 17);
       previousDt = dt;
     }
 
@@ -230,6 +230,10 @@ final class PortalShotParticleSystem {
       position = new Vector3f((float) value.x, (float) value.y, (float) value.z);
       previous = new Vector3f(position);
       this.radius = radius;
+    }
+
+    boolean expired(float time) {
+      return time - birth >= life;
     }
 
     void scalar(int field, float value, boolean multiply) {

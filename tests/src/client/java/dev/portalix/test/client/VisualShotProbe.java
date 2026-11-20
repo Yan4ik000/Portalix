@@ -23,7 +23,6 @@ import net.minecraft.util.Util;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 
-/** Observes real effects; only pixels in the presented main image establish visual success. */
 public final class VisualShotProbe {
   public record Spec(AABB flightVolume, AABB impactVolume, AABB controlVolume, Vec3 expectedHit,
                      boolean orange, Path evidenceDirectory, PortalixVariant variant) {
@@ -38,11 +37,11 @@ public final class VisualShotProbe {
   }
 
   private record Pixels(int changed, int spanX, int spanY, int hueChanges,
-                        int negativeResidualRejected, int outsideTrajectoryRejected) {}
+                        int negativeResidualRejected, int outsideTrajectoryRejected, int impactAreaRejected) {}
   public record FrameTicket(long presentation, int playerTick, double partialTick,
-                            double flightAge, String phase) {}
+                            double flightAge, double impactAge, String phase) {}
   private record Sample(long frameId, long presentationNanos, long tick, int playerTick, String phase, double partialTick,
-                        long presentation, Pixels flight,
+                        long presentation, double flightAge, double impactAge, Pixels flight,
                         Pixels impact, FrameCapture.Difference control, boolean stableCamera) {}
   private record EventReceipt(long gameTick, int playerTick) {
     double eventPlayerTick(long serverTick) {
@@ -50,6 +49,7 @@ public final class VisualShotProbe {
     }
   }
 
+  private static final int MAX_FLIGHT_CAPTURES = 5;
   private static VisualShotProbe active;
   private final FrameCapture.Frame baseline;
   private final Spec spec;
@@ -152,8 +152,9 @@ public final class VisualShotProbe {
     double impactAge = submitted && impact != null ? submittedTime - impactReceipt.eventPlayerTick(impact.serverTick()) : -1;
     String phase = "";
     if (submitted) {
-      phase = phase(flightAge, impactAge, impact != null);
-      if (submittedPlayerTick == lastRequestedPlayerTick && phase.equals(lastRequestedPhase)) phase = "";
+      phase = phase(flightAge, impactAge);
+      if (!phase.equals("flight") && submittedPlayerTick == lastRequestedPlayerTick
+          && phase.equals(lastRequestedPhase)) phase = "";
     }
     if (phase.isEmpty() || !blocker.isEmpty()) return null;
     switch (phase) {
@@ -164,12 +165,13 @@ public final class VisualShotProbe {
     }
     lastRequestedPlayerTick = client.player.tickCount;
     lastRequestedPhase = phase;
-    return new FrameTicket(index, client.player.tickCount, partial, flightAge, phase);
+    return new FrameTicket(index, client.player.tickCount, partial, flightAge, impactAge, phase);
   }
 
-  private String phase(double flightAge, double impactAge, boolean impactReceived) {
-    if (!impactReceived) return bestFlight == null && flightCaptures < 5
-        && flightAge >= 2.25 && flightAge < shot.impactAfterTicks() ? "flight" : "";
+  private String phase(double flightAge, double impactAge) {
+    // The integrated server can deliver impact while the client projectile is still in flight.
+    if (flightAge < shot.impactAfterTicks()) return bestFlight == null && flightCaptures < MAX_FLIGHT_CAPTURES
+        && flightAge >= (double) shot.impactAfterTicks() * flightCaptures / MAX_FLIGHT_CAPTURES ? "flight" : "";
     if (impactAge >= 26) {
       int playerTick = Minecraft.getInstance().player.tickCount;
       return !settledRequested && playerTick - impactReceipt.eventPlayerTick(impact.serverTick()) >= 26 ? "settled" : "";
@@ -189,9 +191,9 @@ public final class VisualShotProbe {
   /** Classify the captured image using its effect phase at copy time, independent of readback latency. */
   public void accept(FrameCapture.Frame frame, FrameTicket ticket) {
     if (completion != null || shot == null) throw new IllegalStateException("No pending visual shot observation");
+    requireWorldFrame(frame);
     if (frame.playerTick() != ticket.playerTick)
       throw new IllegalArgumentException("The effect ticket and captured frame describe different game ticks");
-    requireWorldFrame(frame);
     if (frame.id() <= baseline.id()) throw new IllegalArgumentException("The sample predates its baseline");
     if (samples.size() >= 11) throw new IllegalStateException("Visual shot sample budget exceeded");
     if (!Minecraft.getInstance().gui.hud.isHidden()) violations.add("HUD/hand became visible during the particle-only observation");
@@ -203,9 +205,11 @@ public final class VisualShotProbe {
     var control = frame.difference(baseline, regions[2], 24);
     boolean quiet = control.meanChannelDifference() < 12 && control.changedFraction() < .15;
     if (!quiet) violations.add("The control region changed in frame " + frame.id() + ": " + control);
-    Pixels flightPixels = changedPixels(frame, regions[0], true);
-    Pixels impactPixels = changedPixels(frame, regions[1], false);
     String phase = ticket.phase;
+    var sparkArea = "flight".equals(phase) && ticket.impactAge >= 0
+        ? project(frame, spec.impactVolume.inflate(.25)) : null;
+    Pixels flightPixels = changedPixels(frame, regions[0], true, sparkArea);
+    Pixels impactPixels = changedPixels(frame, regions[1], false, null);
     if ("settled".equals(phase)) {
       settled = frame;
       settledFlight = flightPixels;
@@ -225,15 +229,14 @@ public final class VisualShotProbe {
         maximumObservedFlight = flightPixels.changed;
         observedFlight = frame;
       }
-      // The muzzle flash ends before 0.8 ticks; the projectile launches at 2 ticks.
-      if (ticket.flightAge >= 2.25 && ticket.flightAge < shot.impactAfterTicks() && stable && quiet
+      if (ticket.flightAge >= 0 && ticket.flightAge < shot.impactAfterTicks() && stable && quiet
           && sprite(flightPixels, 8) && flightPixels.changed > maximumFlight) {
         maximumFlight = flightPixels.changed;
         bestFlight = frame;
       }
     }
     samples.add(new Sample(frame.id(), frame.presentationNanos(), frame.gameTick(), frame.playerTick(), phase, ticket.partialTick,
-        ticket.presentation, flightPixels, impactPixels, control, stable));
+        ticket.presentation, ticket.flightAge, ticket.impactAge, flightPixels, impactPixels, control, stable));
   }
 
   public boolean done() { return settled != null; }
@@ -245,7 +248,7 @@ public final class VisualShotProbe {
     completion = CompletableFuture.supplyAsync(() -> {
       writeEvidence();
       verify();
-      return List.of("visual/real projectile appears in the main image after muzzle flash and before impact",
+      return List.of("visual/real projectile appears in the main image between launch and impact",
           "visual/real failed-surface impact sparks disappear after their lifetime");
     }, Util.ioPool());
     return completion;
@@ -258,17 +261,19 @@ public final class VisualShotProbe {
     int halfWidth = frame.width() / 24, halfHeight = frame.height() / 6;
     FrameCapture.Region corridor = new FrameCapture.Region((int) aim.x() - halfWidth, (int) aim.y() - halfHeight,
         halfWidth * 2, halfHeight * 2);
-    flight = intersect(flight, intersect(corridor, frame.whole()));
+    flight = flight.intersection(corridor)
+        .orElseThrow(() -> new AssertionError("Authored shot regions do not intersect the window"));
     FrameCapture.Region impact = project(frame, spec.impactVolume);
     FrameCapture.Region control = project(frame, spec.controlVolume);
-    if (overlaps(control, flight) || overlaps(control, impact))
+    if (control.intersection(flight).isPresent() || control.intersection(impact).isPresent())
       throw new AssertionError("The authored control region overlaps shot evidence on screen");
     return new FrameCapture.Region[] {flight, impact, control};
   }
 
-  private Pixels changedPixels(FrameCapture.Frame frame, FrameCapture.Region region, boolean flight) {
+  private Pixels changedPixels(FrameCapture.Frame frame, FrameCapture.Region region, boolean flight,
+                               FrameCapture.Region excluded) {
     int count = 0, minX = frame.width(), minY = frame.height(), maxX = -1, maxY = -1;
-    int hueChanges = 0, negativeResidual = 0, outsideTrajectory = 0;
+    int hueChanges = 0, negativeResidual = 0, outsideTrajectory = 0, impactArea = 0;
     Trajectory trajectory = flight ? trajectory(frame) : null;
     for (int y = region.y(); y < region.y() + region.height(); y++)
       for (int x = region.x(); x < region.x() + region.width(); x++) {
@@ -288,11 +293,16 @@ public final class VisualShotProbe {
           outsideTrajectory++;
           continue;
         }
+        if (excluded != null && x >= excluded.x() && x < excluded.x() + excluded.width()
+            && y >= excluded.y() && y < excluded.y() + excluded.height()) {
+          impactArea++;
+          continue;
+        }
         count++; minX = Math.min(minX, x); minY = Math.min(minY, y);
         maxX = Math.max(maxX, x); maxY = Math.max(maxY, y);
       }
     return new Pixels(count, count == 0 ? 0 : maxX - minX + 1, count == 0 ? 0 : maxY - minY + 1,
-        hueChanges, negativeResidual, outsideTrajectory);
+        hueChanges, negativeResidual, outsideTrajectory, impactArea);
   }
 
   private Trajectory trajectory(FrameCapture.Frame frame) {
@@ -385,18 +395,5 @@ public final class VisualShotProbe {
 
   private static FrameCapture.Region project(FrameCapture.Frame frame, AABB box) {
     return frame.project(box).orElseThrow(() -> new AssertionError("Authored shot region is outside the window: " + box));
-  }
-
-  private static FrameCapture.Region intersect(FrameCapture.Region first, FrameCapture.Region second) {
-    int x = Math.max(first.x(), second.x()), y = Math.max(first.y(), second.y());
-    int right = Math.min(first.x() + first.width(), second.x() + second.width());
-    int bottom = Math.min(first.y() + first.height(), second.y() + second.height());
-    if (right <= x || bottom <= y) throw new AssertionError("Authored shot regions do not intersect the window");
-    return new FrameCapture.Region(x, y, right - x, bottom - y);
-  }
-
-  private static boolean overlaps(FrameCapture.Region first, FrameCapture.Region second) {
-    return first.x() < second.x() + second.width() && second.x() < first.x() + first.width()
-        && first.y() < second.y() + second.height() && second.y() < first.y() + first.height();
   }
 }

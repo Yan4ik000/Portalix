@@ -28,18 +28,16 @@ public final class GunIndicatorRenderer {
 
   private GunIndicatorRenderer() {}
 
-  public static void loadResources() {
+  static void loadResources(ParticleMaterialLibrary definitions) {
     systems =
         new SourceParticleSystem.Library(
             ModAssetLoader.json("/assets/portalix/source_particles/indicator.json"));
-    var definitions = new ParticleMaterialLibrary();
-    definitions.prepareRenderTypes();
     var compiled = new HashMap<String, Binding>();
     systems.definitions.forEach(
         (name, definition) -> {
           var program = definition.program();
           if (program == null) return;
-          var material = definitions.system(name).material();
+          var material = definitions.material(program.material);
           if (program.renderer instanceof Renderer.Trail)
             throw new IllegalArgumentException("Unsupported gun indicator trail: " + name);
           compiled.put(
@@ -294,8 +292,6 @@ public final class GunIndicatorRenderer {
           ParticleSpline.tangent(
               a.get(axis), particles[b + axis], particles[c + axis], d.get(axis), t));
     }
-    // Preserve addition of the original zero anchor, including signed-zero coordinates.
-    point.add(0, 0, 0);
     tangent.cross(work.set(camera).sub(point));
     if (tangent.lengthSquared() > 0) tangent.normalize();
     result[0] = point.x;

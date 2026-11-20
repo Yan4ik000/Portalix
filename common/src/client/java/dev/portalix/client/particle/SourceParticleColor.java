@@ -30,8 +30,15 @@ final class SourceParticleColor {
     return (float) Math.pow(packed, GAMMA);
   }
 
-  static float packedColor(float channel) {
+  static Vector3f linearColor(Vector3f rgb) {
+    return new Vector3f(linearColor(rgb.x), linearColor(rgb.y), linearColor(rgb.z));
+  }
 
+  static float packedAlpha(float alpha) {
+    return packedColor(Math.clamp(alpha, 0, 1));
+  }
+
+  static float packedColor(float channel) {
     return (Float.floatToRawIntBits(channel * 255.0F + 8388608.0F) & 255) / 255.0F;
   }
 }

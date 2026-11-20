@@ -14,7 +14,8 @@ import java.util.Map.Entry;
 import java.util.Set;
 import net.minecraft.resources.Identifier;
 
-final class ParticleMaterialLibrary {
+public final class ParticleMaterialLibrary {
+  private final Map<String, Material> materials;
   private final Map<String, Definition> systems;
 
   ParticleMaterialLibrary() {
@@ -108,9 +109,8 @@ final class ParticleMaterialLibrary {
           renderers.add(new Renderer(kind, subdivisions, texel, scroll));
         }
 
-        Material material =
-            source.has("material") ? materials.get(source.get("material").getAsString()) : null;
-        if (!renderers.isEmpty() && material == null) {
+        Material material = materials.get(source.get("material").getAsString());
+        if (material == null) {
           throw new IllegalArgumentException("Missing Source material " + entry.getKey());
         }
 
@@ -120,16 +120,30 @@ final class ParticleMaterialLibrary {
       }
     }
 
+    this.materials = Map.copyOf(materials);
     this.systems = Map.copyOf(definitions);
   }
 
-  void prepareRenderTypes() {
+  public static void reloadRenderers() {
+    var library = new ParticleMaterialLibrary();
+    library.prepareRenderTypes();
+    CarryParticleRenderer.loadResources(library);
+    GunIndicatorRenderer.loadResources(library);
+  }
+
+  private void prepareRenderTypes() {
     for (Material material :
         systems.values().stream().map(Definition::material).distinct().toList()) {
-      if (material == null) continue;
       ParticleRenderTypes.source(material.texture(), material.overbright(), material.ignoreDepth());
-      ParticleRenderTypes.spritecard(material.texture(), material.overbright(), material.ignoreDepth());
     }
+  }
+
+  Material material(String name) {
+    Material value = materials.get(name);
+    if (value == null) {
+      throw new IllegalArgumentException("Unknown Source material " + name);
+    }
+    return value;
   }
 
   Definition system(String name) {

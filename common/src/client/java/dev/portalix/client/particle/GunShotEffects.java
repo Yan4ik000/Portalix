@@ -16,6 +16,7 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.OrderedSubmitNodeCollector;
 import net.minecraft.resources.Identifier;
 import net.minecraft.server.level.ParticleStatus;
+import net.minecraft.util.Mth;
 import net.minecraft.world.level.ClipContext;
 import net.minecraft.world.level.ClipContext.Block;
 import net.minecraft.world.level.ClipContext.Fluid;
@@ -29,6 +30,8 @@ public final class GunShotEffects {
   private static final double SPARK_COLLISION_RANGE_SQUARED = 64.0 * 64.0;
   private static final Identifier TEX_MUZZLE =
       PortalixMod.id("textures/effects/particle_glow_05.png");
+  private static final double MUZZLE_LENGTH = .07;
+  private static final float MUZZLE_RADIUS = .26F;
   private static final int MAX_SHOTS = 128;
   private static final int IMPACT_LIFETIME_TICKS = 25;
   private static final int COLLISION_TRACE_BUDGET = 256;
@@ -175,7 +178,7 @@ public final class GunShotEffects {
         double length = shot.length;
         boolean orange = shot.data.orange();
 
-        if (age < 0.8) {
+        if (age < 0.8 && ParticleVisibility.visible(shot.muzzleBounds, view)) {
           float life = (float) (age / 0.8);
           float fade = 1.0F - life;
           int rgb = shot.data.variant().particleGlowColor(orange);
@@ -195,14 +198,14 @@ public final class GunShotEffects {
               TEX_MUZZLE,
               (pose, vertices) -> {
                 for (int i = 0; i < 4; i++) {
-                  double distance = 0.01 + 0.06 * (i / 3.0);
+                  double distance = Mth.lerp(i / 3.0, .01, MUZZLE_LENGTH);
                   Vec3 position = muzzle.add(direction.scale(distance));
                   Vector3f center =
                       new Vector3f(
                           (float) (position.x - camera.x),
                           (float) (position.y - camera.y),
                           (float) (position.z - camera.z));
-                  float radius = (0.16F + 0.10F * (i / 3.0F)) * fade;
+                  float radius = Mth.lerp(i / 3.0F, .16F, MUZZLE_RADIUS) * fade;
                   int alpha = (int) (240 * fade);
                   ParticleGeometry.sprite(pose, vertices, center, right, up, radius, red, green, blue, alpha);
                 }
@@ -250,13 +253,17 @@ public final class GunShotEffects {
     final double tick;
     final double length;
     final AABB bounds;
+    final AABB muzzleBounds;
 
     Shot(GunShotPayload data, double tick) {
       this.data = data;
       this.tick = tick;
       this.length = data.start().distanceTo(data.end());
-      Vec3 auxiliary = data.start().add(data.launchDirection().normalize().scale(this.length));
+      var direction = data.launchDirection().normalize();
+      Vec3 auxiliary = data.start().add(direction.scale(this.length));
       this.bounds = ParticleVisibility.ropeBounds(data.start(), auxiliary, data.end());
+      this.muzzleBounds = new AABB(data.start(), data.start().add(direction.scale(MUZZLE_LENGTH)))
+          .inflate(Math.sqrt(2) * MUZZLE_RADIUS);
       this.projectile =
           new PortalShotParticleSystem(
               data.start(),

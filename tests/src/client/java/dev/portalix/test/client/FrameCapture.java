@@ -161,6 +161,14 @@ public final class FrameCapture {
       if (width <= 0 || height <= 0) throw new IllegalArgumentException("Empty region");
     }
     public int area() { return Math.multiplyExact(width, height); }
+
+    Optional<Region> intersection(Region other) {
+      int left = Math.max(x, other.x), top = Math.max(y, other.y);
+      int right = Math.min(x + width, other.x + other.width);
+      int bottom = Math.min(y + height, other.y + other.height);
+      return right <= left || bottom <= top ? Optional.empty()
+          : Optional.of(new Region(left, top, right - left, bottom - top));
+    }
   }
 
   public record Statistics(int samples, int matched, double fraction, double meanLuminance,

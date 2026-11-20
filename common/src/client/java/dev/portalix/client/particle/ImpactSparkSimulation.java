@@ -21,6 +21,7 @@ final class ImpactSparkSimulation {
   double simulated;
   private int emitted;
   private int substep;
+  private int previousCollisionParticles;
 
   ImpactSparkSimulation(
       Vec3 origin,
@@ -70,16 +71,8 @@ final class ImpactSparkSimulation {
               ? (0.35 + 0.45 * random.nextDouble())
               : (0.2 + 0.6 * Math.pow(random.nextDouble(), 3.0));
       double radius = (1.0 + random.nextDouble() * 0.8) * SOURCE_UNIT_BLOCKS;
-      double trail = 0.2;
-      this.sparks.add(new Spark(start, velocity, life, radius, trail));
+      this.sparks.add(new Spark(start, velocity, life, radius));
     }
-  }
-
-  double radiusScale(double normalizedAge) {
-    if (!Double.isFinite(normalizedAge) || normalizedAge < 0.0 || normalizedAge >= 1.0) {
-      return 0.0;
-    }
-    return Math.clamp(1.0 - normalizedAge, 0.0, 1.0);
   }
 
   void advance(double age, CollisionTracer trace, int collisionParticles, int stride) {
@@ -95,6 +88,17 @@ final class ImpactSparkSimulation {
       emitted = sparks.size();
       return;
     }
+    if (simulated + STEP > target + 1.0E-8) return;
+    int firstNewCollisionParticle = Math.ceilDiv(previousCollisionParticles, stride) * stride;
+    int collisionLimit = Math.min(collisionParticles, sparks.size());
+    for (int index = firstNewCollisionParticle; index < collisionLimit; index += stride) {
+      Spark spark = sparks.get(index);
+      spark.cx = spark.x;
+      spark.cy = spark.y;
+      spark.cz = spark.z;
+    }
+    previousCollisionParticles = collisionParticles;
+
     float step = (float) STEP;
     float damping = this.validSurface ? 0.08F : 0.05F;
     float momentum = SourceParticleKinematics.momentumScale(damping, step, step);
@@ -173,10 +177,9 @@ final class ImpactSparkSimulation {
     double vx, vy, vz;
     final double life;
     final double radius;
-    final double initialTrail;
     double birth = Double.NaN;
 
-    Spark(Vec3 position, Vec3 velocity, double life, double radius, double trail) {
+    Spark(Vec3 position, Vec3 velocity, double life, double radius) {
       x = px = cx = position.x;
       y = py = cy = position.y;
       z = pz = cz = position.z;
@@ -185,7 +188,6 @@ final class ImpactSparkSimulation {
       vz = velocity.z;
       this.life = life;
       this.radius = radius;
-      this.initialTrail = trail;
     }
   }
 }

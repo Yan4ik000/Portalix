@@ -229,17 +229,6 @@ public final class PortalParticleMesh {
         b.alpha());
   }
 
-  private static float packed(float value) {
-    return SourceParticleColor.packedColor(Math.clamp(value, 0, 1));
-  }
-
-  private static Vector3f linear(Vector3f color) {
-    return new Vector3f(
-        SourceParticleColor.linearColor(color.x),
-        SourceParticleColor.linearColor(color.y),
-        SourceParticleColor.linearColor(color.z));
-  }
-
   private static int color(Vector3f rgb, float alpha) {
     return Math.clamp(Math.round(alpha * 255), 0, 255) << 24
         | Math.clamp(Math.round(rgb.x * 255), 0, 255) << 16
@@ -261,8 +250,10 @@ public final class PortalParticleMesh {
       SourceParticleSystem.Particle pb) {
     quad(
         out,
-        new Sample(a, sideA, radiusA, packed(pa.alpha * pa.alpha2), linear(pa.rgb)),
-        new Sample(b, sideB, radiusB, packed(pb.alpha * pb.alpha2), linear(pb.rgb)),
+        new Sample(a, sideA, radiusA, SourceParticleColor.packedAlpha(pa.alpha * pa.alpha2),
+            SourceParticleColor.linearColor(pa.rgb)),
+        new Sample(b, sideB, radiusB, SourceParticleColor.packedAlpha(pb.alpha * pb.alpha2),
+            SourceParticleColor.linearColor(pb.rgb)),
         u,
         next);
   }

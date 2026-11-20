@@ -36,8 +36,6 @@ final class PortalShotParticleProgram {
 
   private record Initialization(boolean modifier, Initializer action) {}
 
-  record Operation(boolean decay, Operator action) {}
-
   record Child(PortalShotParticleProgram program, float delay) {}
 
   record Library(float maximumStep, List<Child> children) {
@@ -70,7 +68,7 @@ final class PortalShotParticleProgram {
   final boolean rope;
   final float texelScale;
   final List<Initializer> initializers;
-  final List<Operation> operators;
+  final List<Operator> operators;
 
   private PortalShotParticleProgram(JsonObject definition) {
     limit = (int) scalar(definition, "max_particles");
@@ -91,13 +89,9 @@ final class PortalShotParticleProgram {
     }
     initialization.sort(Comparator.comparing(Initialization::modifier));
     initializers = initialization.stream().map(Initialization::action).toList();
-    var operations = new ArrayList<Operation>();
-    for (JsonElement value : definition.getAsJsonArray("operators")) {
-      JsonObject operator = value.getAsJsonObject();
-      boolean decay =
-          name(operator).equals("Lifespan Decay") || name(operator).equals("Alpha Fade and Decay");
-      operations.add(new Operation(decay, compileOperator(operator)));
-    }
+    var operations = new ArrayList<Operator>();
+    for (JsonElement value : definition.getAsJsonArray("operators"))
+      operations.add(compileOperator(value.getAsJsonObject()));
     operators = List.copyOf(operations);
     JsonObject renderer = definition.getAsJsonArray("renderers").get(0).getAsJsonObject();
     rope = name(renderer).equals("render_rope");
@@ -179,7 +173,25 @@ final class PortalShotParticleProgram {
   }
 
   private static Operator compileOperator(JsonObject fields) {
-    if (name(fields).equals("Movement Lock to Control Point")) {
+    String operator = name(fields);
+    if (operator.equals("Lifespan Decay")) {
+      return (collection, time, _, _, _, _) ->
+          collection.particles.removeIf(particle -> particle.expired(time));
+    }
+    if (operator.equals("Alpha Fade and Decay")) {
+      float inStart = scalar(fields, "start_fade_in_time"), inEnd = scalar(fields, "end_fade_in_time");
+      float outStart = scalar(fields, "start_fade_out_time"), outEnd = scalar(fields, "end_fade_out_time");
+      float startAlpha = scalar(fields, "start_alpha"), endAlpha = scalar(fields, "end_alpha");
+      return (collection, time, _, _, _, _) -> collection.particles.removeIf(particle -> {
+        if (particle.expired(time)) return true;
+        float life = (time - particle.birth) / particle.life;
+        float alpha = life < inEnd ? fade(life, inStart, inEnd, startAlpha, 1.0F)
+            : life >= outStart ? fade(life, outStart, outEnd, 1.0F, endAlpha) : 1.0F;
+        particle.alpha = particle.initialAlpha * alpha;
+        return false;
+      });
+    }
+    if (operator.equals("Movement Lock to Control Point")) {
       float startMinimum = scalar(fields, "start_fadeout_min");
       float startMaximum = scalar(fields, "start_fadeout_max");
       float endMinimum = scalar(fields, "end_fadeout_min");
@@ -202,15 +214,15 @@ final class PortalShotParticleProgram {
         }
       };
     }
-    ParticleOperator action = compileParticleOperator(fields);
+    ParticleOperator action = compileParticleOperator(operator, fields);
     return (collection, time, dt, control, previousControl, offset) -> {
       for (Particle particle : collection.particles)
         action.apply(collection, particle, time, dt, control, offset);
     };
   }
 
-  private static ParticleOperator compileParticleOperator(JsonObject fields) {
-    return switch (name(fields)) {
+  private static ParticleOperator compileParticleOperator(String operator, JsonObject fields) {
+    return switch (operator) {
       case "Movement Basic" -> {
         Vector3f gravity = vector(fields, "gravity").mul(UNIT);
         float drag = scalar(fields, "drag");
@@ -272,18 +284,6 @@ final class PortalShotParticleProgram {
             particle.position.setComponent(component, particle.position.get(component)
                 + rate * dt * UNIT * sourceSine(frequency * clock * multiplier + phase));
           }
-        };
-      }
-      case "Lifespan Decay" -> (collection, particle, time, dt, control, offset) -> {};
-      case "Alpha Fade and Decay" -> {
-        float inStart = scalar(fields, "start_fade_in_time"), inEnd = scalar(fields, "end_fade_in_time");
-        float outStart = scalar(fields, "start_fade_out_time"), outEnd = scalar(fields, "end_fade_out_time");
-        float startAlpha = scalar(fields, "start_alpha"), endAlpha = scalar(fields, "end_alpha");
-        yield (collection, particle, time, dt, control, offset) -> {
-          float life = (time - particle.birth) / particle.life;
-          float alpha = life < inEnd ? fade(life, inStart, inEnd, startAlpha, 1.0F)
-              : life >= outStart ? fade(life, outStart, outEnd, 1.0F, endAlpha) : 1.0F;
-          particle.alpha = particle.initialAlpha * alpha;
         };
       }
       case "Remap Distance to Control Point to Scalar" -> {

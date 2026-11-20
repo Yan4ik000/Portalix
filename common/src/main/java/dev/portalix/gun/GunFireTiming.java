@@ -9,6 +9,6 @@ public final class GunFireTiming {
   private GunFireTiming() {}
 
   public static int shotTravelTicks(double distance) {
-    return 2 + Math.max(2, (int) Math.ceil(distance / PROJECTILE_BLOCKS_PER_TICK));
+    return Math.max(1, (int) Math.ceil(distance / PROJECTILE_BLOCKS_PER_TICK));
   }
 }

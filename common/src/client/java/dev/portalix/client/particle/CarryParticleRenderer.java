@@ -132,9 +132,7 @@ public final class CarryParticleRenderer {
     }
   }
 
-  public static void loadResources() {
-    ParticleMaterialLibrary definitions = new ParticleMaterialLibrary();
-    definitions.prepareRenderTypes();
+  static void loadResources(ParticleMaterialLibrary definitions) {
     ParticleRecordingPlayer fp = loadPlayback("holding_fp", definitions);
     ParticleRecordingPlayer tp = loadPlayback("holding_tp", definitions);
     CarryParticleRenderer.definitions = definitions;

@@ -2,6 +2,7 @@ package dev.portalix.test;
 
 import static dev.portalix.test.ServerRegressionSuite.check;
 
+import dev.portalix.gun.GunFireTiming;
 import dev.portalix.item.ModItems;
 import dev.portalix.item.PortalixVariant;
 import dev.portalix.item.PortalixIdentity;
@@ -22,6 +23,7 @@ final class GunShootingRegression implements ServerRegressionSuite.Scenario {
   private final boolean noGravity;
   private final UUID gun;
   private int started = -1;
+  private int lastFireTick;
   private int phase;
 
   GunShootingRegression(RegressionWorld world) {
@@ -49,14 +51,15 @@ final class GunShootingRegression implements ServerRegressionSuite.Scenario {
       started = now;
       return false;
     }
-    check(now - started < 100, "Portalix did not complete firing and reset");
+    var links = PortalTopology.links(world.level).stream().filter(link -> link.gun().equals(gun)).toList();
+    check(now - started < 100, "Portalix did not complete firing and reset: phase=" + phase
+        + ", ticksSinceFire=" + (now - lastFireTick) + ", links=" + links);
     if (phase == 0) {
-      if (now - started < 10) return false;
+      if (now - lastFireTick < GunFireTiming.ACTION_COOLDOWN_TICKS) return false;
       fire(GunCommand.FIRE_ORANGE, 163.5);
       phase = 1;
       return false;
     }
-    var links = PortalTopology.links(world.level).stream().filter(link -> link.gun().equals(gun)).toList();
     if (phase == 1) {
       if (links.isEmpty()) return false;
       check(links.size() == 2, "Two shots did not create a traversable portal pair");
@@ -66,13 +69,14 @@ final class GunShootingRegression implements ServerRegressionSuite.Scenario {
     }
     if (phase == 2) {
       check(links.isEmpty(), "Reset left the portal pair active");
+      if (now - lastFireTick < GunFireTiming.ACTION_COOLDOWN_TICKS) return false;
       fire(GunCommand.FIRE_BLUE, 154.5);
       started = now;
       phase = 3;
       return false;
     }
     if (phase == 3) {
-      if (now - started < 10) return false;
+      if (now - lastFireTick < GunFireTiming.ACTION_COOLDOWN_TICKS) return false;
       fire(GunCommand.FIRE_ORANGE, 163.5);
       phase = 4;
       return false;
@@ -90,9 +94,13 @@ final class GunShootingRegression implements ServerRegressionSuite.Scenario {
   }
 
   private void fire(GunCommand command, double x) {
+    int now = world.level.getServer().getTickCount();
+    check(started < 0 || now - lastFireTick >= GunFireTiming.ACTION_COOLDOWN_TICKS,
+        "The firing scenario issued a command during cooldown: " + command + ", phase=" + phase);
     world.player.snapTo(x, 104 - world.player.getEyeHeight(), 152.5, 0, 0);
     world.player.setDeltaMovement(Vec3.ZERO);
     session.handle(world.player, command);
+    lastFireTick = now;
   }
 
   @Override

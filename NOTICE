@@ -25,7 +25,7 @@ common/src/main/resources/assets/portalix/; in the JAR, relative to assets/porta
 - source_particles/ and portals/ — material and particle definitions, effect
   recordings and extracted data tables;
 - sounds/*.ogg and source_sound_settings.json — sounds and their parameters;
-- gun_palettes.json — particle, crosshair and portal palettes extracted from Portal 2.
+- gun_palettes.json - particle and portal palettes, including colors extracted from Portal 2.
 
 This list includes converted and edited versions of these materials,
 as well as extracted animation frame coordinates in the accompanying .png.mcmeta files.

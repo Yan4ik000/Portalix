@@ -3,9 +3,8 @@ package dev.portalix.client;
 import dev.portalix.PortalixMod;
 import dev.portalix.client.gun.model.GunMaterialTypes;
 import dev.portalix.client.gun.model.GunModels;
-import dev.portalix.client.particle.CarryParticleRenderer;
-import dev.portalix.client.particle.GunIndicatorRenderer;
 import dev.portalix.client.particle.GunShotEffects;
+import dev.portalix.client.particle.ParticleMaterialLibrary;
 import dev.portalix.client.particle.SourceParticleSystem;
 import dev.portalix.client.platform.ClientPlatform;
 import dev.portalix.client.portal.scene.PortalSceneManager;
@@ -34,8 +33,7 @@ public final class ModResourceReload extends SimplePreparableReloadListener<Void
     ParticleRenderTypes.clear();
     GunMaterialTypes.clear();
     GunModels.load();
-    CarryParticleRenderer.loadResources();
-    GunIndicatorRenderer.loadResources();
+    ParticleMaterialLibrary.reloadRenderers();
     GunShotEffects.loadResources();
   }
 
