@@ -20,6 +20,7 @@ import com.mojang.blaze3d.vertex.DefaultVertexFormat;
 import com.mojang.blaze3d.vertex.VertexConsumer;
 import dev.portalix.PortalixMod;
 import dev.portalix.api.PortalEndpoint;
+import dev.portalix.client.ModResourceReload;
 import dev.portalix.client.compat.iris.IrisEffectTarget;
 import dev.portalix.client.compat.ShaderBackend;
 import dev.portalix.client.compat.iris.IrisShaders;
@@ -314,6 +315,7 @@ public final class PortalSurfaceRenderer implements FeatureRenderer<PortalSurfac
     }
     Background background = null;
     PortalScreenRegion backgroundRegion = null;
+    boolean bundledShaders = ModResourceReload.bundledPortalShaders();
     Matrix4f viewProjection = null;
     StagedVertexBuffer staged = context.stagedVertexBuffer();
     List<PreparedDraw> draws = new ArrayList<>();
@@ -337,14 +339,20 @@ public final class PortalSurfaceRenderer implements FeatureRenderer<PortalSurfac
       if (mesh.size() >= 3) {
         if (background == null) background = prepareBackground();
         int width = background.texture.getWidth(0), height = background.texture.getHeight(0);
-        var region = PortalScreenRegion.project(mesh, viewProjection, width, height);
-        // The opening shader refracts outside the mesh. A settled rim only reads under itself.
-        var samples = submit.open < 1 ? PortalScreenRegion.full(width, height) : region;
-        backgroundRegion = samples.union(backgroundRegion);
+        var region = bundledShaders
+            ? PortalScreenRegion.project(mesh, viewProjection, width, height)
+            : PortalScreenRegion.full(width, height);
+        var scene = PortalSceneManager.portalImage(endpoint);
+        if (!bundledShaders) {
+          backgroundRegion = region;
+        } else if (scene == null || !PortalSurfaceMesh.insideAperture(mesh, submit.open)) {
+          // The opening shader refracts outside the mesh. A settled rim only reads under itself.
+          var samples = submit.open < 1 ? PortalScreenRegion.full(width, height) : region;
+          backgroundRegion = samples.union(backgroundRegion);
+        }
         double clearance = submit.camera.subtract(endpoint.center()).dot(normal);
         // Bias along each camera ray so the surface stays in front of its wall at grazing angles.
         float depthScale = (float) Math.max(.5, 1 - PortalSurfaceMesh.NORMAL_OFFSET / clearance);
-        var scene = PortalSceneManager.portalImage(endpoint);
         var noise =
             context
                 .textureManager()
@@ -497,6 +505,7 @@ public final class PortalSurfaceRenderer implements FeatureRenderer<PortalSurfac
       FeatureFrameContext context, int groupIndex, List<Submit> submits, boolean outline) {
     if (IrisShaders.shadowPass()) return;
     var group = groups.get(groupIndex);
+    if (group.draws.isEmpty()) return;
     var draws = new ArrayList<SurfaceDraw>(group.draws.size());
     for (var draw : group.draws) {
       var geometry =
@@ -505,11 +514,8 @@ public final class PortalSurfaceRenderer implements FeatureRenderer<PortalSurfac
               : null;
       draws.add(new SurfaceDraw(draw.renderType, geometry, draw.particles));
     }
-    if (IrisShaders.active()) {
-      if (!draws.isEmpty()) ShaderBackend.INSTANCE.submit(() -> executeSurfaces(group, draws));
-      return;
-    }
-    if (!draws.isEmpty()) executeSurfaces(group, draws);
+    if (IrisShaders.active()) IrisEffectTarget.deferDraw(() -> executeSurfaces(group, draws));
+    else executeSurfaces(group, draws);
   }
 
   private record SurfaceDraw(
@@ -540,7 +546,7 @@ public final class PortalSurfaceRenderer implements FeatureRenderer<PortalSurfac
 
   private void drawSurfaces(PreparedGroup group, List<SurfaceDraw> draws) {
     var background = group.background;
-    if (background != null) {
+    if (group.backgroundRegion != null) {
       var color = RenderSystem.outputColorTextureOverride;
       var source = color == null ? background.source : color.texture();
       var region = group.backgroundRegion;

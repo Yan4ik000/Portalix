@@ -40,15 +40,6 @@ public record PortalScreenRegion(int x, int y, int width, int height) {
     return new PortalScreenRegion(left, bottom, right - left, top - bottom);
   }
 
-  public PortalScreenRegion scaleTo(int sourceWidth, int sourceHeight, int targetWidth, int targetHeight) {
-    if (sourceWidth == targetWidth && sourceHeight == targetHeight) return this;
-    int left = (int) ((long) x * targetWidth / sourceWidth);
-    int bottom = (int) ((long) y * targetHeight / sourceHeight);
-    int right = (int) Math.ceilDiv((long) (x + width) * targetWidth, sourceWidth);
-    int top = (int) Math.ceilDiv((long) (y + height) * targetHeight, sourceHeight);
-    return new PortalScreenRegion(left, bottom, right - left, top - bottom);
-  }
-
   public PortalScreenRegion clip(int width, int height) {
     int right = x + this.width, top = y + this.height;
     if (right <= width && top <= height) return this;

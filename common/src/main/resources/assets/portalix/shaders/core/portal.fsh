@@ -53,19 +53,19 @@ void main() {
     vec3 rimColor = TextureMat[3].y > 0.5
         ? gradient * ColorModulator.rgb
         : srgbToLinear(texture(Sampler2, vec2(gradient)).rgb) * 4.0;
-    vec3 base = srgbToLinear(texture(Sampler0, fragmentUv).rgb);
-    bool hasBase = false;
+    vec3 base;
     if (TextureMat[3].x > 0.5 && aperture == 1.0) {
         base = srgbToLinear(texture(PortalScene, fragmentUv * TextureMat[2].xy + TextureMat[2].zw).rgb);
-        hasBase = true;
-    } else if (ModelOffset.x < 1.0) {
-        vec4 refracted = sourcePortalRefraction(portalUv, tangentPosition, bitangentPosition, screenPosition, ModelOffset.x);
-        if (refracted.a > 0.5) {
-            base = refracted.rgb;
-            hasBase = true;
+    } else {
+        vec4 refracted = vec4(0.0);
+        if (ModelOffset.x < 1.0)
+            refracted = sourcePortalRefraction(portalUv, tangentPosition, bitangentPosition, screenPosition, ModelOffset.x);
+        if (refracted.a > 0.5) base = refracted.rgb;
+        else {
+            if (rim.x <= 1.0 / 255.0) discard;
+            base = srgbToLinear(texture(Sampler0, fragmentUv).rgb);
         }
     }
-    if (!hasBase && rim.x <= 1.0 / 255.0) discard;
     fragColor = vec4(linearToSrgb(clamp(mix(base, rimColor, clamp(rim.x, 0.0, 1.0)), 0.0, 1.0)), 1.0);
 #endif
 }

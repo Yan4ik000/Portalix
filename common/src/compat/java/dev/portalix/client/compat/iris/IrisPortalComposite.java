@@ -13,12 +13,11 @@ import com.mojang.blaze3d.textures.FilterMode;
 import com.mojang.blaze3d.textures.GpuTexture;
 import com.mojang.blaze3d.textures.GpuTextureView;
 import dev.portalix.PortalixMod;
+import dev.portalix.client.ModResourceReload;
 import dev.portalix.client.mixin.compat.iris.IrisRenderingPipelineAccessor;
 import dev.portalix.client.portal.render.PortalScreenRegion;
 import java.util.ArrayList;
-import java.util.IdentityHashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
 import java.util.OptionalDouble;
 import net.irisshaders.iris.Iris;
@@ -40,7 +39,7 @@ public final class IrisPortalComposite {
               .withDepthStencilState(new DepthStencilState(CompareOp.GREATER_THAN_OR_EQUAL, true))
               .withCull(false)
               .build());
-  private static final Map<RenderTarget, Frame> frames = new IdentityHashMap<>();
+  private static final ScopedValue<Frame> renderFrame = ScopedValue.newInstance();
   private static IrisRenderingPipelineAccessor handPipeline;
   private static GpuTextureView worldDepth;
   private static GpuTextureView handDepth;
@@ -54,39 +53,40 @@ public final class IrisPortalComposite {
     final List<Runnable> surfaces = new ArrayList<>();
     PortalScreenRegion surfaceRegion;
     PortalScreenRegion openedRegion;
+    boolean composited;
   }
 
-  private static Frame frame() {
-    var target = Minecraft.getInstance().gameRenderer.mainRenderTarget();
-    return frames.computeIfAbsent(target, ignored -> new Frame());
+  public static void renderLevel(Runnable render) {
+    // Draws borrow staged geometry from this invocation of LevelRenderer.render.
+    ScopedValue.where(renderFrame, new Frame()).run(render);
   }
 
   public static void aperture(PortalScreenRegion region, Runnable draw) {
-    var frame = frame();
+    var frame = renderFrame.get();
     frame.apertures.add(draw);
     frame.surfaceRegion = region.union(frame.surfaceRegion);
   }
 
   @SuppressWarnings("try")
   public static void beforeHand(IrisRenderingPipelineAccessor pipeline) {
+    var frame = renderFrame.get();
+    if (frame.apertures.isEmpty()) return;
     var target = Minecraft.getInstance().gameRenderer.mainRenderTarget();
-    var frame = frames.get(target);
-    if (frame == null || frame.apertures.isEmpty()) return;
     var depth = pipeline.portalix$targets().getDepthTexture();
-    try (var ignored = IrisEffectTarget.begin()) {
-      var color = RenderSystem.outputColorTextureOverride;
-      if (color == null) color = target.getColorTextureView();
-      int width = color.getWidth(0), height = color.getHeight(0);
-      frame.openedRegion = frame.surfaceRegion.scaleTo(target.width, target.height, width, height)
-          .clip(Math.min(width, depth.getWidth(0)), Math.min(height, depth.getHeight(0)));
-      // The aperture uses Iris's viewport. The final surface samples this copy in the main viewport.
-      var region = frame.surfaceRegion.union(frame.openedRegion);
-      RenderSystem.getDevice()
-          .createCommandEncoder()
-          .copyTextureToTexture(
-              depth, occlusion, 0, region.x(), region.y(),
-              region.x(), region.y(), region.width(), region.height());
-      if (frame.openedRegion != null) frame.apertures.forEach(Runnable::run);
+    int width = Math.min(target.width, Math.min(depth.getWidth(0), occlusion.getWidth(0)));
+    int height = Math.min(target.height, Math.min(depth.getHeight(0), occlusion.getHeight(0)));
+    var region = ModResourceReload.bundledPortalDepthShaders()
+        ? frame.surfaceRegion.clip(width, height) : PortalScreenRegion.full(width, height);
+    if (region != null) {
+      try (var ignored = IrisEffectFramebuffer.beginDepth(target)) {
+        RenderSystem.getDevice()
+            .createCommandEncoder()
+            .copyTextureToTexture(
+                depth, occlusion, 0, region.x(), region.y(),
+                region.x(), region.y(), region.width(), region.height());
+        frame.apertures.forEach(Runnable::run);
+        frame.openedRegion = region;
+      }
     }
     frame.apertures.clear();
     frame.surfaceRegion = null;
@@ -94,16 +94,14 @@ public final class IrisPortalComposite {
 
   @SuppressWarnings("try")
   public static void restoreDepth() {
+    var frame = renderFrame.get();
+    if (frame.openedRegion == null) return;
     var target = Minecraft.getInstance().gameRenderer.mainRenderTarget();
-    var frame = frames.get(target);
-    if (frame == null || frame.openedRegion == null) return;
     var region = frame.openedRegion;
     frame.openedRegion = null;
-    try (var ignored = IrisEffectTarget.begin()) {
-      var color = RenderSystem.outputColorTextureOverride;
-      var depth = RenderSystem.outputDepthTextureOverride;
-      if (color == null) color = target.getColorTextureView();
-      if (depth == null) depth = target.getDepthTextureView();
+    try (var ignored = IrisEffectFramebuffer.beginDepth(target)) {
+      var color = target.getColorTextureView();
+      var depth = target.getDepthTextureView();
       region = region.clip(Math.min(color.getWidth(0), depth.getWidth(0)),
           Math.min(color.getHeight(0), depth.getHeight(0)));
       if (region == null) return;
@@ -176,17 +174,18 @@ public final class IrisPortalComposite {
   }
 
   public static void submit(Runnable draw) {
-    frame().surfaces.add(draw);
+    var frame = renderFrame.isBound() ? renderFrame.get() : null;
+    if (frame != null && !frame.composited && IrisShaders.active()) frame.surfaces.add(draw);
+    else draw.run();
   }
 
   public static void finish() {
-    var target = Minecraft.getInstance().gameRenderer.mainRenderTarget();
-    var pending = frames.remove(target);
-    if (pending != null) pending.surfaces.forEach(Runnable::run);
+    var frame = renderFrame.get();
+    frame.composited = true;
+    frame.surfaces.forEach(Runnable::run);
   }
 
   public static void clear() {
-    frames.clear();
     closeDepth();
   }
 }

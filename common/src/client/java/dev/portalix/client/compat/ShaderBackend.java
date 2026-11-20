@@ -22,10 +22,12 @@ public interface ShaderBackend {
   void register(RenderPipeline pipeline);
   void invalidatePrimaryHistory();
   Scene scene();
+  void renderLevel(Runnable render);
   IrisDrawContext captureDrawContext();
   RenderScope itemContext(Item item);
   RenderScope drawContext(IrisDrawContext context);
   long vertexKey();
+  boolean supportsColorEffects();
   RenderScope beginEffect();
   void clearEffects();
   void endFrame();

@@ -4,6 +4,7 @@ import com.llamalad7.mixinextras.injector.wrapmethod.WrapMethod;
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.mojang.blaze3d.buffers.GpuBufferSlice;
 import com.mojang.blaze3d.resource.GraphicsResourceAllocator;
+import dev.portalix.client.compat.ShaderBackend;
 import dev.portalix.client.portal.scene.PortalSceneManager;
 import net.minecraft.client.DeltaTracker;
 import net.minecraft.client.renderer.LevelRenderer;
@@ -26,6 +27,12 @@ abstract class PortalLevelRendererMixin {
       boolean sky,
       Operation<Void> original) {
     if (!PortalSceneManager.isPortalView()) PortalSceneManager.render(delta, modelView);
-    original.call(resources, delta, outline, camera, modelView, fog, fogColor, sky);
+    var shaders = ShaderBackend.INSTANCE;
+    if (shaders == null) {
+      original.call(resources, delta, outline, camera, modelView, fog, fogColor, sky);
+    } else {
+      shaders.renderLevel(
+          () -> original.call(resources, delta, outline, camera, modelView, fog, fogColor, sky));
+    }
   }
 }

@@ -17,6 +17,8 @@ import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
 import net.irisshaders.iris.Iris;
+import net.irisshaders.iris.gl.texture.InternalTextureFormat;
+import net.irisshaders.iris.gl.texture.ShaderDataType;
 import net.irisshaders.iris.mixin.GpuDeviceAccessor;
 import net.irisshaders.iris.pipeline.IrisRenderingPipeline;
 import net.irisshaders.iris.pipeline.WorldRenderingPipeline;
@@ -29,6 +31,19 @@ public final class IrisEffectFramebuffer {
       new IdentityHashMap<>();
   private IrisEffectFramebuffer() {}
 
+  public static boolean supportsColorEffects() {
+    if (!IrisShaders.active() || ImmediateState.bypass || RenderSystem.outputColorTextureOverride != null)
+      return true;
+    if (!(Iris.getPipelineManager().getPipelineNullable() instanceof IrisRenderingPipeline iris)
+        || !iris.shouldOverrideShaders()) return true;
+    var targets = ((IrisRenderingPipelineAccessor) iris).portalix$targets();
+    var image = findImage(targets, colorAttachment(iris));
+    var depth = targets.getDepthTexture();
+    // Scaled or integer attachments need the post-composite color/depth pair.
+    return image.getInternalFormat().getShaderDataType() == ShaderDataType.FLOAT
+        && image.getWidth() == depth.getWidth(0) && image.getHeight() == depth.getHeight(0);
+  }
+
   public static RenderTarget current() {
     if (!IrisShaders.active()) return Minecraft.getInstance().gameRenderer.mainRenderTarget();
     var pipeline = Iris.getPipelineManager().getPipelineNullable();
@@ -36,25 +51,12 @@ public final class IrisEffectFramebuffer {
       return Minecraft.getInstance().gameRenderer.mainRenderTarget();
     var images = targets.computeIfAbsent(iris, ignored -> new HashMap<>());
     var access = (IrisRenderingPipelineAccessor) iris;
-    var framebuffer =
-        iris.isBeforeTranslucent
-            ? access.portalix$beforeTranslucents()
-            : access.portalix$afterTranslucents();
-    int id = framebuffer.getColorAttachment(0);
+    int id = colorAttachment(iris);
     var target = images.get(id);
     var image = target == null ? findImage(access.portalix$targets(), id) : target.image;
     if (target == null || target.width != image.getWidth() || target.height != image.getHeight()) {
       if (target != null) target.destroyBuffers();
-      GpuFormat format = null;
-      int internal = image.getInternalFormat().getGlFormat();
-      for (GpuFormat candidate : GpuFormat.values()) {
-        if (GlConst.toGlInternalId(candidate) == internal) {
-          format = candidate;
-          break;
-        }
-      }
-      if (format == null)
-        throw new IllegalStateException("Unsupported Iris color format: " + internal);
+      var format = borrowedFormat(image.getInternalFormat());
       var backend = ((GpuDeviceAccessor) RenderSystem.getDevice()).getBackend();
       var cache = ((GlDeviceAccessor) backend).portalix$framebuffers();
       target = new Target(id, format, image, cache);
@@ -63,6 +65,35 @@ public final class IrisEffectFramebuffer {
     target.depth(access.portalix$targets().getDepthTexture());
     target.used = true;
     return target;
+  }
+
+  private static int colorAttachment(IrisRenderingPipeline iris) {
+    var access = (IrisRenderingPipelineAccessor) iris;
+    var framebuffer = iris.isBeforeTranslucent
+        ? access.portalix$beforeTranslucents() : access.portalix$afterTranslucents();
+    return framebuffer.getColorAttachment(0);
+  }
+
+  private static GpuFormat borrowedFormat(InternalTextureFormat format) {
+    // The allocation table omits these RGB formats. Iris already owns the GL image.
+    return switch (format) {
+      case RGB8 -> GpuFormat.RGB8_UNORM;
+      case RGB8_SNORM -> GpuFormat.RGB8_SNORM;
+      case RGB16 -> GpuFormat.RGB16_UNORM;
+      case RGB16_SNORM -> GpuFormat.RGB16_SNORM;
+      case RGB16F -> GpuFormat.RGB16_FLOAT;
+      case RGB32F -> GpuFormat.RGB32_FLOAT;
+      // OpenGL owns the packed format. The Java view supplies the output class
+      // and an allocatable format for color copies.
+      case RGBA2, RGBA4, R3_G3_B2, RGB5_A1, RGB565 -> GpuFormat.RGBA8_UNORM;
+      case RGB9_E5 -> GpuFormat.RGBA16_FLOAT;
+      default -> {
+        for (var candidate : GpuFormat.values()) {
+          if (GlConst.toGlInternalId(candidate) == format.getGlFormat()) yield candidate;
+        }
+        throw new IllegalStateException("Unsupported Iris color format: " + format);
+      }
+    };
   }
 
   private static net.irisshaders.iris.targets.RenderTarget findImage(RenderTargets targets, int texture) {
@@ -76,7 +107,11 @@ public final class IrisEffectFramebuffer {
 
   public static Scope begin() {
     if (!IrisShaders.active() || ImmediateState.bypass) return null;
-    return new Scope(current());
+    return new Scope(RenderSystem.outputColorTextureOverride == null ? current() : null);
+  }
+
+  static Scope beginDepth(RenderTarget target) {
+    return new Scope(target);
   }
 
   public static void clear() {
@@ -118,7 +153,7 @@ public final class IrisEffectFramebuffer {
     private final boolean multiply = ImmediateState.safeToMultiply;
 
     Scope(RenderTarget target) {
-      if (color == null) {
+      if (target != null) {
         RenderSystem.outputColorTextureOverride = target.getColorTextureView();
         RenderSystem.outputDepthTextureOverride = target.getDepthTextureView();
       }

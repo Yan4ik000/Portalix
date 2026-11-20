@@ -21,6 +21,18 @@ public final class PortalSurfaceMesh {
 
   public record Vertex(Vec3 point, float u, float v) {}
 
+  static boolean insideAperture(List<Vertex> polygon, float opening) {
+    // Perspective-correct UVs stay in the convex hull of the clipped vertices.
+    float radius = PortalOpeningAnimation.apertureScale(opening) - 1e-4F;
+    if (radius <= 0) return false;
+    for (var vertex : polygon) {
+      float x = (2 * vertex.u() - 1) * UV_SCALE;
+      float y = (2 * vertex.v() - 1) * UV_SCALE;
+      if (x * x + y * y >= radius * radius) return false;
+    }
+    return true;
+  }
+
   public static List<Vertex> mesh(PortalEndpoint portal, Vec3 camera, Matrix4fc projection) {
     var polygon = new ArrayList<Vertex>();
     for (int corner = 0; corner < 4; corner++) {

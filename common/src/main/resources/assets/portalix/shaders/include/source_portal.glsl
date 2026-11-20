@@ -87,6 +87,10 @@ vec4 sourcePortalRefraction(vec2 t0xy, vec3 t1xyz, vec3 t2xyz, vec3 t4xyz, float
 
 // The rim uses the same noise and coverage for the standard texture and cooperative tint.
 vec2 sourcePortalRim(vec2 uv, vec4 t5, float opening, float idle) {
+    // Inside the settled rim's inner radius (1 - 0.3), its opacity and color contribution are zero.
+    vec2 center = 2.0 * uv - 1.0;
+    if (opening >= 1.0 && idle >= 1.0 && dot(center, center) < 0.4899)
+        return vec2(0.0);
     vec4 t0 = vec4(uv, 0, 0);
     vec4 r0 = vec4(0), r1 = vec4(0), r2 = vec4(0), r3 = vec4(0);
     vec4 r4 = vec4(0), r5 = vec4(0), r6 = vec4(0);

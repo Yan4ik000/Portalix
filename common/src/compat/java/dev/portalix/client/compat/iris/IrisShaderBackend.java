@@ -100,6 +100,11 @@ public final class IrisShaderBackend implements ShaderBackend {
   }
 
   @Override
+  public void renderLevel(Runnable render) {
+    IrisPortalComposite.renderLevel(render);
+  }
+
+  @Override
   public void invalidatePrimaryHistory() {
     if (!active()) return;
     var primary = Iris.getPipelineManager().getPipelineNullable();
@@ -124,6 +129,11 @@ public final class IrisShaderBackend implements ShaderBackend {
   @Override
   public long vertexKey() {
     return IrisDrawState.vertexKey();
+  }
+
+  @Override
+  public boolean supportsColorEffects() {
+    return IrisEffectFramebuffer.supportsColorEffects();
   }
 
   @Override

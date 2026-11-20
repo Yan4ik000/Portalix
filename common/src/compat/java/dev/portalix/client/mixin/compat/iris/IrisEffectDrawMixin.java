@@ -51,6 +51,23 @@ abstract class IrisEffectDrawMixin {
       return;
     }
     if (IrisShaders.shadowPass()) return;
+    if (!IrisEffectTarget.supportsColorEffects()) {
+      var draw = (PreparedRenderType) (Object) this;
+      var projection = RenderSystem.getProjectionMatrixBuffer();
+      var projectionType = RenderSystem.getProjectionType();
+      IrisEffectTarget.deferDraw(() -> {
+        // Iris restores the world projection after its hand pass, before final composition.
+        var previousProjection = RenderSystem.getProjectionMatrixBuffer();
+        var previousType = RenderSystem.getProjectionType();
+        try {
+          RenderSystem.setProjectionMatrix(projection, projectionType);
+          draw.drawFromBuffer(vertices, indices, type, baseVertex, firstIndex, indexCount);
+        } finally {
+          RenderSystem.setProjectionMatrix(previousProjection, previousType);
+        }
+      });
+      return;
+    }
     try (var ignored = IrisEffectTarget.begin()) {
       original.call(vertices, indices, type, baseVertex, firstIndex, indexCount);
     }
