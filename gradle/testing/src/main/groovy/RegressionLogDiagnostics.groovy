@@ -20,10 +20,10 @@ final class RegressionLogDiagnostics {
             issues.add([category: 'missing-startup-backend', fatal: true,
                 message: 'The log does not identify startup of the requested graphics backend: ' + backend])
         Pattern completion = Pattern.compile('(?:\\[STDOUT]: )?PORTALIX REGRESSION '
-            + Pattern.quote(profile) + ': (?:passed|failed) \\d+ groups')
+            + Pattern.quote(profile) + ': (?:passed|failed|incomplete) \\d+ groups')
         if (!messages.any { completion.matcher(it).matches() })
             issues.add([category: 'missing-profile-completion', fatal: true,
-                message: 'The current profile never logged a completed passed/failed client report: ' + profile])
+                message: 'The current profile never logged a completed client report: ' + profile])
         issues
     }
 

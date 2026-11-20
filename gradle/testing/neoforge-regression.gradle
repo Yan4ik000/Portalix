@@ -21,7 +21,7 @@ neoForge {
             systemProperty 'portalix.test.reportDir', regressionReportDirectory.get().asFile.absolutePath
             rootProject.regressionEnvironmentProperties.each { name, value -> systemProperty name, value }
             jvmArgument '-Xmx6G'
-            programArguments.addAll('--width', '1856', '--height', '1044', '--offlineDeveloperMode')
+            programArguments.add('--offlineDeveloperMode')
             taskBefore tasks.named('prepareRegressionClient')
             disableIdeRun()
         }
@@ -39,7 +39,7 @@ neoForge {
             }
             rootProject.regressionEnvironmentProperties.each { name, value -> systemProperty name, value }
             jvmArgument '-Xmx6G'
-            programArguments.addAll('--width', '1856', '--height', '1044', '--offlineDeveloperMode')
+            programArguments.add('--offlineDeveloperMode')
             taskBefore tasks.named('prepareBenchmarkClient')
             disableIdeRun()
         }

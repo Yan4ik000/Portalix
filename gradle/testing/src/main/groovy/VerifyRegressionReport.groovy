@@ -32,12 +32,13 @@ abstract class VerifyRegressionReport extends DefaultTask {
         File report = new File(directory, 'results.json')
         if (!report.isFile()) throw new GradleException("Client exited without a regression report: ${report}")
         def result = new JsonSlurper().parse(report, 'UTF-8')
-        if (result.profile != profileName.get() || result.status != 'passed')
+        if (result.profile != profileName.get() || !(result.status in ['passed', 'incomplete']))
             throw new GradleException("Regression profile did not pass: ${report}")
         if (!(result.scenes instanceof List) || result.scenes.any { it.diagnostics != diagnosticsMode.get() })
             throw new GradleException("Regression report did not use the requested diagnostics mode: ${diagnosticsMode.get()}")
         Map contract = new JsonSlurper().parse(sceneContract.get().asFile, 'UTF-8') as Map
-        def names = RegressionSceneReports.verify(directory, result, contract, clientTestSelection.get())
+        def results = RegressionSceneReports.verify(directory, result, contract, clientTestSelection.get())
+        def skipped = results.findAll { it.status == 'skipped' }
         File xml = new File(directory, 'TEST-regression.xml')
         if (!xml.isFile()) throw new GradleException("Client produced no JUnit report: ${xml}")
         def factory = DocumentBuilderFactory.newInstance()
@@ -46,16 +47,27 @@ abstract class VerifyRegressionReport extends DefaultTask {
         def suite = document.documentElement
         def cases = document.getElementsByTagName('testcase')
         if (suite.tagName != 'testsuite' || suite.getAttribute('name') != profileName.get()
-            || suite.getAttribute('tests') != names.size().toString() || cases.length != names.size()
+            || suite.getAttribute('tests') != results.size().toString() || cases.length != results.size()
             || suite.getAttribute('failures') != '0'
-            || ['errors', 'skipped', 'disabled'].any { suite.hasAttribute(it) && suite.getAttribute(it) != '0' }
+            || suite.getAttribute('skipped') != skipped.size().toString()
+            || ['errors', 'disabled'].any { suite.hasAttribute(it) && suite.getAttribute(it) != '0' }
             || document.getElementsByTagName('failure').length != 0
             || document.getElementsByTagName('error').length != 0
-            || document.getElementsByTagName('skipped').length != 0)
-            throw new GradleException("JUnit regression report is incomplete or did not pass: ${xml}")
+            || document.getElementsByTagName('skipped').length != skipped.size())
+            throw new GradleException("JUnit regression report disagrees with the client results: ${xml}")
         for (int index = 0; index < cases.length; index++) {
-            if (cases.item(index).getAttribute('name') != names[index])
+            def test = cases.item(index)
+            def expected = results[index]
+            def skippedElements = test.getElementsByTagName('skipped')
+            if (test.getAttribute('name') != expected.name
+                || (expected.status == 'skipped'
+                    ? skippedElements.length != 1 || skippedElements.item(0).getAttribute('message') != expected.message
+                    : skippedElements.length != 0))
                 throw new GradleException("JSON and JUnit regression cases disagree: ${xml}")
+        }
+        if (!skipped.isEmpty()) {
+            def summary = skipped.collect { "${it.name}: ${it.message}" }.join('\n')
+            throw new GradleException("Regression profile skipped required cases:\n${summary}\nSee ${report}")
         }
         logger.lifecycle("Regression profile passed: ${profileName.get()} (${report})")
     }

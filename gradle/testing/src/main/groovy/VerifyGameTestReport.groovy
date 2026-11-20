@@ -1,12 +1,10 @@
 import groovy.json.JsonSlurper
 import org.gradle.api.DefaultTask
 import org.gradle.api.GradleException
-import org.gradle.api.file.ConfigurableFileCollection
 import org.gradle.api.file.RegularFileProperty
 import org.gradle.api.provider.ListProperty
 import org.gradle.api.tasks.Input
 import org.gradle.api.tasks.InputFile
-import org.gradle.api.tasks.InputFiles
 import org.gradle.api.tasks.PathSensitive
 import org.gradle.api.tasks.PathSensitivity
 import org.gradle.api.tasks.TaskAction
@@ -19,7 +17,6 @@ abstract class VerifyGameTestReport extends DefaultTask {
     @InputFile @PathSensitive(PathSensitivity.NONE) abstract RegularFileProperty getLaunchLogFile()
     @InputFile @PathSensitive(PathSensitivity.NONE) abstract RegularFileProperty getLaunchStartFile()
     @Input abstract ListProperty<String> getExpectedTests()
-    @InputFiles @PathSensitive(PathSensitivity.RELATIVE) abstract ConfigurableFileCollection getTestInstances()
 
     @TaskAction void verify() {
         verifyReport(reportFile.get().asFile, expectedTests.get())
@@ -30,12 +27,11 @@ abstract class VerifyGameTestReport extends DefaultTask {
         logger.lifecycle("Server GameTests passed: ${expectedTests.get().join(', ')}")
     }
 
-    static void verifyLaunchLog(File log, Long startedAt = null) {
+    static void verifyLaunchLog(File log, long startedAt) {
         if (!log.isFile()) throw new GradleException("GameTest server produced no launch log: ${log}")
-        if (startedAt != null && log.lastModified() < startedAt)
+        if (log.lastModified() < startedAt)
             throw new GradleException("GameTest server launch log predates this run: ${log}")
-        String text = startedAt == null ? log.getText('UTF-8') :
-            VerifyRegressionLog.currentRunLog(log.parentFile, startedAt, ZoneId.systemDefault())
+        String text = VerifyRegressionLog.currentRunLog(log.parentFile, startedAt, ZoneId.systemDefault())
         if (text.isBlank()) throw new GradleException("GameTest server produced an empty launch log: ${log}")
         def fatal = RegressionLogDiagnostics.inspect(text).findAll { it.fatal }
         if (fatal) throw new GradleException("GameTest server launch contains fatal diagnostics: ${fatal.collect { it.category }}; ${log}")

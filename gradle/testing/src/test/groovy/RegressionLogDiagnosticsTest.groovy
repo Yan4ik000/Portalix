@@ -1,6 +1,12 @@
 import org.junit.jupiter.api.Test
 
 class RegressionLogDiagnosticsTest {
+    @Test void anIncompleteReportStillMarksACompletedLaunch() {
+        def log = '''[01:02:03] [Render thread/INFO] (Minecraft) Using graphics backend Vulkan, test driver
+[01:02:04] [Render thread/INFO] (Portalix) PORTALIX REGRESSION neoforge-sodium-vulkan: incomplete 11 groups'''
+        assert RegressionLogDiagnostics.launchIssues(log, 'neoforge-sodium-vulkan', 'vulkan').isEmpty()
+    }
+
     @Test void everyLoaderErrorIsFatalRegardlessOfPackage() {
         ['[01:02:03] [Render thread/ERROR] (Minecraft) Resource cleanup failed',
          '[01:02:03] [Render thread/ERROR] [another.mod/]: Resource cleanup failed'].each { line ->

@@ -1,0 +1,35 @@
+buildscript {
+    dependencies { classpath 'dev.portalix.build:test-infrastructure:1' }
+}
+
+import VerifyGameTestReport
+import groovy.json.JsonOutput
+import java.nio.file.Files
+import java.time.Duration
+
+def runDirectory = layout.buildDirectory.dir('run/gametest')
+def reportDirectory = layout.buildDirectory.dir('reports/gametest')
+def results = reportDirectory.map { it.file('results.xml') }
+def launchMarker = reportDirectory.map { it.file('launch-start.json') }
+
+tasks.named('runRegressionServer') {
+    timeout = Duration.ofMinutes(5)
+    doFirst {
+        def directory = runDirectory.get().asFile
+        directory.mkdirs()
+        new File(directory, 'server.properties').createNewFile()
+        reportDirectory.get().asFile.mkdirs()
+        Files.deleteIfExists(results.get().asFile.toPath())
+        launchMarker.get().asFile.setText(JsonOutput.toJson([startedAt: System.currentTimeMillis()]), 'UTF-8')
+    }
+}
+
+tasks.register('testServer', VerifyGameTestReport) {
+    group = 'verification'
+    description = 'Runs and validates the selected synchronous server GameTest systems.'
+    dependsOn 'runRegressionServer'
+    reportFile = results
+    launchLogFile = runDirectory.map { it.file('logs/latest.log') }
+    launchStartFile = launchMarker
+    expectedTests = rootProject.regressionExpectedServerTests
+}

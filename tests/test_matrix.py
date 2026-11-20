@@ -86,13 +86,12 @@ def report_status(path, profile, client_test, exit_code):
     if not isinstance(result, dict) or result.get("profile") != profile:
         return "invalid-report"
     status = result.get("status")
-    if status not in ("passed", "failed", "unsupported"):
+    if status not in ("passed", "failed", "incomplete", "unsupported"):
         return "invalid-report"
-    if status == "passed":
-        if result.get("clientTest") != client_test:
-            return "invalid-report"
-        if exit_code != 0:
-            return "failed"
+    if status in ("passed", "incomplete") and result.get("clientTest") != client_test:
+        return "invalid-report"
+    if status == "passed" and exit_code != 0:
+        return "failed"
     return status
 
 

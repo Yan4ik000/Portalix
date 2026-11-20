@@ -76,7 +76,10 @@ final class ScenarioRecording {
       Graphics2D graphics = thumbnail.createGraphics();
       try {
         graphics.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BILINEAR);
-        graphics.drawImage(source, 0, 0, WIDTH, HEIGHT, null);
+        double scale = Math.min((double) WIDTH / source.getWidth(), (double) HEIGHT / source.getHeight());
+        int width = Math.max(1, (int) Math.round(source.getWidth() * scale));
+        int height = Math.max(1, (int) Math.round(source.getHeight() * scale));
+        graphics.drawImage(source, (WIDTH - width) / 2, (HEIGHT - height) / 2, width, height, null);
       } finally {
         graphics.dispose();
       }

@@ -2,7 +2,7 @@
 
 # Tests
 
-The suite consists of small JUnit tests for mod logic and gameplay scenarios on Fabric and NeoForge. Java 25 and Python 3 are required. Run commands from the project root.
+The suite includes JUnit tests for mod logic and gameplay scenarios on Fabric and NeoForge. Gradle requires JDK 25. The matrix runner also requires Python 3. Run commands from the project root.
 
 ## Running tests
 
@@ -59,16 +59,16 @@ Client scenes:
 | `resources` | Resource reload and display of a fresh remote block change |
 | `lifecycle` | Disconnecting and rejoining the world |
 
-Scenes use the real client, ordinary gameplay actions and native physics. Rendering checks use captures of the actual game window; captures are saved alongside the report. A normal run uses a render distance of 16 chunks. `-PtestDiagnostics=full` additionally saves a frame recording for manual review.
+Scenes use the real client, ordinary gameplay actions and native physics. Minecraft chooses the window size. Rendering checks use captures at the actual framebuffer resolution, which is recorded in the report. `-PtestDiagnostics=full` additionally saves a frame recording for manual review.
 
-Results are stored in `tests/build/reports/regression`; server reports are stored in the loaders' build directories. Launch errors, a failed scene or a skipped selected scene cause the check to fail.
+Results are stored in `tests/build/reports/regression`. Server reports are stored in the loaders' build directories. If a scene skips a case, JSON marks the run as `incomplete`, and both JSON and JUnit record the reason. Launch errors, failed scenes and skipped cases produce a nonzero exit code.
 
 ## Performance
 
-A separate existing route measures frame times during firing, traversal to a remote area, a repeat visit and return traversal through the same pair:
+A separate route measures frame times during firing, traversal to a remote area, a repeat visit and return traversal through the same pair:
 
 ```sh
 ./gradlew :benchmarkClient -PtestProfile=fabric-native-opengl
 ```
 
-The report is saved in `tests/build/reports/benchmarks`. The default render distance is 16 chunks; set `-PbenchmarkRenderDistance=32` to increase it to 32.
+The report is saved in `tests/build/reports/benchmarks`. Compare results at the same framebuffer resolution. The default render distance is 16 chunks. Set `-PbenchmarkRenderDistance=32` to increase it to 32.

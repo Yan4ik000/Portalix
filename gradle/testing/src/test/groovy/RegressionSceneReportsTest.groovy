@@ -13,17 +13,29 @@ class RegressionSceneReportsTest {
     @BeforeEach void independentSystems() {
         def scenes = catalog.scenes.collect { id -> scene(id) }
         List names = scenes.collectMany { it.passed }
-        report = [clientTest: 'all', scenes: scenes, passed: names,
+        report = [clientTest: 'all', status: 'passed', scenes: scenes, passed: names,
             cases: names.collect { [name: it, status: 'passed'] }]
     }
 
     @Test void completeSystemsAndOneExplicitlySelectedSystemPass() {
-        assert verify() == report.passed
+        assert verify() == report.cases
         report.clientTest = 'carry'
         report.scenes = [report.scenes[1]]
         report.passed = report.scenes[0].passed
         report.cases = report.passed.collect { [name: it, status: 'passed'] }
-        assert verify('carry') == report.passed
+        assert verify('carry') == report.cases
+    }
+
+    @Test void skippedCasesRequireMatchingIncompleteSceneAndAggregateResults() {
+        def skipped = [name: 'carry/long-distance', status: 'skipped', message: 'Requires a longer render distance']
+        report.scenes[1].cases.add(skipped)
+        assertThrows(GradleException) { verify() }
+        report.scenes[1].status = 'incomplete'
+        assertThrows(GradleException) { verify() }
+        report.status = 'incomplete'
+        report.cases.add(skipped)
+        assert verify() == report.cases
+        assertThrows(GradleException) { report.cases[-1] = skipped + [message: 'Different reason']; verify() }
     }
 
     @Test void selectionCannotSilentlyOmitDuplicateReorderOrSubstituteASystem() {
@@ -57,7 +69,7 @@ class RegressionSceneReportsTest {
             checkpoints: [id + '-after']]
     }
 
-    private List<String> verify(String selection = 'all') {
+    private List<Map> verify(String selection = 'all') {
         RegressionSceneReports.verify(temporary.toFile(), report, catalog, selection)
     }
 }

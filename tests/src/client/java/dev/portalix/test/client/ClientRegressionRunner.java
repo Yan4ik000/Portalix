@@ -51,10 +51,11 @@ public final class ClientRegressionRunner {
   public record ShaderConfiguration(String pack, String profile, java.util.Map<String, String> settings) {}
 
   private enum Stage { START, ENVIRONMENT, REPLACE_WORLD, WORLD, SCENE, DRAIN, CLEANUP, RECORDING, DONE }
+  private record CaseResult(String name, String status, String message) {}
   private static final String PROFILE = System.getProperty("portalix.test.profile");
   private static final Logger LOGGER = LogUtils.getLogger();
   private static final long START = System.nanoTime();
-  private static final List<String> PASSED = new ArrayList<>();
+  private static final List<CaseResult> CASES = new ArrayList<>();
   private static Stage stage = Stage.START;
   private static long stageStarted = START;
   private static String backend;
@@ -110,12 +111,11 @@ public final class ClientRegressionRunner {
         case START -> {
           if (!client.isGameLoadFinished() || client.gui.overlay() != null) return;
           configureGraphics(client);
-          client.getWindow().setWindowed(1856, 1044);
           transition(Stage.ENVIRONMENT);
         }
         case ENVIRONMENT -> {
           verifyEnvironment(client);
-          PASSED.add("environment/actual renderer, dependencies, shader and window settings");
+          CASES.add(new CaseResult("environment/actual renderer, dependencies, shader and window settings", "passed", null));
           createWorld(client);
         }
         case REPLACE_WORLD -> {
@@ -287,12 +287,16 @@ public final class ClientRegressionRunner {
 
   private static void recordScene() {
     var entry = new LinkedHashMap<String, Object>();
+    var skipped = scene.skipped();
     entry.put("id", SELECTED.get(sceneIndex).id());
-    entry.put("status", failure == null ? "passed" : "failed");
+    entry.put("status", resultStatus(failure, skipped.size()));
     entry.put("durationSeconds", (System.nanoTime() - sceneStarted) / 1e9);
     var names = scene.passed();
     entry.put("passed", names);
-    entry.put("cases", names.stream().map(name -> java.util.Map.of("name", name, "status", "passed")).toList());
+    var cases = new ArrayList<CaseResult>();
+    for (String name : names) cases.add(new CaseResult(name, "passed", null));
+    for (var skip : skipped) cases.add(new CaseResult(skip.name(), "skipped", skip.reason()));
+    entry.put("cases", cases);
     entry.put("checkpoints", frames.checkpoints());
     entry.put("checkedFrames", frames.checkedFrames());
     entry.put("auditedPresentedFrames", frames.presentedFrames());
@@ -306,7 +310,12 @@ public final class ClientRegressionRunner {
         entry.put("recording", "evidence/" + SELECTED.get(sceneIndex).id() + "/" + artifact.getFileName());
     }
     SCENES.add(entry);
-    PASSED.addAll(names);
+    CASES.addAll(cases);
+  }
+
+  private static String resultStatus(Throwable failure, long skipped) {
+    if (failure != null) return "failed";
+    return skipped == 0 ? "passed" : "incomplete";
   }
 
   private static void verifyEnvironment(Minecraft client) {
@@ -330,8 +339,6 @@ public final class ClientRegressionRunner {
       SHADER_SETTINGS.putAll(environment.settings());
     }
     ClientAssertions.check(!client.getWindow().isFullscreen(), "Tests require windowed mode");
-    ClientAssertions.check(client.getWindow().getWidth() == 1856 && client.getWindow().getHeight() == 1044,
-        "Expected actual framebuffer 1856x1044, got " + client.getWindow().getWidth() + "x" + client.getWindow().getHeight());
     ClientAssertions.check(!client.options.enableVsync().get(), "VSync must be disabled");
     ClientAssertions.check(client.options.framerateLimit().get() >= 260, "Frame cap must be unlimited");
     ClientAssertions.check(client.options.renderDistance().get() == renderDistance()
@@ -386,21 +393,24 @@ public final class ClientRegressionRunner {
     try {
       Files.createDirectories(reportDirectory());
       var report = new LinkedHashMap<String, Object>();
+      long skipped = CASES.stream().filter(result -> result.status().equals("skipped")).count();
+      String status = resultStatus(failure, skipped);
       report.put("profile", PROFILE);
       report.put("clientTest", SELECTION);
       report.put("scenes", SCENES);
-      report.put("status", failure == null ? "passed" : "failed");
+      report.put("status", status);
       report.put("backend", backend);
       report.put("shader", shader);
       report.put("shaderProfile", shaderProfile);
       report.put("shaderSettings", SHADER_SETTINGS);
       report.put("settings", options);
+      var target = client.gameRenderer.mainRenderTarget();
+      report.put("framebuffer", java.util.Map.of("width", target.width, "height", target.height));
       report.put("durationSeconds", (System.nanoTime() - START) / 1e9);
-      report.put("passed", PASSED);
-      var cases = new ArrayList<java.util.Map<String, String>>();
-      for (String name : PASSED) cases.add(java.util.Map.of("name", name, "status", "passed"));
-      if (failure != null) cases.add(java.util.Map.of("name", "regression", "status", "failed", "message", failure.toString()));
-      report.put("cases", cases);
+      var passed = CASES.stream().filter(result -> result.status().equals("passed")).map(CaseResult::name).toList();
+      report.put("passed", passed);
+      if (failure != null) CASES.add(new CaseResult("regression", "failed", failure.toString()));
+      report.put("cases", CASES);
       String trace = "";
       if (failure != null) {
         var buffer = new StringWriter();
@@ -411,13 +421,20 @@ public final class ClientRegressionRunner {
         LOGGER.error("Regression profile failed: {}", PROFILE, failure);
       }
       var xml = new StringBuilder("<?xml version=\"1.0\" encoding=\"UTF-8\"?><testsuite name=\"")
-          .append(escape(PROFILE)).append("\" tests=\"").append(PASSED.size() + (failure == null ? 0 : 1))
-          .append("\" failures=\"").append(failure == null ? 0 : 1).append("\">");
-      for (String name : PASSED) xml.append("<testcase name=\"").append(escape(name)).append("\"/>");
-      if (failure != null) xml.append("<testcase name=\"regression\"><failure>").append(escape(trace)).append("</failure></testcase>");
+          .append(escape(PROFILE)).append("\" tests=\"").append(CASES.size())
+          .append("\" failures=\"").append(failure == null ? 0 : 1)
+          .append("\" skipped=\"").append(skipped).append("\">");
+      for (var result : CASES) {
+        xml.append("<testcase name=\"").append(escape(result.name())).append('"');
+        switch (result.status()) {
+          case "skipped" -> xml.append("><skipped message=\"").append(escape(result.message())).append("\"/></testcase>");
+          case "failed" -> xml.append("><failure>").append(escape(trace)).append("</failure></testcase>");
+          default -> xml.append("/>");
+        }
+      }
       Files.writeString(reportDirectory().resolve("TEST-regression.xml"), xml.append("</testsuite>").toString());
       Files.writeString(reportDirectory().resolve("results.json"), new GsonBuilder().setPrettyPrinting().create().toJson(report));
-      LOGGER.info("PORTALIX REGRESSION {}: {} {} groups", PROFILE, report.get("status"), PASSED.size());
+      LOGGER.info("PORTALIX REGRESSION {}: {} {} groups", PROFILE, status, passed.size());
     } catch (Exception reportFailure) {
       LOGGER.error("Cannot write regression report: {}", PROFILE, reportFailure);
     } finally {

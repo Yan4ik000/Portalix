@@ -1,10 +1,4 @@
-buildscript {
-    dependencies { classpath 'dev.portalix.build:test-infrastructure:1' }
-}
-
-import VerifyGameTestReport
-
-def gameTestReportFile = layout.buildDirectory.file('reports/gametest/results.xml').get().asFile
+def gameTestReportFile = layout.buildDirectory.file('reports/gametest/results.xml')
 
 neoForge {
     runs {
@@ -15,7 +9,8 @@ neoForge {
             systemProperty 'neoforge.enableGameTest', 'true'
             rootProject.regressionEnvironmentProperties.each { name, value -> systemProperty name, value }
             jvmArgument '-Xmx4G'
-            programArguments.addAll('--tests', rootProject.regressionServerTestFilter, '--report', gameTestReportFile.absolutePath)
+            programArguments.addAll('--tests', rootProject.regressionServerTestFilter, '--report',
+                gameTestReportFile.get().asFile.absolutePath)
             disableIdeRun()
         }
     }
@@ -23,25 +18,6 @@ neoForge {
 
 tasks.named('runRegressionServer') {
     mustRunAfter ':fabric:testServer'
-    timeout = java.time.Duration.ofMinutes(5)
-    doFirst {
-        def runDirectory = layout.buildDirectory.dir('run/gametest').get().asFile
-        runDirectory.mkdirs()
-        new File(runDirectory, 'server.properties').createNewFile()
-        gameTestReportFile.parentFile.mkdirs()
-        java.nio.file.Files.deleteIfExists(gameTestReportFile.toPath())
-        new File(gameTestReportFile.parentFile, 'launch-start.json').setText(
-            groovy.json.JsonOutput.toJson([startedAt: System.currentTimeMillis()]), 'UTF-8')
-    }
 }
 
-tasks.register('testServer', VerifyGameTestReport) {
-    group = 'verification'
-    description = 'Runs and validates the selected synchronous server GameTest systems.'
-    dependsOn 'runRegressionServer'
-    reportFile = layout.buildDirectory.file('reports/gametest/results.xml')
-    launchLogFile = layout.buildDirectory.file('run/gametest/logs/latest.log')
-    launchStartFile = layout.buildDirectory.file('reports/gametest/launch-start.json')
-    expectedTests = rootProject.regressionExpectedServerTests
-    testInstances.from(rootProject.regressionServerTestInstances)
-}
+apply from: rootProject.file('gradle/testing/gametest-report.gradle')

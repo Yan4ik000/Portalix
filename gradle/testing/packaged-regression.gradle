@@ -1,6 +1,16 @@
 if (!rootProject.regressionPackaged) return
 
-def archive = tasks.named('jar', Jar).flatMap { it.archiveFile }
+def releaseJar = tasks.named('jar', Jar)
+def archiveDirectory = layout.buildDirectory.dir("run/archives/${rootProject.regressionProfileId}")
+// A running game lazily reads its JAR. Another build may replace the release artifact between class loads.
+def stageArchive = tasks.register('stageRegressionArchive', Copy) {
+    dependsOn 'verifyModArchive'
+    from(releaseJar.flatMap { it.archiveFile })
+    into(archiveDirectory)
+}
+def archive = archiveDirectory.zip(releaseJar.flatMap { it.archiveFileName }) { directory, name ->
+    directory.file(name)
+}
 def productionOutputs = files(sourceSets.main.output, sourceSets.client.output)
 sourceSets {
     packagedMod {
@@ -8,7 +18,7 @@ sourceSets {
         resources.setSrcDirs([])
         output.classesDirs.setFrom([])
         output.resourcesDir = null
-        output.dir([builtBy: tasks.named('jar')], archive)
+        output.dir([builtBy: stageArchive], archive)
     }
 }
 ['regression', 'regressionClient'].each { name ->
@@ -32,5 +42,5 @@ if (project.name == 'fabric') {
     }
 }
 tasks.matching { it.name in ['runRegressionClient', 'runBenchmarkClient', 'runRegressionServer'] }.configureEach {
-    dependsOn 'verifyModArchive'
+    dependsOn stageArchive
 }

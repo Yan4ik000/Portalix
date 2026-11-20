@@ -1,20 +1,20 @@
 import org.gradle.api.GradleException
 
 final class RegressionSceneReports {
-    static List<String> verify(File directory, Map result, Map catalog, String selection) {
+    static List<Map> verify(File directory, Map result, Map catalog, String selection) {
         List selected = selection == 'all' ? catalog.scenes : [selection]
         if (selected.isEmpty() || !selected.every { it in catalog.scenes || it in catalog.benchmarks })
             throw new GradleException("Unknown clientTest '${selection}'")
         if (result.clientTest != selection || !(result.scenes instanceof List)
             || result.scenes.collect { it.id } != selected)
             throw new GradleException('The report does not contain the selected client scenes')
-        List<String> sceneNames = []
+        List<Map> sceneCases = []
         result.scenes.each { Map scene ->
-            if (scene.status != 'passed' || !(scene.durationSeconds instanceof Number)
+            if (!(scene.durationSeconds instanceof Number)
                 || !Double.isFinite(scene.durationSeconds.doubleValue()) || scene.durationSeconds <= 0
                 || !(scene.checkedFrames instanceof Number) || scene.checkedFrames <= 0)
                 throw new GradleException("Client scene did not finish: ${scene.id}")
-            sceneNames.addAll(passingCases(scene))
+            sceneCases.addAll(caseResults(scene))
             if (!(scene.checkpoints instanceof List) || scene.checkpoints.isEmpty())
                 throw new GradleException("Client scene produced no screenshots: ${scene.id}")
             scene.checkpoints.each { String checkpoint ->
@@ -25,20 +25,22 @@ final class RegressionSceneReports {
                     throw new GradleException("Missing client screenshot: ${image}")
             }
         }
-        List<String> names = passingCases(result)
-        if (names.size() < sceneNames.size() || names.takeRight(sceneNames.size()) != sceneNames)
+        List<Map> cases = caseResults(result)
+        if (cases.size() < sceneCases.size() || cases.takeRight(sceneCases.size()) != sceneCases)
             throw new GradleException('Aggregate results omit or reorder client scene assertions')
-        names
+        cases
     }
 
-    private static List<String> passingCases(Map result) {
+    private static List<Map> caseResults(Map result) {
         if (!(result.cases instanceof List) || result.cases.isEmpty()
-            || !result.cases.every { it instanceof Map && it.status == 'passed'
-                && it.name instanceof String && !it.name.isBlank() })
-            throw new GradleException('Client scene has no passing assertions')
+            || !result.cases.every { it instanceof Map && it.name instanceof String && !it.name.isBlank()
+                && (it.status == 'passed' || it.status == 'skipped' && it.message instanceof String && !it.message.isBlank()) })
+            throw new GradleException('Client assertion results are missing or invalid')
         List<String> names = result.cases.collect { it.name }
-        if (result.passed != names || names.toSet().size() != names.size())
+        List<String> passed = result.cases.findResults { it.status == 'passed' ? it.name : null }
+        String status = passed.size() == names.size() ? 'passed' : 'incomplete'
+        if (passed.isEmpty() || result.passed != passed || result.status != status || names.toSet().size() != names.size())
             throw new GradleException('Client assertion results disagree or contain duplicates')
-        names
+        result.cases
     }
 }

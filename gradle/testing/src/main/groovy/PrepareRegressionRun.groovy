@@ -11,6 +11,8 @@ import org.gradle.api.tasks.InputFiles
 import org.gradle.api.tasks.PathSensitive
 import org.gradle.api.tasks.PathSensitivity
 import org.gradle.api.tasks.TaskAction
+import java.nio.file.Files
+import java.nio.file.LinkOption
 import java.security.MessageDigest
 
 abstract class PrepareRegressionRun extends DefaultTask {
@@ -36,17 +38,11 @@ abstract class PrepareRegressionRun extends DefaultTask {
             throw new GradleException("Profile ${profileName.get()} belongs to ${loaderName.get()}, not ${moduleName.get()}; use :testClient or the matching loader task")
         File report = reportDirectory.get().asFile
         report.mkdirs()
-        // A failed launch must never inherit a passing report from an earlier run.
         ['results.json', 'TEST-regression.xml', 'launch-start.json', 'launch-diagnostics.json', 'game.log'].each {
-            java.nio.file.Files.deleteIfExists(new File(report, it).toPath())
+            Files.deleteIfExists(new File(report, it).toPath())
         }
-        report.listFiles()?.findAll { it.name ==~ /portal-view-\d+\.png/ }?.each {
-            java.nio.file.Files.deleteIfExists(it.toPath())
-        }
-        def evidence = new File(report, 'evidence').toPath().toAbsolutePath().normalize()
-        if (!evidence.startsWith(report.toPath().toAbsolutePath().normalize()))
-            throw new GradleException("Evidence directory escaped its report directory: ${evidence}")
-        if (java.nio.file.Files.exists(evidence, java.nio.file.LinkOption.NOFOLLOW_LINKS)) PrepareRegressionRun.deleteTree(evidence)
+        def evidence = new File(report, 'evidence').toPath()
+        if (Files.exists(evidence, LinkOption.NOFOLLOW_LINKS)) PrepareRegressionRun.deleteTree(evidence)
         if (!supported.get()) {
             if (!irisVulkan(profileName.get(), backend.get(), shaders.get()))
                 throw new GradleException('Unsupported profile does not match the known Iris Vulkan limitation')
@@ -73,10 +69,7 @@ abstract class PrepareRegressionRun extends DefaultTask {
         }
         File saves = new File(run, 'saves')
         saves.listFiles()?.findAll { it.name.startsWith('portalix-regression-') }?.each { world ->
-            def target = world.toPath().toAbsolutePath().normalize()
-            if (!target.startsWith(saves.toPath().toAbsolutePath().normalize()))
-                throw new GradleException("Test world escaped its run directory: ${target}")
-            PrepareRegressionRun.deleteTree(target)
+            PrepareRegressionRun.deleteTree(world.toPath())
         }
         Integer dataVersion = null
         for (File artifact : minecraftClasspath.files) {
@@ -94,8 +87,6 @@ abstract class PrepareRegressionRun extends DefaultTask {
         new File(run, 'options.txt').setText("version:${dataVersion}\n" + '''enableVsync:false
 maxFps:260
 fullscreen:false
-overrideWidth:1856
-overrideHeight:1044
 pauseOnLostFocus:false
 onboardAccessibility:false
 skipMultiplayerWarning:true
