@@ -1,3 +1,4 @@
+import groovy.json.JsonOutput
 import org.gradle.api.GradleException
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
@@ -10,7 +11,7 @@ class SodiumCompileArchiveTest {
 
     @Test void selectsTheSingleNestedModRatherThanOtherLibraries() {
         String path = 'META-INF/jarjar/net.caffeinemc.sodium-0.8.12-mod.jar'
-        File archive = archive('sodium.jar', [path, 'META-INF/jarjar/other.jar', 'net.caffeinemc.sodium-0.8.12-mod.jar'])
+        File archive = archive('sodium.jar', [path, 'META-INF/jarjar/other.jar', 'net.caffeinemc.sodium-0.8.12-mod.jar'], [path])
         assert SodiumCompileArchive.single([archive]) == [archive: archive, path: path]
     }
 
@@ -27,8 +28,8 @@ class SodiumCompileArchiveTest {
     @Test void rejectsAmbiguityWithinOneArchiveAndAcrossResolvedArtifacts() {
         String first = 'META-INF/jarjar/net.caffeinemc.sodium-1-mod.jar'
         String second = 'META-INF/jarjar/net.caffeinemc.sodium-2-mod.jar'
-        [[archive('both.jar', [first, second])],
-         [archive('one.jar', [first]), archive('two.jar', [second])]].each { artifacts ->
+        [[archive('both.jar', [first, second], [first, second])],
+         [archive('one.jar', [first], [first]), archive('two.jar', [second], [second])]].each { artifacts ->
             def failure = assertThrows(GradleException) { SodiumCompileArchive.single(artifacts) }
             assert failure.message.contains('found 2')
             assert failure.message.contains(first)
@@ -36,9 +37,13 @@ class SodiumCompileArchiveTest {
         }
     }
 
-    private File archive(String name, List<String> paths) {
+    private File archive(String name, List<String> paths, List<String> sodiumPaths = []) {
         File archive = new File(directory, name)
         new ZipOutputStream(new FileOutputStream(archive)).withCloseable { zip ->
+            def jars = sodiumPaths.collect { [identifier: [group: 'net.caffeinemc', artifact: 'neoforge'], path: it] }
+            zip.putNextEntry(new ZipEntry('META-INF/jarjar/metadata.json'))
+            zip.write(JsonOutput.toJson([jars: jars]).getBytes('UTF-8'))
+            zip.closeEntry()
             paths.each { path ->
                 zip.putNextEntry(new ZipEntry(path))
                 zip.write([1, 2, 3] as byte[])

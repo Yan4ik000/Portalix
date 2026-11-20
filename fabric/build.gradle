@@ -1,3 +1,6 @@
+import java.util.jar.Manifest
+import net.fabricmc.loom.util.ZipReprocessorUtil
+
 plugins {
     id 'net.fabricmc.fabric-loom'
 }
@@ -25,19 +28,31 @@ loom {
 sourceSets.client {
     java.srcDir project(':common').file('src/client/java')
     resources.srcDir project(':common').file('src/client/resources')
-    if (rootProject.includeRenderCompat) {
-        java.srcDir project(':common').file('src/compat/java')
-        resources.srcDir project(':common').file('src/compat/resources')
-    }
+    java.srcDir project(':common').file('src/compat/java')
+    resources.srcDir project(':common').file('src/compat/resources')
 }
 
 dependencies {
     minecraft "com.mojang:minecraft:${rootProject.minecraft_version}"
     implementation "net.fabricmc:fabric-loader:${rootProject.loader_version}"
     implementation "net.fabricmc.fabric-api:fabric-api:${rootProject.fabric_api_version}"
-    if (rootProject.includeRenderCompat) {
-        clientCompileOnly "maven.modrinth:sodium:${rootProject.sodium_version}"
-        clientCompileOnly "maven.modrinth:iris:${rootProject.iris_version}"
+    clientCompileOnly "maven.modrinth:sodium:${rootProject.sodium_version}"
+    clientCompileOnly "maven.modrinth:iris:${rootProject.iris_version}"
+}
+
+tasks.named('jar', Jar) {
+    doLast {
+        // Loom writes the client-only entries in filesystem order.
+        ZipReprocessorUtil.transformZipEntry(archiveFile.get().asFile.toPath(), 'META-INF/MANIFEST.MF') { bytes ->
+            def manifest = new Manifest(new ByteArrayInputStream(bytes))
+            def attributes = manifest.mainAttributes
+            def key = 'Fabric-Loom-Client-Only-Entries'
+            def entries = attributes.getValue(key).split(';')
+            attributes.putValue(key, entries.sort().join(';'))
+            def output = new ByteArrayOutputStream()
+            manifest.write(output)
+            output.toByteArray()
+        }
     }
 }
 

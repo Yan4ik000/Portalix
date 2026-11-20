@@ -6,12 +6,6 @@ plugins {
 
 layout.buildDirectory = layout.projectDirectory.dir('tests/build')
 
-def renderCompat = providers.gradleProperty('renderCompat').getOrElse('all')
-if (!(renderCompat in ['all', 'none'])) {
-    throw new GradleException("Unknown renderCompat '${renderCompat}'; choose all or none")
-}
-ext.includeRenderCompat = renderCompat == 'all'
-
 subprojects {
     apply plugin: 'java-library'
     group = rootProject.group
@@ -38,33 +32,11 @@ subprojects {
             neoforge_version: rootProject.neoforge_version,
             sodium_compat_version: rootProject.sodium_compat_version,
             iris_compat_version: rootProject.iris_compat_version,
-            render_dependency_type: rootProject.includeRenderCompat ? 'optional' : 'incompatible',
-            sodium_compat_range: rootProject.includeRenderCompat ? "[${rootProject.sodium_compat_version}]" : '[0,)',
-            iris_compat_range: rootProject.includeRenderCompat ? "[${rootProject.iris_compat_version}]" : '[0,)',
-            render_dependency_reason: rootProject.includeRenderCompat
-                ? 'Only the tested version is supported. Install that version or remove this optional mod.'
-                : 'This Portalix build has no Sodium/Iris integration. Use the standard build or remove these mods.'
+            render_dependency_reason: 'Only the tested version is supported. Install that version or remove this optional mod.'
         ]
         inputs.properties(metadata)
-        inputs.property('renderCompat', rootProject.includeRenderCompat)
         filesMatching(['fabric.mod.json', 'META-INF/neoforge.mods.toml', '*.mixins.json']) {
             expand metadata
-        }
-        if (!rootProject.includeRenderCompat && name == 'processResources') {
-            doLast {
-                def fabricMetadata = new File(destinationDir, 'fabric.mod.json')
-                if (fabricMetadata.isFile()) {
-                    def json = new groovy.json.JsonSlurper().parse(fabricMetadata, 'UTF-8')
-                    json.mixins.removeAll { it instanceof Map && it.config == 'portalix.compat.mixins.json' }
-                    json.breaks = (json.breaks ?: [:]) + [sodium: '*', iris: '*']
-                    fabricMetadata.setText(groovy.json.JsonOutput.prettyPrint(groovy.json.JsonOutput.toJson(json)) + '\n', 'UTF-8')
-                }
-                def neoMetadata = new File(destinationDir, 'META-INF/neoforge.mods.toml')
-                if (neoMetadata.isFile()) {
-                    def text = neoMetadata.getText('UTF-8').replace('[[mixins]]\nconfig="portalix.compat.mixins.json"', '')
-                    neoMetadata.setText(text, 'UTF-8')
-                }
-            }
         }
     }
     tasks.withType(Jar).configureEach {

@@ -18,7 +18,6 @@ abstract class VerifyModArchive extends DefaultTask {
     @InputFile @PathSensitive(PathSensitivity.NONE) abstract RegularFileProperty getArchiveFile()
     @Input abstract Property<String> getLoaderName()
     @Input abstract Property<String> getModVersion()
-    @Input abstract Property<Boolean> getRenderCompat()
     @Input abstract MapProperty<String, String> getDeclaredRenderVersions()
     @Input abstract ListProperty<String> getRequiredResources()
     @InputFiles @PathSensitive(PathSensitivity.RELATIVE) abstract ConfigurableFileCollection getClassDirectories()
@@ -32,11 +31,11 @@ abstract class VerifyModArchive extends DefaultTask {
                     classes.add(root.toPath().relativize(file.toPath()).toString().replace('\\', '/'))
             }
         }
-        verify(archiveFile.get().asFile, loaderName.get(), modVersion.get(), renderCompat.get(),
+        verify(archiveFile.get().asFile, loaderName.get(), modVersion.get(),
             requiredResources.get() as Set, classes, declaredRenderVersions.get())
     }
 
-    static void verify(File file, String loader, String version, boolean compat,
+    static void verify(File file, String loader, String version,
             Set<String> resources, Set<String> classes, Map<String, String> renderVersions) {
         new ZipFile(file).withCloseable { archive ->
             List<String> names = archive.entries().toList().findAll { !it.directory }.collect { it.name }
@@ -55,7 +54,6 @@ abstract class VerifyModArchive extends DefaultTask {
                 'Test or dependency-source material leaked into the release archive')
             require(ModArchiveMetadata.versions(archive, loader)['portalix'] == version,
                 'Packaged mod identity/version differs from this build')
-            String metadata
             List<String> configs
             List<String> entrypoints = []
             if (loader == 'fabric') {
@@ -63,33 +61,51 @@ abstract class VerifyModArchive extends DefaultTask {
                 def json = readJson(archive, 'fabric.mod.json')
                 require(json.accessWidener == 'portalix.accesswidener' && entries.contains(json.accessWidener),
                     'Fabric access widener is absent or misdeclared')
-                configs = json.mixins.collect { it instanceof Map ? it.config : it }
+                Map<String, String> expectedConfigs = [
+                    'portalix.mixins.json': '*',
+                    'portalix.fabric.mixins.json': '*',
+                    'portalix.client.mixins.json': 'client',
+                    'portalix.compat.mixins.json': 'client'
+                ]
+                require(json.mixins instanceof List, 'Missing Fabric mixin registrations')
+                Map<String, String> registrations = [:]
+                json.mixins.each { registration ->
+                    String config = registration instanceof Map ? registration.config : registration
+                    String environment = registration instanceof Map ? registration.get('environment', '*') : '*'
+                    require(!registrations.containsKey(config), "Duplicate Fabric mixin registration ${config}")
+                    registrations[config] = environment
+                }
+                require(registrations == expectedConfigs,
+                    "Expected Fabric mixin registrations ${expectedConfigs}, found ${registrations}")
+                configs = registrations.keySet().toList()
                 entrypoints.addAll(json.entrypoints.values().flatten())
                 renderVersions.each { id, selected ->
-                    require(compat ? json.breaks?.get(id) == ["<${selected}".toString(), ">${selected}".toString()] :
-                        json.breaks?.get(id) == '*', "Packaged Fabric ${id} constraints do not match this product")
+                    require(json.breaks?.get(id) == ["<${selected}".toString(), ">${selected}".toString()],
+                        "Packaged Fabric ${id} constraints must allow only ${selected}")
                 }
             } else {
-                metadata = readText(archive, 'META-INF/neoforge.mods.toml')
+                String metadata = readText(archive, 'META-INF/neoforge.mods.toml')
                 require(!metadata.contains('${'), 'Unexpanded NeoForge metadata')
-                configs = (metadata =~ /(?m)^\s*config\s*=\s*"([^"]+)"/).collect { it[1] }
+                configs = (metadata =~ /(?ms)^\s*\[\[mixins]]\s*\n(.*?)(?=^\s*\[|\z)/).collect {
+                    ModArchiveMetadata.stringValue(it[1], 'config')
+                }
+                Set<String> expectedConfigs = ['portalix.mixins.json', 'portalix.neoforge.mixins.json',
+                    'portalix.client.mixins.json', 'portalix.compat.mixins.json'] as Set
+                require(configs.size() == expectedConfigs.size() && configs.toSet() == expectedConfigs,
+                    "Expected NeoForge mixin registrations ${expectedConfigs}, found ${configs}")
                 entrypoints.addAll(['dev.portalix.neoforge.PortalixNeoForge',
                     'dev.portalix.neoforge.client.PortalixNeoForgeClient'])
                 require(entries.contains('META-INF/accesstransformer.cfg') && !entries.contains('portalix.accesswidener'),
                     'NeoForge access rules are absent or include the Fabric access widener')
+                def sections = metadata.split(/(?m)^\[\[dependencies\.portalix]]/).drop(1)
                 renderVersions.each { id, selected ->
-                    def sections = metadata.split(/(?m)^\[\[dependencies\.portalix]]/).drop(1)
                     def dependency = sections.findAll { (it =~ /(?m)^\s*modId\s*=\s*"${id}"/).find() }
                     require(dependency.size() == 1, "Missing or duplicate NeoForge dependency ${id}")
-                    require(ModArchiveMetadata.stringValue(dependency[0], 'type') == (compat ? 'optional' : 'incompatible') &&
-                        ModArchiveMetadata.stringValue(dependency[0], 'versionRange') == (compat ? "[${selected}]" : '[0,)'),
-                        "Packaged NeoForge ${id} constraints do not match this product")
+                    require(ModArchiveMetadata.stringValue(dependency[0], 'type') == 'optional' &&
+                        ModArchiveMetadata.stringValue(dependency[0], 'versionRange') == "[${selected}]",
+                        "Packaged NeoForge ${id} must be optional and allow only ${selected}")
                 }
             }
-            require(configs.contains('portalix.compat.mixins.json') == compat,
-                'Mixin metadata does not match the selected render compatibility product')
-            require(entries.contains('portalix.compat.mixins.json') == compat,
-                'Compat mixin resources do not match the selected product')
             configs.each { path ->
                 def config = readJson(archive, path)
                 ['mixins', 'client', 'server'].each { side ->
@@ -100,15 +116,17 @@ abstract class VerifyModArchive extends DefaultTask {
                 }
                 if (config.plugin) entrypoints.add(config.plugin)
             }
-            entries.findAll { it.startsWith('META-INF/services/') }.each { service ->
-                readText(archive, service).readLines().collect { it.split('#', 2)[0].trim() }
-                    .findAll { it }.each { provider -> entrypoints.add(provider) }
+            String serviceDirectory = 'META-INF/services/'
+            Map<String, List<String>> services = [:]
+            entries.findAll { it.startsWith(serviceDirectory) }.each { path ->
+                def providers = readText(archive, path).readLines().collect { it.split('#', 2)[0].trim() }.findAll { it }
+                services[path.substring(serviceDirectory.length())] = providers
+                entrypoints.addAll(providers)
             }
             ['dev.portalix.platform.ModPresence', 'dev.portalix.platform.PortalPlatform',
              'dev.portalix.platform.RegistryPlatform', 'dev.portalix.client.platform.ClientPlatform'].each { service ->
-                String path = "META-INF/services/${service}"
-                require(entries.contains(path), "Missing platform service ${service}")
-                def providers = readText(archive, path).readLines().collect { it.split('#', 2)[0].trim() }.findAll { it }
+                def providers = services[service]
+                require(providers != null, "Missing platform service ${service}")
                 require(providers.size() == 1 && providers[0].contains(".${loader}."),
                     "Missing, ambiguous or wrong-loader platform service ${service}")
             }

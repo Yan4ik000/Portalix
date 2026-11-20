@@ -1,6 +1,7 @@
 sourceSets {
     clientTest {
         java.srcDir rootProject.file('common/src/clientTest/java')
+        java.srcDir rootProject.file('common/src/compatTest/java')
         compileClasspath += sourceSets.main.output + sourceSets.client.output + sourceSets.client.compileClasspath
         runtimeClasspath += sourceSets.main.output + sourceSets.client.output + sourceSets.client.runtimeClasspath + sourceSets.client.compileClasspath
     }
@@ -16,7 +17,6 @@ tasks.register('clientTest', Test) {
     description = 'Runs shared client CPU contracts without starting Minecraft or a GPU.'
     testClassesDirs = sourceSets.clientTest.output.classesDirs
     classpath = sourceSets.clientTest.runtimeClasspath
-    useJUnitPlatform()
 }
 
 tasks.named('check') { dependsOn 'clientTest' }

@@ -26,16 +26,16 @@ side="BOTH"
 
 [[dependencies.portalix]]
 modId="sodium"
-type="${render_dependency_type}"
-versionRange="${sodium_compat_range}"
+type="optional"
+versionRange="[${sodium_compat_version}]"
 reason="${render_dependency_reason}"
 ordering="NONE"
 side="CLIENT"
 
 [[dependencies.portalix]]
 modId="iris"
-type="${render_dependency_type}"
-versionRange="${iris_compat_range}"
+type="optional"
+versionRange="[${iris_compat_version}]"
 reason="${render_dependency_reason}"
 ordering="NONE"
 side="CLIENT"

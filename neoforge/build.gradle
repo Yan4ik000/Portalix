@@ -22,10 +22,8 @@ sourceSets {
     client {
         java.srcDir project(':common').file('src/client/java')
         resources.srcDir project(':common').file('src/client/resources')
-        if (rootProject.includeRenderCompat) {
-            java.srcDir project(':common').file('src/compat/java')
-            resources.srcDir project(':common').file('src/compat/resources')
-        }
+        java.srcDir project(':common').file('src/compat/java')
+        resources.srcDir project(':common').file('src/compat/resources')
         compileClasspath += sourceSets.main.output
         runtimeClasspath += sourceSets.main.output
     }
@@ -51,10 +49,8 @@ neoForge {
 }
 
 dependencies {
-    if (rootProject.includeRenderCompat) {
-        sodiumCompileArtifact "maven.modrinth:sodium:${rootProject.sodium_neoforge_version}"
-        clientCompileOnly "maven.modrinth:iris:${rootProject.iris_neoforge_version}"
-    }
+    sodiumCompileArtifact "maven.modrinth:sodium:${rootProject.sodium_neoforge_version}"
+    clientCompileOnly "maven.modrinth:iris:${rootProject.iris_neoforge_version}"
 }
 
 def sodiumCompileJar = tasks.register('extractSodiumCompileJar', Sync) {
@@ -68,10 +64,8 @@ def sodiumCompileJar = tasks.register('extractSodiumCompileJar', Sync) {
 }
 
 dependencies {
-    if (rootProject.includeRenderCompat) {
-        clientCompileOnly files(sodiumCompileJar.map { it.destinationDir.toPath().resolve('sodium.jar').toFile() })
-            .builtBy(sodiumCompileJar)
-    }
+    clientCompileOnly files(sodiumCompileJar.map { it.destinationDir.toPath().resolve('sodium.jar').toFile() })
+        .builtBy(sodiumCompileJar)
 }
 
 tasks.named('jar') {

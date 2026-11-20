@@ -79,7 +79,7 @@ You hold the key to the portals. What you do with it is up to you.
 
 ## Building
 
-Building requires JDK 25 and Python 3. Gradle uses the JDK from `JAVA_HOME` or `PATH`.
+Building requires JDK 25. Gradle uses the JDK from `JAVA_HOME` or `PATH`.
 
 Run `./gradlew build` on Linux/macOS or `./gradlew.bat build` on Windows. This command builds the mod for both loaders.
 

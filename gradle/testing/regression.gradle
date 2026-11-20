@@ -15,20 +15,15 @@ profileCatalog.loaders.each { loader ->
         }
     }
 }
-ext.regressionProfiles = profiles
 def packagedSelection = providers.gradleProperty('testPackaged').getOrElse('false')
 if (!(packagedSelection in ['true', 'false'])) throw new GradleException('testPackaged must be true or false')
 ext.regressionPackaged = packagedSelection == 'true'
-ext.regressionProductDirectory = regressionPackaged ? "packaged/${includeRenderCompat ? 'all' : 'none'}/" :
-    (includeRenderCompat ? '' : 'no-compat/')
+ext.regressionModeDirectory = regressionPackaged ? 'packaged/' : ''
 ext.regressionProfileId = providers.gradleProperty('testProfile').getOrElse('fabric-native-opengl')
 if (!profiles.containsKey(regressionProfileId)) {
     throw new GradleException("Unknown testProfile '${regressionProfileId}'. Choose: ${profiles.keySet().join(', ')}")
 }
 ext.regressionProfile = profiles[regressionProfileId]
-if (!includeRenderCompat && regressionProfile.renderer != 'native') {
-    throw new GradleException("Profile '${regressionProfileId}' requires -PrenderCompat=all")
-}
 
 def sceneCatalogFile = layout.projectDirectory.file('tests/src/client/resources/portalix-regression-scenes.json')
 def sceneCatalog = new groovy.json.JsonSlurper().parseText(providers.fileContents(sceneCatalogFile).asText.get())
@@ -52,25 +47,25 @@ if (!(regressionDiagnostics in ['compact', 'full'])) {
     throw new GradleException('testDiagnostics must be compact or full')
 }
 
-ext.regressionServerTestInstances = fileTree('tests/src/main/resources/data/portalix_regression/test_instance') {
+def testInstances = fileTree('tests/src/main/resources/data/portalix_regression/test_instance') {
     include '*.json'
 }
-def serverTests = regressionServerTestInstances.files.collect {
+def serverTests = testInstances.files.collect {
     it.name.substring(0, it.name.length() - '.json'.length())
 }.sort()
 if (serverTests.isEmpty()) throw new GradleException('No server GameTest instances are registered')
-ext.regressionServerTestSelection = providers.gradleProperty('serverTest').getOrElse('all')
-if (regressionServerTestSelection != 'all' && !serverTests.contains(regressionServerTestSelection)) {
-    throw new GradleException("Unknown serverTest '${regressionServerTestSelection}'. Choose all or: ${serverTests.join(', ')}")
+def serverSelection = providers.gradleProperty('serverTest').getOrElse('all')
+if (serverSelection != 'all' && !serverTests.contains(serverSelection)) {
+    throw new GradleException("Unknown serverTest '${serverSelection}'. Choose all or: ${serverTests.join(', ')}")
 }
 ext.regressionServerTestFilter = 'portalix_regression:' +
-    (regressionServerTestSelection == 'all' ? '*' : regressionServerTestSelection)
-ext.regressionExpectedServerTests = (regressionServerTestSelection == 'all' ? serverTests : [regressionServerTestSelection])
+    (serverSelection == 'all' ? '*' : serverSelection)
+ext.regressionExpectedServerTests = (serverSelection == 'all' ? serverTests : [serverSelection])
     .collect { 'portalix_regression:' + it }
 
 tasks.register('listTestProfiles') {
     group = 'verification'
-    description = 'Lists the 12 independently selectable client regression profiles.'
+    description = 'Lists the client regression profiles.'
     def entries = profiles.collect { id, profile ->
         "${id}${profile.supported ? '' : " (UNSUPPORTED: Iris ${profileCatalog.unsupportedIrisVersion} cannot enable shaders on Vulkan)"}"
     }
@@ -98,7 +93,7 @@ tasks.register('testServer') {
         profileName = regressionProfileId
         clientTestSelection = benchmark ? regressionBenchmarkSelection : regressionClientTestSelection
         diagnosticsMode = regressionDiagnostics
-        reportDirectory = layout.buildDirectory.dir("reports/${benchmark ? 'benchmarks' : 'regression'}/${regressionProductDirectory}${regressionProfileId}")
+        reportDirectory = layout.buildDirectory.dir("reports/${benchmark ? 'benchmarks' : 'regression'}/${regressionModeDirectory}${regressionProfileId}")
         sceneContract = layout.projectDirectory.file('tests/src/client/resources/portalix-regression-scenes.json')
         dependsOn ":${loader}:run${benchmark ? 'Benchmark' : 'Regression'}Client", ":${loader}:verify${benchmark ? 'Benchmark' : 'Regression'}Log"
     }

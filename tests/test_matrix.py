@@ -123,15 +123,10 @@ def stop_process(process):
 
 def run_matrix(repository, args, profiles):
     report_root = repository / "tests/build/reports/regression"
-    render_compat = getattr(args, "render_compat", "all")
-    packaged = getattr(args, "packaged", False)
-    if packaged:
-        report_root = report_root / "packaged" / render_compat
-    elif render_compat == "none":
-        report_root = report_root / "no-compat"
+    if args.packaged:
+        report_root = report_root / "packaged"
     run = new_run(profiles, report_root)
-    run.update(clientTest=args.client_test,
-               renderCompat=render_compat, packaged=packaged,
+    run.update(clientTest=args.client_test, packaged=args.packaged,
                expectedStatus="unsupported" if args.compatibility else "passed")
     write_run(run, report_root)
     verified_loaders = set()
@@ -149,7 +144,7 @@ def run_matrix(repository, args, profiles):
             wrapper = repository / ("gradlew.bat" if os.name == "nt" else "gradlew")
             command = [str(wrapper), task, f"-PtestProfile={profile}",
                        f"-PclientTest={args.client_test}", f"-PtestDiagnostics={args.diagnostics}",
-                       f"-PrenderCompat={render_compat}", f"-PtestPackaged={str(packaged).lower()}",
+                       f"-PtestPackaged={str(args.packaged).lower()}",
                        "--no-daemon", "--console=plain"]
             print(f"Running {profile}", flush=True)
             with (directory / "gradle.log").open("wb") as stdout, (directory / "gradle-error.log").open("wb") as stderr:
@@ -197,7 +192,6 @@ def main():
     parser.add_argument("--diagnostics", choices=("compact", "full"), default="compact")
     parser.add_argument("--compatibility", action="store_true")
     parser.add_argument("--packaged", action="store_true", help="Load and verify the built release JAR instead of mod class directories")
-    parser.add_argument("--render-compat", choices=("all", "none"), default="all")
     parser.add_argument("--list", action="store_true")
     parser.add_argument("--timeout-seconds", type=int, default=1800)
     args = parser.parse_args()
@@ -207,12 +201,6 @@ def main():
         profiles = select_profiles(REPOSITORY, args.profiles, args.compatibility)
     except ValueError as error:
         parser.error(str(error))
-    if args.render_compat == "none":
-        if args.compatibility:
-            parser.error("--compatibility requires --render-compat all")
-        if args.profiles and any("-native-" not in profile for profile in profiles):
-            parser.error("--render-compat none supports only native renderer profiles")
-        profiles = [profile for profile in profiles if "-native-" in profile]
     if args.list:
         print("\n".join(profiles))
         return 0
