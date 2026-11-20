@@ -2,13 +2,16 @@ package dev.portalix.client.mixin.gpu;
 
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
+import com.mojang.blaze3d.buffers.GpuBuffer;
+import com.mojang.blaze3d.buffers.GpuBufferSlice;
+import com.mojang.blaze3d.textures.GpuSampler;
+import com.mojang.blaze3d.textures.GpuTextureView;
 import com.mojang.blaze3d.vulkan.VulkanBindGroupLayout;
 import com.mojang.blaze3d.vulkan.VulkanRenderPass;
 import com.mojang.blaze3d.vulkan.VulkanRenderPipeline;
 import it.unimi.dsi.fastutil.ints.IntArrayList;
 import java.util.ArrayList;
 import java.util.BitSet;
-import java.util.HashMap;
 import java.util.List;
 import org.lwjgl.vulkan.VkCommandBuffer;
 import org.lwjgl.vulkan.VkWriteDescriptorSet;
@@ -37,32 +40,26 @@ abstract class VulkanDescriptorBindingsMixin {
     portalix$fullPush = true;
   }
 
-  // Track storage mutations so every setter uses the same descriptor invalidation path.
-  @WrapOperation(
-      method = "*",
-      at = @At(value = "INVOKE", target =
-          "Ljava/util/HashMap;put(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;"),
-      require = 3)
-  private Object portalix$bindingChanged(
-      HashMap<Object, Object> bindings, Object name, Object value, Operation<Object> original) {
-    Object previous = original.call(bindings, name, value);
+  @Inject(method = "bindTexture", at = @At("RETURN"), allow = 2)
+  private void portalix$textureChanged(
+      String name, GpuTextureView texture, GpuSampler sampler, CallbackInfo ci) {
     portalix$markBinding(name);
-    return previous;
   }
 
-  @WrapOperation(
-      method = "*",
-      at = @At(value = "INVOKE", target =
-          "Ljava/util/HashMap;remove(Ljava/lang/Object;)Ljava/lang/Object;"))
-  private Object portalix$bindingRemoved(
-      HashMap<Object, Object> bindings, Object name, Operation<Object> original) {
-    Object previous = original.call(bindings, name);
+  @Inject(method = "setUniform(Ljava/lang/String;Lcom/mojang/blaze3d/buffers/GpuBuffer;)V",
+      at = @At("RETURN"), allow = 1)
+  private void portalix$uniformChanged(String name, GpuBuffer value, CallbackInfo ci) {
     portalix$markBinding(name);
-    return previous;
+  }
+
+  @Inject(method = "setUniform(Ljava/lang/String;Lcom/mojang/blaze3d/buffers/GpuBufferSlice;)V",
+      at = @At("RETURN"), allow = 1)
+  private void portalix$uniformSliceChanged(String name, GpuBufferSlice value, CallbackInfo ci) {
+    portalix$markBinding(name);
   }
 
   @Unique
-  private void portalix$markBinding(Object name) {
+  private void portalix$markBinding(String name) {
     anyDescriptorDirty = true;
     if (portalix$fullPush || pipeline != portalix$boundPipeline) return;
     var entries = pipeline.layout().entries();
