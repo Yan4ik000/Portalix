@@ -29,10 +29,9 @@ import net.minecraft.world.phys.Vec3;
 final class GunVariantsScenario {
   private enum Step { PREPARE_VIEW, EMPTY_HAND, HOLSTER, EQUIP, CAPTURE, RESTORE_HOLSTER, RESTORE, RESTORED, REPORT, RESTORE_VIEW, DONE }
 
-  private static final List<PortalixVariant> VARIANTS = List.of(PortalixVariant.STANDARD,
-      PortalixVariant.BLUE, PortalixVariant.ORANGE, PortalixVariant.POTATO);
+  private static final List<PortalixVariant> VARIANTS = List.of(PortalixVariant.values());
   private static final List<String> GROUPS = List.of(
-      "visual/all four real gun variants synchronize, draw and retain a textured first-person body",
+      "visual/all gun variants synchronize, draw and retain a textured first-person body",
       "visual/shared gun shell pixels change from neutral to blue to orange without changing the world",
       "visual/potato variant adds a localized warm mesh and the original gun restores afterward");
   private static final Component CAPTION = Component.literal("Gun variants: stationary texture and geometry comparison");
@@ -139,11 +138,19 @@ final class GunVariantsScenario {
           images.put(current, frame);
           recordFrame(current.name().toLowerCase(java.util.Locale.ROOT), frame);
           proof.put(current.name().toLowerCase(java.util.Locale.ROOT) + "Foreground", foreground);
-          if (current == PortalixVariant.ORANGE) assertShellPalette();
-          if (current == PortalixVariant.POTATO) assertPotato();
+          if (!current.skin().isEmpty()) {
+            var standard = images.get(PortalixVariant.STANDARD);
+            paired(frame, standard);
+            var skin = frame.difference(standard, handRegion(frame), 24);
+            check(skin.changedPixels() >= 20, "The " + current + " skin matched the standard gun");
+            proof.put(current.name().toLowerCase(java.util.Locale.ROOT) + "SkinDifference", skin);
+          }
         })) {
-          if (++variant == VARIANTS.size()) next(Step.RESTORE_HOLSTER);
-          else next(Step.HOLSTER);
+          if (++variant == VARIANTS.size()) {
+            assertShellPalette();
+            assertPotato();
+            next(Step.RESTORE_HOLSTER);
+          } else next(Step.HOLSTER);
         }
       }
       case RESTORE_HOLSTER -> {

@@ -61,7 +61,6 @@ public final class GunMeshFeatureRenderer implements FeatureRenderer<GunMeshFeat
   private final List<List<Prepared>> groups = new ArrayList<>();
   private final List<Submit> pending = new ArrayList<>();
 
-
   public record Submit(
       Matrix4f pose,
       RenderType pass,
@@ -127,13 +126,15 @@ public final class GunMeshFeatureRenderer implements FeatureRenderer<GunMeshFeat
 
   @Override
   public void finishExecute(FeatureFrameContext context) {
-    for (Submit submit : pending) submit.lease.close();
-    pending.clear();
-    groups.clear();
+    clearFrame();
   }
 
   @Override
   public void close() {
+    clearFrame();
+  }
+
+  private void clearFrame() {
     for (Submit submit : pending) submit.lease.close();
     pending.clear();
     groups.clear();

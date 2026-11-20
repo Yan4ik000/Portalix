@@ -19,8 +19,7 @@ import net.neoforged.neoforge.common.NeoForge;
 public final class PortalixNeoForgeClient {
   public PortalixNeoForgeClient(IEventBus bus) {
     bus.addListener((ModelEvent.ModifyBakingResult event) ->
-        event.getBakingResult().itemStackModels().replaceAll(
-            (id, model) -> PortalixItemModel.MODELS.contains(id) ? new PortalixItemModel(model) : model));
+        event.getBakingResult().itemStackModels().replaceAll(PortalixItemModel::wrap));
     bus.addListener((RegisterClientPayloadHandlersEvent event) ->
         ClientNetworking.register(new NeoForgeClientNetworking(event)));
     PortalixClient.register();

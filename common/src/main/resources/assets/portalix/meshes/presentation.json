@@ -1,0 +1,102 @@
+{
+  "worldGripOffset": [0, -3.3, 1.5],
+  "presentation": {
+    "hand": [
+      {
+        "kind": "scale",
+        "values": [1.65, 1.65, 1],
+        "mirror": true
+      },
+      {
+        "kind": "translate",
+        "values": [0, -0.022, 0]
+      },
+      {
+        "kind": "scale",
+        "values": [0.025, 0.025, 0.025],
+        "mirror": false
+      },
+      {
+        "kind": "translate",
+        "values": [7, -7, -12]
+      },
+      {
+        "kind": "rotateX",
+        "values": [-1]
+      },
+      {
+        "kind": "rotateY",
+        "values": [-5]
+      },
+      {
+        "kind": "translate",
+        "values": [-7, 7, 12]
+      }
+    ],
+    "worldHand": [
+      {
+        "kind": "translate",
+        "values": [0.5, 0.5, 0.5]
+      },
+      {
+        "kind": "scale",
+        "values": [0.038, 0.038, 0.038],
+        "mirror": true
+      }
+    ],
+    "icon": [
+      {
+        "kind": "translate",
+        "values": [0.5, 0.48, 0.5]
+      },
+      {
+        "kind": "rotateY",
+        "values": [-55]
+      },
+      {
+        "kind": "rotateX",
+        "values": [25]
+      },
+      {
+        "kind": "scale",
+        "values": [0.037, 0.037, 0.037],
+        "mirror": false
+      },
+      {
+        "kind": "translate",
+        "values": [0, -2, 12]
+      }
+    ],
+    "ground": [
+      {
+        "kind": "translate",
+        "values": [0.5, 0.25, 0.5]
+      },
+      {
+        "kind": "scale",
+        "values": [0.025, 0.025, 0.025],
+        "mirror": false
+      },
+      {
+        "kind": "translate",
+        "values": [0, -2, 12]
+      }
+    ],
+    "item": [
+      {
+        "kind": "translate",
+        "values": [0.5, 0.5, 0.5]
+      },
+      {
+        "kind": "scale",
+        "values": [0.035, 0.035, 0.035],
+        "mirror": false
+      },
+      {
+        "kind": "translate",
+        "values": [0, -3, 8]
+      }
+    ]
+  },
+  "animationFps": 30.0
+}

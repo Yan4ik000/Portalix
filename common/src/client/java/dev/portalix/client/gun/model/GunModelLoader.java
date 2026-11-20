@@ -24,6 +24,8 @@ import org.joml.Vector3f;
 
 final class GunModelLoader {
   private static final int MESH_MAGIC = 0x50474d32;
+  private static final JsonObject PRESENTATION_METADATA =
+      ModAssetLoader.json("/assets/portalix/meshes/presentation.json");
 
   private GunModelLoader() {}
 
@@ -196,14 +198,17 @@ final class GunModelLoader {
     try {
       JsonObject metadata = ModAssetLoader.json("/assets/portalix/meshes/" + kind + ".json");
       List<String> missingKeys = new ArrayList<>();
-      for (String key :
-          List.of(
-              "version", "animationFps", "gripBone", "worldGripOffset", "presentation", "groups")) {
+      for (String key : List.of("version", "gripBone", "groups")) {
         if (!metadata.has(key) || metadata.get(key).isJsonNull()) missingKeys.add(key);
       }
-      if (metadata.has("presentation") && metadata.get("presentation").isJsonObject()) {
+      for (String key : List.of("animationFps", "worldGripOffset", "presentation")) {
+        if (!PRESENTATION_METADATA.has(key) || PRESENTATION_METADATA.get(key).isJsonNull())
+          missingKeys.add(key);
+      }
+      JsonObject transforms = PRESENTATION_METADATA.getAsJsonObject("presentation");
+      if (transforms != null) {
         for (GunPose pose : GunPose.values()) {
-          if (!metadata.getAsJsonObject("presentation").has(pose.key()))
+          if (!transforms.has(pose.key()))
             missingKeys.add("presentation." + pose.key());
         }
       }
@@ -215,20 +220,20 @@ final class GunModelLoader {
       }
       if (!missingKeys.isEmpty())
         throw new IOException("Missing mesh metadata: " + String.join(", ", missingKeys));
-      animationFps = metadata.get("animationFps").getAsFloat();
+      animationFps = PRESENTATION_METADATA.get("animationFps").getAsFloat();
       if (!Float.isFinite(animationFps) || animationFps <= 0)
         throw new IOException("Invalid animation frame rate");
       if (metadata.get("version").getAsInt() != 1) {
         throw new IOException("Unsupported mesh metadata");
       }
 
-      gripOffset = metadataVector(metadata, "worldGripOffset");
+      gripOffset = metadataVector(PRESENTATION_METADATA, "worldGripOffset");
       if (!gripOffset.isFinite()) {
         throw new IOException("Invalid mesh metadata vector worldGripOffset");
       }
 
       for (GunPose pose : GunPose.values()) {
-        JsonArray operations = metadata.getAsJsonObject("presentation").getAsJsonArray(pose.key());
+        JsonArray operations = transforms.getAsJsonArray(pose.key());
         presentation.put(pose, readPresentation(operations));
       }
 

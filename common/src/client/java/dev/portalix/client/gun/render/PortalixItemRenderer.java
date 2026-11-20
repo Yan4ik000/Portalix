@@ -65,6 +65,7 @@ public final class PortalixItemRenderer
     }
   }
 
+  @Override
   @SuppressWarnings("try")
   public void submit(
       Argument argument,
@@ -118,10 +119,12 @@ public final class PortalixItemRenderer
     }
   }
 
+  @Override
   public void getExtents(Consumer<Vector3fc> out) {
     GunModels.world().getExtents(out);
   }
 
+  @Override
   public Argument extractArgument(ItemStack stack) {
     return new Argument(ItemDisplayContext.NONE, -1, PortalixVariant.of(stack), stack.getItem());
   }

@@ -19,7 +19,6 @@ import org.joml.Vector3f;
 import org.joml.Vector3fc;
 
 public final class GunModel {
-  final List<GunModelAsset.Group> groups;
   private final Matrix4f[] idleMatrices;
   private final Matrix4f[] bind;
   private final Vector3f idleGrip = new Vector3f();
@@ -51,7 +50,7 @@ public final class GunModel {
 
   public GunModel(String kind) {
     GunModelAsset asset = GunModelLoader.load(kind);
-    this.groups = asset.groups();
+    var groups = asset.groups();
     this.attachments = asset.attachments();
     this.parents = asset.parents();
     this.inverseBind = asset.inverseBind();
@@ -66,13 +65,13 @@ public final class GunModel {
     this.animations = new GunAnimationSet(asset.clips(), asset.animationFps());
     this.gripOffset = asset.gripOffset();
     this.presentation = asset.presentation();
-    this.geometryRoot = geometryRoot();
+    this.geometryRoot = geometryRoot(groups);
     this.geometryPose = new float[parents.length * 7];
     this.referencePose = animations.pose("idle", 0.0F, false);
     this.skinMatrices(referencePose);
     this.referenceRootInverse =
         geometryRoot < 0 ? new Matrix4f() : new Matrix4f(globalScratch[geometryRoot]).invert();
-    this.renderer = new GunModelRenderer(this);
+    this.renderer = new GunModelRenderer(this, groups);
     Matrix4f[] matrices = this.skinMatrices(referencePose);
     this.idleMatrices = new Matrix4f[matrices.length];
     for (int i = 0; i < matrices.length; i++) this.idleMatrices[i] = new Matrix4f(matrices[i]);
@@ -81,7 +80,7 @@ public final class GunModel {
       idleSockets.put(socket, attachment(socket, matrices));
     Vector3f point = new Vector3f();
 
-    for (GunModelAsset.Group group : this.groups) {
+    for (GunModelAsset.Group group : groups) {
       float[] vertices = new float[group.vertices().length / 14 * 8];
       GunVertexSkinning.skin(group.vertices(), matrices, vertices);
 
@@ -127,7 +126,7 @@ public final class GunModel {
     pose.popPose();
   }
 
-  private int geometryRoot() {
+  private int geometryRoot(List<GunModelAsset.Group> groups) {
     int root = -1;
     for (GunModelAsset.Group group : groups) {
       float[] vertices = group.vertices();

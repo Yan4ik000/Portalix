@@ -102,14 +102,12 @@ public final class ModResourceReload extends SimplePreparableReloadListener<Void
     PortalSceneManager.clear();
     checkShaders(resources);
     load();
-    Minecraft client = Minecraft.getInstance();
-    for (var id :
-        client
-            .getResourceManager()
-            .listResources(
-                "textures",
-                id -> id.getNamespace().equals("portalix") && id.getPath().endsWith(".png"))
-            .keySet()) client.getTextureManager().getTexture(id);
+    var textures = Minecraft.getInstance().getTextureManager();
+    var portalixTextures = resources.listResources("textures", id ->
+        id.getNamespace().equals(PortalixMod.MOD_ID)
+            && !id.getPath().startsWith("textures/model/")
+            && id.getPath().endsWith(".png"));
+    for (var id : portalixTextures.keySet()) textures.getTexture(id);
     GunModels.view().warmup();
     GunModels.world().warmup();
   }

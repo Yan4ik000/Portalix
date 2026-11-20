@@ -17,14 +17,18 @@ import net.minecraft.world.item.ItemDisplayContext;
 import net.minecraft.world.item.ItemStack;
 
 public final class PortalixItemModel implements ItemModel {
-  public static final Set<Identifier> MODELS = Arrays.stream(PortalixVariant.values())
+  private static final Set<Identifier> MODELS = Arrays.stream(PortalixVariant.values())
       .map(PortalixVariant::itemId)
       .collect(Collectors.toUnmodifiableSet());
 
   private final ItemModel original;
 
-  public PortalixItemModel(ItemModel original) {
+  private PortalixItemModel(ItemModel original) {
     this.original = original;
+  }
+
+  public static ItemModel wrap(Identifier id, ItemModel model) {
+    return MODELS.contains(id) ? new PortalixItemModel(model) : model;
   }
 
   @Override
