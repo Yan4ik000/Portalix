@@ -7,6 +7,7 @@ import dev.portalix.item.PortalixIdentity;
 import dev.portalix.item.PortalixVariant;
 import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.List;
 import java.util.UUID;
 import net.minecraft.world.item.DyeColor;
 import net.minecraft.world.item.Item;
@@ -43,7 +44,7 @@ final class ContentRegression {
     craftVariant(world, PortalixVariant.NEON, DyeColor.CYAN, DyeColor.PINK);
     craftVariant(world, PortalixVariant.MONOCHROME, DyeColor.BLACK, DyeColor.WHITE);
     craft(world, ModItems.POTATOS.get(), ModItems.AI_MODULE.get(), Items.POTATO);
-    craft(world, ModItems.POTATO_PORTALIX.get(), gun, ModItems.POTATOS.get());
+    upgrade(world, ModItems.POTATO_PORTALIX.get(), ModItems.POTATOS.get());
 
     var identities = new HashSet<UUID>();
     for (PortalixVariant variant : PortalixVariant.values()) {
@@ -59,18 +60,33 @@ final class ContentRegression {
 
   private static void craftVariant(RegressionWorld world, PortalixVariant variant,
       DyeColor first, DyeColor second) {
-    craft(world, ModItems.gun(variant), ModItems.PORTALIX.get(), ModItems.CONTROL_BOARD.get(),
+    upgrade(world, ModItems.gun(variant), ModItems.CONTROL_BOARD.get(),
         Items.DYE.pick(first), Items.DYE.pick(second));
+  }
+
+  private static void upgrade(RegressionWorld world, Item result, Item... materials) {
+    var gun = new ItemStack(ModItems.gun(PortalixVariant.STANDARD));
+    UUID identity = PortalixIdentity.ensure(gun);
+    var stacks = new ArrayList<ItemStack>();
+    stacks.add(gun);
+    for (Item material : materials) stacks.add(new ItemStack(material));
+    var output = craft(world, result, stacks);
+    check(identity.equals(PortalixIdentity.get(output)), "Upgrading a Portalix changed its identity");
   }
 
   private static void craft(RegressionWorld world, Item result, Item... ingredients) {
     var stacks = new ArrayList<ItemStack>();
     for (Item item : ingredients) stacks.add(item == Items.AIR ? ItemStack.EMPTY : new ItemStack(item));
+    craft(world, result, stacks);
+  }
+
+  private static ItemStack craft(RegressionWorld world, Item result, List<ItemStack> stacks) {
     while (stacks.size() < 9) stacks.add(ItemStack.EMPTY);
     var input = CraftingInput.of(3, 3, stacks);
     var recipe = world.level.getServer().getRecipeManager().getRecipeFor(RecipeType.CRAFTING, input, world.level);
     check(recipe.isPresent(), "No crafting recipe accepts the ingredients for " + result);
     var output = recipe.orElseThrow().value().assemble(input);
     check(output.is(result) && output.getCount() == 1, "Crafting produced the wrong item for " + result);
+    return output;
   }
 }

@@ -1,5 +1,5 @@
 {
-  "type": "minecraft:crafting_shapeless",
+  "type": "portalix:gun_upgrade",
   "category": "equipment",
   "ingredients": [
     "portalix:portalix",

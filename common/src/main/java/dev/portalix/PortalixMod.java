@@ -1,5 +1,6 @@
 package dev.portalix;
 
+import dev.portalix.item.GunUpgradeRecipe;
 import dev.portalix.item.ModItems;
 import dev.portalix.item.PortalixIdentity;
 import dev.portalix.item.PortalixItem;
@@ -27,6 +28,7 @@ public final class PortalixMod {
   public static void initialize() {
     PortalixIdentity.initialize();
     ModItems.initialize();
+    GunUpgradeRecipe.initialize();
     GunSounds.register();
     PortalChunkTracker.initialize();
   }
