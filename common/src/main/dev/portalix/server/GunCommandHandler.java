@@ -5,6 +5,7 @@ import dev.portalix.gun.GunPermissions;
 import dev.portalix.item.PortalixIdentity;
 import dev.portalix.network.gun.GunCommand;
 import dev.portalix.network.gun.GunEventKind;
+import dev.portalix.portal.traversal.EntityPortalState;
 import dev.portalix.server.carry.CarryController;
 import dev.portalix.server.portal.GunPortalRegistry;
 import java.util.HashMap;
@@ -36,6 +37,9 @@ final class GunCommandHandler {
   }
 
   void receiveCommand(ServerPlayer player, GunCommand command) {
+    if (command == GunCommand.RESET
+        && EntityPortalState.of(player).crossedWithin(GunFireTiming.RESET_CROSSING_COOLDOWN_NANOS))
+      return;
     carryController.checkEquipment(player);
     long tick = player.level().getServer().getTickCount();
     UUID owner = player.getUUID();

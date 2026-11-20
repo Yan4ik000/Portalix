@@ -9,6 +9,7 @@ import dev.portalix.gun.GunFireTiming;
 import dev.portalix.gun.GunPermissions;
 import dev.portalix.network.gun.GunCommand;
 import dev.portalix.network.gun.GunCommandPayload;
+import dev.portalix.portal.traversal.EntityPortalState;
 import net.minecraft.client.KeyMapping.Category;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
@@ -87,6 +88,10 @@ public final class GunInputHandler {
     var animation = PortalixClient.localAnimation();
     if (animation.isHolstering() || animation.isDrawing()) return;
 
+    if (command == GunCommand.RESET
+        && EntityPortalState.of(client.player).crossedWithin(
+            GunFireTiming.RESET_CROSSING_COOLDOWN_NANOS))
+      return;
     int tick = client.player.tickCount;
     int nextAllowedTick = command == GunCommand.TOGGLE_GRAB ? nextGrabTick : nextActionTick;
     if (command != GunCommand.RELEASE && command != GunCommand.RESET && tick < nextAllowedTick)

@@ -29,6 +29,7 @@ public final class EntityPortalState {
   AABB collisionQuery;
   long sequence;
   private PortalEntityMovement.Crossing lastCrossing;
+  private long lastCrossingNanos;
   PortalEntityMovement.MoveResult lastMove;
   private final PortalCameraCorrections cameraHistory = new PortalCameraCorrections();
   private double cameraEyeHeightShift;
@@ -186,6 +187,10 @@ public final class EntityPortalState {
     return lastCrossing;
   }
 
+  public boolean crossedWithin(long nanos) {
+    return lastCrossing != null && System.nanoTime() - lastCrossingNanos < nanos;
+  }
+
   public PortalEntityMovement.MoveResult lastMove() {
     return lastMove;
   }
@@ -199,6 +204,10 @@ public final class EntityPortalState {
   }
 
   void crossed(PortalEntityMovement.Crossing crossing) {
+    if (lastCrossing == null || lastCrossing.eventId() != crossing.eventId()
+        || !lastCrossing.link().equals(crossing.link())) {
+      lastCrossingNanos = System.nanoTime();
+    }
     sequence = Math.max(sequence, crossing.eventId());
     lastCrossing = crossing;
   }
