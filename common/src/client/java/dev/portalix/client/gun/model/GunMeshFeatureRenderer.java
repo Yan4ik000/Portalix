@@ -10,6 +10,7 @@ import com.mojang.blaze3d.vertex.MeshData;
 import com.mojang.blaze3d.vertex.VertexFormat;
 import dev.portalix.PortalixMod;
 import dev.portalix.client.compat.iris.IrisDrawContext;
+import dev.portalix.client.compat.iris.IrisEffectTarget;
 import dev.portalix.client.compat.iris.IrisShaders;
 import dev.portalix.client.compat.minecraft.PipelineVariant;
 import dev.portalix.client.compat.minecraft.GunVertexAbi;
@@ -68,13 +69,16 @@ public final class GunMeshFeatureRenderer implements FeatureRenderer<GunMeshFeat
       Supplier<Vertices> vertices,
       int light,
       GunModel.PoseLease lease,
-      IrisDrawContext shaders)
+      IrisDrawContext shaders,
+      SurfaceLight surfaceLight)
       implements SubmitNode {
     @Override
     public FeatureRendererType<Submit> featureType() {
       return TYPE;
     }
   }
+
+  record SurfaceLight(Vector3f origin, int color, RenderType pass) {}
 
   @Override
   public void prepareGroup(FeatureFrameContext context, List<Submit> submits, boolean outline) {
@@ -83,6 +87,9 @@ public final class GunMeshFeatureRenderer implements FeatureRenderer<GunMeshFeat
     List<Prepared> prepared = new ArrayList<>(submits.size());
     for (Submit submit : submits) {
       PreparedRenderType base = submit.pass.prepare();
+      var modelView = RenderSystem.getModelViewMatrixCopy();
+      if (shaders) modelView.mul(submit.pose);
+      var textureMatrix = shaders ? new Matrix4f() : submit.pose;
       prepared.add(
           new Prepared(
               new PreparedRenderType(
@@ -90,20 +97,30 @@ public final class GunMeshFeatureRenderer implements FeatureRenderer<GunMeshFeat
                   base.outputTarget(),
                   RenderSystem.getDynamicUniforms()
                       .writeTransform(
-                          shaders
-                              ? RenderSystem.getModelViewMatrixCopy().mul(submit.pose)
-                              : RenderSystem.getModelViewMatrixCopy(),
+                          modelView,
                           new Vector4f(1),
                           shaders
                               ? new Vector3f()
                               : new Vector3f(submit.light & 65535, submit.light >>> 16, 0),
-                          shaders ? new Matrix4f() : submit.pose),
+                          textureMatrix),
                   base.scissorState(),
                   base.textures()),
               shaders ? submit.pass.format() : GunVertexAbi.FORMAT,
-              shaders ? submit.light : 0));
+              shaders ? submit.light : 0,
+              prepareSurfaceLight(submit.surfaceLight, modelView, textureMatrix)));
     }
     groups.add(prepared);
+  }
+
+  private static PreparedRenderType prepareSurfaceLight(
+      SurfaceLight light, Matrix4f modelView, Matrix4f textureMatrix) {
+    if (light == null || IrisShaders.shadowPass()) return null;
+    PreparedRenderType pass = light.pass.prepare();
+    int rgb = light.color;
+    var tint = new Vector4f((rgb >> 16 & 255) / 255f, (rgb >> 8 & 255) / 255f, (rgb & 255) / 255f, 1);
+    return new PreparedRenderType(pass.pipeline(), pass.outputTarget(),
+        RenderSystem.getDynamicUniforms().writeTransform(modelView, tint, light.origin, textureMatrix),
+        pass.scissorState(), pass.textures());
   }
 
   @Override
@@ -115,14 +132,33 @@ public final class GunMeshFeatureRenderer implements FeatureRenderer<GunMeshFeat
       Submit submit = submits.get(i);
       try (var ignored = submit.shaders == null ? null : submit.shaders.begin()) {
         var renderType = prepared.get(i);
-        submit.geometry.draw(submit.vertices.get(), renderType);
+        var vertices = submit.vertices.get();
+        submit.geometry.draw(vertices, renderType);
+        if (renderType.surfaceLight != null) {
+          drawSurfaceLight(submit.geometry, vertices, renderType.surfaceLight);
+        }
       } finally {
         submit.lease.close();
       }
     }
   }
 
-  private record Prepared(PreparedRenderType renderType, VertexFormat format, int light) {}
+  @SuppressWarnings("try")
+  private static void drawSurfaceLight(
+      Geometry geometry, Vertices vertices, PreparedRenderType surfaceLight) {
+    if (!IrisEffectTarget.supportsColorEffects()) return;
+    try (var ignored = IrisEffectTarget.begin()) {
+      var color = RenderSystem.outputColorTextureOverride;
+      if (color == null) color = surfaceLight.outputTarget().getRenderTarget().getColorTextureView();
+      var pipeline = IrisEffectTarget.pipeline(surfaceLight.pipeline(), color.texture().getFormat());
+      var pass = new PreparedRenderType(pipeline, surfaceLight.outputTarget(),
+          surfaceLight.dynamicTransforms(), surfaceLight.scissorState(), surfaceLight.textures());
+      geometry.draw(vertices, new Prepared(pass, GunVertexAbi.FORMAT, 0, null));
+    }
+  }
+
+  private record Prepared(
+      PreparedRenderType renderType, VertexFormat format, int light, PreparedRenderType surfaceLight) {}
 
   @Override
   public void finishExecute(FeatureFrameContext context) {

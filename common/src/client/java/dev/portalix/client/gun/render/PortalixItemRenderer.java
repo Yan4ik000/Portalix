@@ -35,11 +35,11 @@ public final class PortalixItemRenderer
     try (var ignored = IrisDrawContext.forItem(stack.getItem())) {
       PortalixVariant variant = PortalixVariant.of(stack);
       var gun = PortalixIdentity.get(stack);
-      PortalixClient.localAnimation()
-          .synchronizePortals(
-              PortalixClient.portals().activeMask(gun),
-              PortalixClient.portals().secondaryActive(gun));
-      float[] sample = PortalixClient.localAnimation().sample(partial);
+      var animation = PortalixClient.localAnimation();
+      animation.synchronizePortals(
+          PortalixClient.portals().activeMask(gun),
+          PortalixClient.portals().secondaryActive(gun));
+      float[] sample = animation.sample(partial);
       Matrix4f[] matrices = GunModels.view().skinMatrices(sample);
       pose.pushPose();
       GunModels.view().applyPresentation(GunPose.HAND, pose, left);
@@ -51,15 +51,16 @@ public final class PortalixItemRenderer
             Math.sin(time * 0.4) * speed * 0.07, Math.sin(time * 0.8) * speed * 0.045, 0.0);
       }
 
-      GunModels.view().submitAnimated(pose, collector, sample, matrices, light, variant);
+      int indicator = animation.hasEnergy() ? variant.particleGlowColor(animation.orange()) : 0;
+      GunModels.view().submitAnimated(pose, collector, sample, matrices, light, variant, indicator);
       GunGlowRenderer.submit(
           GunModels.view(),
           matrices,
           pose,
           collector,
           variant,
-          PortalixClient.localAnimation().orange(),
-          PortalixClient.localAnimation().hasEnergy());
+          animation.orange(),
+          animation.hasEnergy());
       CarryParticleRenderer.hand(GunModels.view(), matrices, pose, collector, partial);
       pose.popPose();
     }
@@ -95,14 +96,17 @@ public final class PortalixItemRenderer
                 matrices,
                 light,
                 context == ItemDisplayContext.GUI,
-                argument.variant());
+                argument.variant(),
+                0);
       } else {
         GunAnimator animation = PortalixClient.animation(argument.playerId());
         Matrix4f[] matrices = GunModels.world().idleMatrices();
         Vector3f grip = GunModels.world().grip(matrices);
         GunModels.world().applyPresentation(GunPose.WORLD_HAND, pose, context.leftHand());
         GunModels.world().alignGrip(pose, grip);
-        GunModels.world().submit(pose, collector, matrices, light, false, argument.variant());
+        int indicator =
+            animation.hasEnergy() ? argument.variant().particleGlowColor(animation.orange()) : 0;
+        GunModels.world().submit(pose, collector, matrices, light, false, argument.variant(), indicator);
         GunGlowRenderer.submit(
             GunModels.world(),
             matrices,

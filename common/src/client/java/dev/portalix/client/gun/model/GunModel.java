@@ -109,9 +109,10 @@ public final class GunModel {
       float[] sampled,
       Matrix4f[] skin,
       int light,
-      PortalixVariant variant) {
+      PortalixVariant variant,
+      int indicator) {
     if (geometryRoot < 0) {
-      submit(pose, collector, skin, light, false, variant);
+      submit(pose, collector, skin, light, false, variant, indicator);
       return;
     }
     skin[geometryRoot].mul(bind[geometryRoot], geometryMotion).mul(referenceRootInverse);
@@ -122,7 +123,7 @@ public final class GunModel {
     }
     pose.pushPose();
     pose.mulPose(geometryMotion);
-    submit(pose, collector, skinMatrices(geometryPose, true), light, false, variant);
+    submit(pose, collector, skinMatrices(geometryPose, true), light, false, variant, indicator);
     pose.popPose();
   }
 
@@ -291,6 +292,13 @@ public final class GunModel {
     pose.mulPose(matrices[left ? 1 : 0]);
   }
 
+  Vector3f indicatorOrigin(int bone) {
+    var attachment = attachments.get(GunAttachment.BODY_LIGHT);
+    return attachment.bone() == bone
+        ? SOURCE_TO_MODEL.transformPosition(attachment.bindPosition(), new Vector3f())
+        : null;
+  }
+
   public void alignGrip(PoseStack pose, Vector3f grip) {
     Vector3f offset = this.gripOffset;
     pose.translate(-grip.x + offset.x, -grip.y + offset.y, -grip.z + offset.z);
@@ -312,7 +320,8 @@ public final class GunModel {
       Matrix4f[] matrices,
       int light,
       boolean icon,
-      PortalixVariant variant) {
-    this.renderer.submit(pose, collector, matrices, light, icon, variant);
+      PortalixVariant variant,
+      int indicator) {
+    this.renderer.submit(pose, collector, matrices, light, icon, variant, indicator);
   }
 }

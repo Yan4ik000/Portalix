@@ -62,7 +62,8 @@ final class GunModelRenderer {
       Matrix4f[] matrices,
       int light,
       boolean icon,
-      PortalixVariant variant) {
+      PortalixVariant variant,
+      int indicator) {
     var shaders = IrisDrawContext.capture();
     for (PreparedGroup prepared : this.groups) {
       if (!prepared.visible(variant)) continue;
@@ -74,6 +75,14 @@ final class GunModelRenderer {
       boolean mirrored = pose.last().pose().determinant() < 0.0F;
       for (int passIndex = 0; passIndex < prepared.passCount(); passIndex++) {
         RenderType pass = prepared.pass(passIndex, icon, world, variant);
+        GunMeshFeatureRenderer.SurfaceLight surfaceLight = null;
+        if (indicator != 0 && passIndex == 0 && !icon && prepared.skinMaterial != null) {
+          var origin = model.indicatorOrigin(prepared.bone);
+          if (origin != null) {
+            surfaceLight = new GunMeshFeatureRenderer.SurfaceLight(
+                origin, indicator, GunMaterialTypes.indicator(prepared.textureForPass(0, variant)));
+          }
+        }
         GunModel.PoseLease lease =
             prepared.bone >= 0 ? GunModel.PoseLease.IMMUTABLE : model.retain(matrices);
         try {
@@ -90,7 +99,8 @@ final class GunModelRenderer {
                       : () -> this.skin(prepared.skinnedGroup, matrices),
                   light,
                   lease,
-                  shaders));
+                  shaders,
+                  surfaceLight));
         } catch (RuntimeException | Error failure) {
           lease.close();
           throw failure;

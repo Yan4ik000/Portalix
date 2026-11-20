@@ -1,11 +1,20 @@
 package dev.portalix.client.gun.model;
 
+import com.mojang.blaze3d.GpuFormat;
+import com.mojang.blaze3d.PrimitiveTopology;
+import com.mojang.blaze3d.pipeline.BlendFunction;
+import com.mojang.blaze3d.pipeline.ColorTargetState;
+import com.mojang.blaze3d.pipeline.DepthStencilState;
 import com.mojang.blaze3d.pipeline.RenderPipeline;
 import com.mojang.blaze3d.pipeline.RenderPipeline.Snippet;
+import com.mojang.blaze3d.platform.BlendFactor;
+import com.mojang.blaze3d.platform.CompareOp;
 import dev.portalix.PortalixMod;
+import dev.portalix.client.compat.minecraft.GunVertexAbi;
 import dev.portalix.client.render.ParticleRenderTypes;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Optional;
 import net.minecraft.client.renderer.BindGroupLayouts;
 import net.minecraft.client.renderer.RenderPipelines;
 import net.minecraft.client.renderer.rendertype.RenderSetup;
@@ -33,6 +42,23 @@ public final class GunMaterialTypes {
   private static final Map<Identifier, RenderType> worlds = new HashMap<>();
   private static final Map<Identifier, RenderType> emissiveTypes = new HashMap<>();
   private static final Map<Identifier, RenderType> additiveTypes = new HashMap<>();
+  private static final RenderPipeline INDICATOR =
+      RenderPipelines.register(
+          RenderPipeline.builder()
+              .withLocation(PortalixMod.id("pipeline/gun_indicator"))
+              .withVertexShader(PortalixMod.id("core/gun_indicator"))
+              .withFragmentShader(PortalixMod.id("core/gun_indicator"))
+              .withBindGroupLayout(BindGroupLayouts.MATRICES_PROJECTION)
+              .withBindGroupLayout(BindGroupLayouts.SAMPLER0)
+              .withVertexBinding(0, GunVertexAbi.FORMAT)
+              .withPrimitiveTopology(PrimitiveTopology.QUADS)
+              .withColorTargetState(new ColorTargetState(
+                  Optional.of(new BlendFunction(BlendFactor.SRC_ALPHA, BlendFactor.ONE)),
+                  GpuFormat.RGBA8_UNORM, ColorTargetState.WRITE_COLOR))
+              .withDepthStencilState(new DepthStencilState(CompareOp.GREATER_THAN_OR_EQUAL, false))
+              .withCull(false)
+              .build());
+  private static final Map<Identifier, RenderType> indicators = new HashMap<>();
 
   private GunMaterialTypes() {}
 
@@ -76,6 +102,12 @@ public final class GunMaterialTypes {
         });
   }
 
+  static RenderType indicator(Identifier texture) {
+    return indicators.computeIfAbsent(texture, t -> RenderType.create(
+        "portalix_gun_indicator",
+        RenderSetup.builder(INDICATOR).withTexture("Sampler0", t).createRenderSetup()));
+  }
+
   private static RenderSetup.RenderSetupBuilder entitySetup(
       RenderPipeline pipeline, Identifier texture) {
     // Iris shadow programs consume the complete entity sampler ABI, including emissive materials.
@@ -90,5 +122,6 @@ public final class GunMaterialTypes {
     worlds.clear();
     emissiveTypes.clear();
     additiveTypes.clear();
+    indicators.clear();
   }
 }
