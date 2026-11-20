@@ -4,32 +4,58 @@ import dev.portalix.mixin.world.tracking.ChunkMapAccessor;
 import dev.portalix.mixin.world.tracking.LevelEntityGetterAccessor;
 import dev.portalix.mixin.world.tracking.ServerLevelEntityGetterAccessor;
 import dev.portalix.portal.query.PlayerPortalVisibility;
+import it.unimi.dsi.fastutil.ints.Int2ObjectMap;
 import java.util.List;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.projectile.FishingHook;
 import net.minecraft.world.level.chunk.LevelChunk;
+import net.minecraft.world.level.entity.EntitySectionStorage;
 
 public final class PortalEntityTracking {
   private PortalEntityTracking() {}
+
+  public static void refreshObserver(ServerPlayer observer) {
+    var map = (ChunkMapAccessor) observer.level().getChunkSource().chunkMap;
+    for (var tracker : map.portalix$entityTrackers().values()) {
+      ((Tracker) tracker).updatePlayer(observer);
+    }
+  }
 
   public static void refreshDeliveredColumns(ServerPlayer observer, List<LevelChunk> delivered) {
     var visible = PlayerPortalVisibility.of(observer).chunks();
     if (visible.isEmpty() || delivered.isEmpty()) return;
     var level = observer.level();
-    var entities = ((ServerLevelEntityGetterAccessor) level).portalix$getEntities();
-    var sections = ((LevelEntityGetterAccessor) entities).portalix$sections();
+    var sections = sections(level);
     var trackers = ((ChunkMapAccessor) level.getChunkSource().chunkMap).portalix$entityTrackers();
     for (var chunk : delivered) {
       long column = chunk.getPos().pack();
-      if (chunk.getLevel() != level || !visible.contains(column)) continue;
-      sections.getExistingSectionsInChunk(column).forEach(section ->
-          section.getEntities().forEach(entity -> {
-            var tracker = (Tracker) trackers.get(entity.getId());
-            if (tracker != null) tracker.updatePlayer(observer);
-          }));
+      if (chunk.getLevel() == level && visible.contains(column))
+        refreshColumn(observer, column, sections, trackers);
     }
+  }
+
+  public static void refreshForgottenColumns(ServerPlayer observer, long[] forgotten) {
+    if (forgotten.length == 0) return;
+    var level = observer.level();
+    var sections = sections(level);
+    var trackers = ((ChunkMapAccessor) level.getChunkSource().chunkMap).portalix$entityTrackers();
+    for (long column : forgotten) refreshColumn(observer, column, sections, trackers);
+  }
+
+  private static EntitySectionStorage<?> sections(ServerLevel level) {
+    return ((LevelEntityGetterAccessor) ((ServerLevelEntityGetterAccessor) level).portalix$getEntities())
+        .portalix$sections();
+  }
+
+  private static void refreshColumn(ServerPlayer observer, long column, EntitySectionStorage<?> sections,
+      Int2ObjectMap<?> trackers) {
+    sections.getExistingSectionsInChunk(column).forEach(section ->
+        section.getEntities().forEach(entity -> {
+          var tracker = (Tracker) trackers.get(entity.getId());
+          if (tracker != null) tracker.updatePlayer(observer);
+        }));
   }
 
   public static boolean ownerAvailable(Entity entity, ServerPlayer observer) {

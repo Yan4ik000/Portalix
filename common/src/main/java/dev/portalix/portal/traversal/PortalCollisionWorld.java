@@ -17,7 +17,7 @@ import net.minecraft.world.phys.Vec3;
 
 public final class PortalCollisionWorld {
   private static final List<Vec3> WORLD_AXES =
-      List.of(new Vec3(0, 1, 0), new Vec3(1, 0, 0), new Vec3(0, 0, 1));
+      List.of(Vec3.Y_AXIS, Vec3.X_AXIS, Vec3.Z_AXIS);
   private final List<ConvexPolyhedron> obstacles;
   private final List<ConvexPolyhedron> floorMaterial;
   private final PortalEndpoint floorOpening;
@@ -36,12 +36,10 @@ public final class PortalCollisionWorld {
 
   public static PortalCollisionWorld query(Entity entity, PortalLink link, AABB query) {
     var opening = PortalTopology.collisionOpening(entity.level(), link.entrance().endpoint());
-    var local = WorldCollisionShapes.boxes(entity, query);
+    var local = WorldCollisionShapes.solidBoxes(entity, query);
+    var localBorder = WorldCollisionShapes.borderBoxes(entity.level().getWorldBorder(), query);
     var remote = WorldCollisionShapes.boxes(entity, link.transform().bounds(query));
-    return create(
-        link,
-        local,
-        remote, opening.boundary(), opening.planes());
+    return create(link, local, remote, localBorder, opening.boundary(), opening.planes());
   }
 
   public static PortalGroundSupport queryGroundSupport(
@@ -68,11 +66,16 @@ public final class PortalCollisionWorld {
 
   public static PortalCollisionWorld material(
       PortalLink link, List<AABB> local, List<AABB> remote) {
+    return material(link, local, remote, List.of());
+  }
+
+  public static PortalCollisionWorld material(
+      PortalLink link, List<AABB> local, List<AABB> remote, List<AABB> localBorder) {
     var entrance = link.entrance().endpoint();
     var planes = !remote.isEmpty() || entrance.normal().y != 1 && !local.isEmpty()
         ? PortalCollisionOpening.planes(entrance)
         : List.<ConvexPolyhedron.Plane>of();
-    return create(link, local, remote, List.of(), planes);
+    return create(link, local, remote, localBorder, List.of(), planes);
   }
 
   public static PortalCollisionWorld solid(List<AABB> boxes) {
@@ -81,12 +84,14 @@ public final class PortalCollisionWorld {
   }
 
   private static PortalCollisionWorld create(
-      PortalLink link, List<AABB> local, List<AABB> remote, List<ConvexPolyhedron> boundary,
+      PortalLink link, List<AABB> local, List<AABB> remote, List<AABB> localBorder,
+      List<ConvexPolyhedron> boundary,
       List<ConvexPolyhedron.Plane> openingPlanes) {
     var entrance = link.entrance().endpoint();
     boolean floor = entrance.normal().y == 1;
     var obstacles = new ArrayList<ConvexPolyhedron>();
     var floorMaterial = new ArrayList<ConvexPolyhedron>();
+    for (var box : localBorder) obstacles.add(ConvexPolyhedron.box(box));
     if (!floor) obstacles.addAll(boundary);
     for (AABB box : local) {
       if (floor) {
@@ -206,21 +211,10 @@ public final class PortalCollisionWorld {
       for (var box : hulls) {
         var moved = box.move(resolved);
         var hull = ConvexPolyhedron.box(moved);
-        for (var obstacle : obstacles) {
-          var hit = hull.sweep(segment, obstacle);
-          if (hit.isPresent()
-              && (!hit.get().startedInside() || segment.dot(hit.get().normal()) < 0))
-            fraction = Math.min(fraction, hit.get().fraction());
-        }
+        fraction = clipFraction(hull, segment, obstacles, fraction);
         if (floorOpening != null
-            && !PortalAperture.containsPassage(floorOpening, moved.getCenter())) {
-          for (var obstacle : floorMaterial) {
-            var hit = hull.sweep(segment, obstacle);
-            if (hit.isPresent()
-                && (!hit.get().startedInside() || segment.dot(hit.get().normal()) < 0))
-              fraction = Math.min(fraction, hit.get().fraction());
-          }
-        }
+            && !PortalAperture.containsPassage(floorOpening, moved.getCenter()))
+          fraction = clipFraction(hull, segment, floorMaterial, fraction);
       }
       Vec3 actual = segment.scale(fraction);
       if (portal != null) {
@@ -247,15 +241,26 @@ public final class PortalCollisionWorld {
     return new Resolved(List.copyOf(points), movement.subtract(clipped), null);
   }
 
+  private static double clipFraction(
+      ConvexPolyhedron hull, Vec3 movement, List<ConvexPolyhedron> obstacles, double limit) {
+    for (var obstacle : obstacles) {
+      var hit = blockingHit(hull, movement, obstacle);
+      if (hit != null) limit = Math.min(limit, hit.fraction());
+    }
+    return limit;
+  }
+
+  private static ConvexPolyhedron.Hit blockingHit(
+      ConvexPolyhedron hull, Vec3 movement, ConvexPolyhedron obstacle) {
+    var hit = hull.sweep(movement, obstacle).orElse(null);
+    return hit != null && (!hit.startedInside() || movement.dot(hit.normal()) < 0) ? hit : null;
+  }
+
   private boolean clearSweep(List<AABB> hulls, Vec3 movement) {
     for (var box : hulls) {
       var hull = ConvexPolyhedron.box(box);
-      for (var obstacle : obstacles) {
-        var hit = hull.sweep(movement, obstacle);
-        if (hit.isPresent()
-            && (!hit.orElseThrow().startedInside() || movement.dot(hit.orElseThrow().normal()) < 0))
-          return false;
-      }
+      for (var obstacle : obstacles)
+        if (blockingHit(hull, movement, obstacle) != null) return false;
     }
     return true;
   }

@@ -16,9 +16,4 @@ abstract class PlayerPortalDataMixin implements PortalPassagePose.Access {
   public void portalix$poseScale(float scale) {
     NeoForgePortalData.poseScale((Player) (Object) this, scale);
   }
-
-  @Override
-  public boolean portalix$poseField(int id) {
-    return false;
-  }
 }

@@ -8,21 +8,16 @@ import dev.portalix.client.gun.render.GunRenderEvents;
 import dev.portalix.client.platform.ClientPlatform;
 import dev.portalix.client.portal.render.PortalSurfaceRenderer;
 import dev.portalix.client.render.LinearParticleRenderer;
-import java.util.function.Supplier;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.renderer.OrderedSubmitNodeCollector;
 import net.minecraft.client.renderer.feature.submit.SubmitNode;
-import net.minecraft.client.resources.model.geometry.QuadCollection;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
 import net.minecraft.resources.Identifier;
 import net.minecraft.server.packs.resources.PreparableReloadListener;
-import net.minecraft.world.level.chunk.LevelChunk;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.fml.ModList;
 import net.neoforged.neoforge.client.event.AddClientReloadListenersEvent;
-import net.neoforged.neoforge.client.event.ExtractBlockOutlineRenderStateEvent;
 import net.neoforged.neoforge.client.event.RegisterFeatureRenderersEvent;
 import net.neoforged.neoforge.client.event.RegisterKeyMappingsEvent;
 import net.neoforged.neoforge.client.event.RenderGuiLayerEvent;
@@ -31,8 +26,6 @@ import net.neoforged.neoforge.client.gui.VanillaGuiLayers;
 import net.neoforged.neoforge.client.resources.VanillaClientListeners;
 import net.neoforged.neoforge.client.submit.RenderPhaseKeys;
 import net.neoforged.neoforge.common.NeoForge;
-import net.neoforged.neoforge.event.level.ChunkEvent;
-import org.joml.Vector3fc;
 
 public final class NeoForgeClientPlatform implements ClientPlatform {
   @Override
@@ -88,9 +81,6 @@ public final class NeoForgeClientPlatform implements ClientPlatform {
   public void registerRenderEvents() {
     NeoForge.EVENT_BUS.addListener((SubmitCustomGeometryEvent event) ->
         GunRenderEvents.collect(event.getSubmitNodeCollector(), event.getLevelRenderState()));
-    NeoForge.EVENT_BUS.addListener((ExtractBlockOutlineRenderStateEvent event) -> {
-      if (GunRenderEvents.hidesBlockOutline(event.getBlockPos())) event.setCanceled(true);
-    });
     NeoForge.EVENT_BUS.addListener((RenderGuiLayerEvent.Post event) -> {
       if (event.getName().equals(VanillaGuiLayers.CROSSHAIR)
           && !Minecraft.getInstance().gui.hud.isHidden())
@@ -120,20 +110,5 @@ public final class NeoForgeClientPlatform implements ClientPlatform {
           variant.source().getStencilTest(),
           variant.source().getSortKey());
     }
-  }
-
-  @Override
-  public void chunkLoaded(ClientLevel level, LevelChunk chunk) {
-    NeoForge.EVENT_BUS.post(new ChunkEvent.Load(chunk, false));
-  }
-
-  @Override
-  public void chunkUnloaded(ClientLevel level, LevelChunk chunk) {
-    NeoForge.EVENT_BUS.post(new ChunkEvent.Unload(chunk));
-  }
-
-  @Override
-  public Supplier<Vector3fc[]> itemExtents(QuadCollection quads, Supplier<Vector3fc[]> original) {
-    return original;
   }
 }

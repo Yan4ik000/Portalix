@@ -35,7 +35,7 @@ final class ContentRegression {
         Items.AIR, Items.GLASS, Items.AIR, Items.IRON_INGOT, Items.QUARTZ_BLOCK, Items.IRON_INGOT);
     craft(world, blackHole, Items.OBSIDIAN, Items.ENDER_PEARL, Items.OBSIDIAN,
         Items.ENDER_PEARL, Items.NETHER_STAR, Items.ENDER_PEARL, Items.OBSIDIAN, Items.ENDER_PEARL, Items.OBSIDIAN);
-    Item gun = ModItems.PORTALIX.get();
+    Item gun = ModItems.gun(PortalixVariant.STANDARD);
     craft(world, gun, Items.AIR, cooling, Items.AIR, core, blackHole, shell, Items.AIR, board, Items.AIR);
     craftVariant(world, PortalixVariant.BLUE, DyeColor.CYAN, DyeColor.PURPLE);
     craftVariant(world, PortalixVariant.ORANGE, DyeColor.YELLOW, DyeColor.RED);
@@ -44,7 +44,7 @@ final class ContentRegression {
     craftVariant(world, PortalixVariant.NEON, DyeColor.CYAN, DyeColor.PINK);
     craftVariant(world, PortalixVariant.MONOCHROME, DyeColor.BLACK, DyeColor.WHITE);
     craft(world, ModItems.POTATOS.get(), ModItems.AI_MODULE.get(), Items.POTATO);
-    upgrade(world, ModItems.POTATO_PORTALIX.get(), ModItems.POTATOS.get());
+    upgrade(world, ModItems.gun(PortalixVariant.POTATO), ModItems.POTATOS.get());
 
     var identities = new HashSet<UUID>();
     for (PortalixVariant variant : PortalixVariant.values()) {

@@ -62,6 +62,12 @@ public final class CarryBindings {
     if (id != null) index.removeRelation(index.byOwner.get(id));
   }
 
+  public static void unbindTarget(Entity target) {
+    CarryBindings index = forLevel(target.level());
+    Relation relation = index.byTarget.get(target.getUUID());
+    if (relation != null && relation.targetId == target.getId()) index.removeRelation(relation);
+  }
+
   public static void unbindEntity(Level level, Entity entity) {
     if (level == null || entity == null) return;
     CarryBindings index = forLevel(level);
@@ -133,15 +139,12 @@ public final class CarryBindings {
         && (holderId(first) == second.getId() || holderId(second) == first.getId());
   }
 
-  public static void crossed(Entity entity, PortalLink link) {
-    crossed(entity, PortalLinkId.fromLink(link), 1);
-  }
-
   public static void ownerCrossed(Entity entity, PortalLinkId link) {
     crossedOwner(forLevel(entity.level()).byOwner.get(entity.getUUID()), link);
   }
 
-  private static void crossed(Entity entity, PortalLinkId link, int count) {
+  public static void crossed(Entity entity, PortalLink crossing) {
+    var link = PortalLinkId.fromLink(crossing);
     CarryBindings index = forLevel(entity.level());
     crossedOwner(index.byOwner.get(entity.getUUID()), link);
     Relation target = index.byTarget.get(entity.getUUID());
@@ -149,7 +152,6 @@ public final class CarryBindings {
       var route = new ArrayList<>(target.route);
       route.add(link);
       target.route = PortalRoutes.simplifyIds(route);
-      target.crossings += count;
     }
   }
 
@@ -160,15 +162,6 @@ public final class CarryBindings {
       route.addAll(owner.route);
       owner.route = PortalRoutes.simplifyIds(route);
     }
-  }
-
-  public static long crossings(Entity target) {
-    Relation relation = forLevel(target.level()).byTarget.get(target.getUUID());
-    return relation == null ? 0 : relation.crossings;
-  }
-
-  public static void undoCrossing(Entity entity, PortalLink link) {
-    crossed(entity, PortalLinkId.fromLink(link.inverse()), -1);
   }
 
   public static List<PortalLinkId> route(Entity target) {
@@ -193,7 +186,6 @@ public final class CarryBindings {
     final int ownerId, targetId;
     final UUID ownerUuid, targetUuid;
     List<PortalLinkId> route = List.of();
-    long crossings;
 
     Relation(int owner, int target, UUID ownerUuid, UUID targetUuid) {
       this.ownerId = owner;

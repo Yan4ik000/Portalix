@@ -1,38 +1,36 @@
 package dev.portalix.client.portal.terrain;
 
-import dev.portalix.client.portal.clip.PortalCullPlane;
-import java.util.function.Supplier;
 import net.minecraft.core.SectionPos;
+import net.minecraft.world.phys.Vec3;
 
 public final class PortalOcclusionContext {
-  private static final ScopedValue<PortalCullPlane> EXIT = ScopedValue.newInstance();
-  private static final ScopedValue<SectionPos> CAMERA = ScopedValue.newInstance();
+  private static final ScopedValue<Snapshot> ACTIVE = ScopedValue.newInstance();
 
   private PortalOcclusionContext() {}
 
-  public static <T> T call(PortalCullPlane exit, Supplier<T> task) {
-    return exit == null ? task.get() : ScopedValue.where(EXIT, exit).call(task::get);
+  public record Snapshot(Vec3 origin, SectionPos center, int radius, boolean smartCull) {
+    public Snapshot(Vec3 origin, int radius, boolean smartCull) {
+      this(origin, SectionPos.of(origin), radius, smartCull);
+    }
   }
 
-  public static void run(PortalCullPlane exit, Runnable task) {
-    if (exit == null) task.run();
-    else ScopedValue.where(EXIT, exit).run(task);
+  public interface SnapshotAccess {
+    Snapshot portalix$occlusionSnapshot();
   }
 
-  public static void run(PortalCullPlane exit, SectionPos camera, Runnable task) {
-    ScopedValue.where(CAMERA, camera).run(() -> run(exit, task));
+  public static Snapshot current() {
+    return ACTIVE.isBound() ? ACTIVE.get() : null;
+  }
+
+  public static void run(Snapshot snapshot, Runnable task) {
+    ScopedValue.where(ACTIVE, snapshot).run(task);
   }
 
   public static SectionPos cameraSection(SectionPos ordinary) {
-    return CAMERA.isBound() ? CAMERA.get() : ordinary;
+    return ACTIVE.isBound() ? ACTIVE.get().center() : ordinary;
   }
 
-  public static boolean open(long section) {
-    if (PortalOcclusionOpenings.contains(section)) return true;
-    if (!EXIT.isBound()) return false;
-    int x = SectionPos.x(section) * 16;
-    int y = SectionPos.y(section) * 16;
-    int z = SectionPos.z(section) * 16;
-    return !EXIT.get().intersects(x, y, z, x + 16, y + 16, z + 16);
+  public static int radius(int ordinary) {
+    return ACTIVE.isBound() ? ACTIVE.get().radius() : ordinary;
   }
 }

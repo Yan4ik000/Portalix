@@ -16,12 +16,36 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 @Mixin(CompiledSectionMesh.class)
 abstract class TerrainCompiledMeshMixin implements SectionMeshTaskAccess, SectionMeshBuffersAccess {
-  @Unique private static final int PORTALIX_LAYERS = ChunkSectionLayer.values().length;
+  @Unique private static final ChunkSectionLayer[] PORTALIX_LAYERS = ChunkSectionLayer.values();
+  @Unique private static final int PORTALIX_MASK_BITS = Math.min(Byte.SIZE, PORTALIX_LAYERS.length);
+  @Unique private static final ChunkSectionLayer[][] PORTALIX_LAYER_SETS = portalix$layerSets();
+  @Unique private int portalix$layerMask;
   @Unique private AtomicBoolean portalix$cancelled;
 
   @Unique
   private final RenderSectionBufferSlice[] portalix$slices =
-      new RenderSectionBufferSlice[PORTALIX_LAYERS];
+      new RenderSectionBufferSlice[PORTALIX_LAYERS.length];
+
+  @Unique
+  private static ChunkSectionLayer[][] portalix$layerSets() {
+    var sets = new ChunkSectionLayer[1 << PORTALIX_MASK_BITS][];
+    // Leave additional modded layers in native order without growing the table exponentially.
+    int extra = PORTALIX_LAYERS.length - PORTALIX_MASK_BITS;
+    for (int mask = 0; mask < sets.length; mask++) {
+      var layers = new ChunkSectionLayer[Integer.bitCount(mask) + extra];
+      int index = 0;
+      for (int i = 0; i < PORTALIX_MASK_BITS; i++)
+        if ((mask & (1 << i)) != 0) layers[index++] = PORTALIX_LAYERS[i];
+      System.arraycopy(PORTALIX_LAYERS, PORTALIX_MASK_BITS, layers, index, extra);
+      sets[mask] = layers;
+    }
+    return sets;
+  }
+
+  @Override
+  public ChunkSectionLayer[] portalix$allocatedLayers() {
+    return PORTALIX_LAYER_SETS[portalix$layerMask];
+  }
 
   @Override
   public RenderSectionBufferSlice portalix$slice(ChunkSectionLayer layer) {
@@ -30,13 +54,19 @@ abstract class TerrainCompiledMeshMixin implements SectionMeshTaskAccess, Sectio
 
   @Override
   public void portalix$slice(ChunkSectionLayer layer, RenderSectionBufferSlice slice) {
-    portalix$slices[layer.ordinal()] = slice;
+    int ordinal = layer.ordinal();
+    portalix$slices[ordinal] = slice;
+    if (ordinal < PORTALIX_MASK_BITS) {
+      if (slice == null) portalix$layerMask &= ~(1 << ordinal);
+      else portalix$layerMask |= 1 << ordinal;
+    }
   }
 
   @Inject(method = "close", at = @At("HEAD"))
   private void portalix$releaseBuffers(CallbackInfo ci) {
     PortalSceneManager.terrainMeshReleased((CompiledSectionMesh) (Object) this);
     Arrays.fill(portalix$slices, null);
+    portalix$layerMask = 0;
   }
 
   @Override

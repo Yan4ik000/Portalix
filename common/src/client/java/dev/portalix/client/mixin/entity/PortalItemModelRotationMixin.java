@@ -22,7 +22,6 @@ abstract class PortalItemModelRotationMixin {
   private void portalix$rotateModel(
       ItemEntityRenderState state, PoseStack poses, SubmitNodeCollector collector,
       CameraRenderState camera, CallbackInfo callback) {
-    var rotation = ((PortalEntityRenderStateAccess) state).portalix$modelRotation();
-    if (rotation != null) poses.mulPose(rotation);
+    ((PortalEntityRenderStateAccess) state).portalix$applyModelRotation(poses);
   }
 }

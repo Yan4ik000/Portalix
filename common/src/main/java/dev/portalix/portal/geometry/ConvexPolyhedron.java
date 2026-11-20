@@ -9,7 +9,7 @@ import net.minecraft.world.phys.Vec3;
 public final class ConvexPolyhedron {
   private static final double EPSILON = 1.0E-9;
   private static final List<Vec3> BOX_EDGES =
-      List.of(new Vec3(0, 0, 1), new Vec3(0, -1, 0), new Vec3(1, 0, 0));
+      List.of(Vec3.Z_AXIS, new Vec3(0, -1, 0), Vec3.X_AXIS);
   private final List<Plane> planes;
   private final List<Vec3> vertices;
   private final Vec3 origin;
@@ -54,9 +54,9 @@ public final class ConvexPolyhedron {
   public static ConvexPolyhedron box(AABB box) {
     var planes =
         List.of(
-            new Plane(new Vec3(1, 0, 0), box.maxX), new Plane(new Vec3(-1, 0, 0), -box.minX),
-            new Plane(new Vec3(0, 1, 0), box.maxY), new Plane(new Vec3(0, -1, 0), -box.minY),
-            new Plane(new Vec3(0, 0, 1), box.maxZ), new Plane(new Vec3(0, 0, -1), -box.minZ));
+            new Plane(Vec3.X_AXIS, box.maxX), new Plane(new Vec3(-1, 0, 0), -box.minX),
+            new Plane(Vec3.Y_AXIS, box.maxY), new Plane(new Vec3(0, -1, 0), -box.minY),
+            new Plane(Vec3.Z_AXIS, box.maxZ), new Plane(new Vec3(0, 0, -1), -box.minZ));
     if (box.getXsize() <= EPSILON || box.getYsize() <= EPSILON || box.getZsize() <= EPSILON)
       return new ConvexPolyhedron(planes, box.getCenter());
     var hull =
@@ -126,6 +126,37 @@ public final class ConvexPolyhedron {
     return Optional.of(closest);
   }
 
+  public List<Plane> shadowFrom(Vec3 eye) {
+    var shadow = new ArrayList<Plane>();
+    for (var plane : planes)
+      if (plane.normal.dot(eye) >= plane.offset - tolerance(plane)) shadow.add(plane);
+    if (shadow.isEmpty()) return shadow;
+
+    // Each silhouette plane goes through the eye and supports the blocker at an edge.
+    var rays = vertices.stream().map(vertex -> vertex.subtract(eye)).toList();
+    for (int i = 0; i < rays.size(); i++) {
+      for (int j = i + 1; j < rays.size(); j++) {
+        Vec3 axis = rays.get(i).cross(rays.get(j));
+        double length = axis.length();
+        if (length < EPSILON) continue;
+        axis = axis.scale(1 / length);
+        double min = 0, max = 0;
+        for (var ray : rays) {
+          double offset = axis.dot(ray);
+          min = Math.min(min, offset);
+          max = Math.max(max, offset);
+        }
+        if (max > EPSILON) {
+          if (min < -EPSILON) continue;
+          axis = axis.scale(-1);
+        }
+        var plane = Plane.through(axis, eye);
+        if (!shadow.contains(plane)) shadow.add(plane);
+      }
+    }
+    return shadow;
+  }
+
   public ConvexPolyhedron clip(Plane plane) {
     if (vertices.isEmpty()) return this;
     double minimum = Double.POSITIVE_INFINITY, maximum = Double.NEGATIVE_INFINITY;
@@ -180,7 +211,7 @@ public final class ConvexPolyhedron {
   public Optional<Hit> sweep(Vec3 displacement, ConvexPolyhedron obstacle) {
     if (isEmpty() || obstacle.isEmpty()) return Optional.empty();
     var axes = planeAxes(obstacle);
-    boolean edgesAdded = false;
+    int planeAxisCount = axes.size();
     double enter = Double.NEGATIVE_INFINITY;
     double leave = Double.POSITIVE_INFINITY;
     Vec3 hitNormal = Vec3.ZERO;
@@ -188,13 +219,8 @@ public final class ConvexPolyhedron {
     double penetration = Double.POSITIVE_INFINITY;
     Vec3 escapeNormal = Vec3.ZERO;
     for (int index = 0; ; index++) {
-      if (index == axes.size()) {
-        if (edgesAdded) break;
-        addEdgeAxes(axes, obstacle);
-        edgesAdded = true;
-        if (index == axes.size()) break;
-      }
-      Vec3 axis = axes.get(index);
+      Vec3 axis = separatingAxis(obstacle, axes, planeAxisCount, index);
+      if (axis == null) break;
       double aMin = min(axis),
           aMax = max(axis),
           bMin = obstacle.min(axis),
@@ -237,19 +263,20 @@ public final class ConvexPolyhedron {
   public boolean intersects(ConvexPolyhedron other) {
     if (isEmpty() || other.isEmpty()) return false;
     var axes = planeAxes(other);
-    boolean edgesAdded = false;
+    int planeAxisCount = axes.size();
     for (int index = 0; ; index++) {
-      if (index == axes.size()) {
-        if (edgesAdded) break;
-        addEdgeAxes(axes, other);
-        edgesAdded = true;
-        if (index == axes.size()) break;
-      }
-      Vec3 axis = axes.get(index);
+      Vec3 axis = separatingAxis(other, axes, planeAxisCount, index);
+      if (axis == null) break;
       if (max(axis) <= other.min(axis) + EPSILON || other.max(axis) <= min(axis) + EPSILON)
         return false;
     }
     return true;
+  }
+
+  private Vec3 separatingAxis(
+      ConvexPolyhedron other, List<Vec3> axes, int planeAxisCount, int index) {
+    if (index == planeAxisCount) addEdgeAxes(axes, other);
+    return index < axes.size() ? axes.get(index) : null;
   }
 
   private List<Vec3> planeAxes(ConvexPolyhedron other) {

@@ -220,25 +220,12 @@ abstract class SodiumSharedTerrainMixin implements SharedSodiumTerrain {
         DeferredTaskList next = taskLists != null && !taskLists.isEmpty()
             && (immediate || PortalFrameTerrainBudget.claim(owner).canPrepare()) ? taskLists : null;
         Vector3dc position = primary;
-        for (var entry : views.terrainQueues()) {
+        var entry = views.nextQueue(next, immediate);
+        if (entry != null) {
           var view = entry.getValue();
-          if (!view.tasks().isEmpty()
-              && (immediate || PortalFrameTerrainBudget.claim(entry.getKey()).canPrepare())
-              && (next == null || view.tasks().firstLong() < next.firstLong())) {
-            next = view.tasks();
-            position = view.camera();
-            owner = entry.getKey();
-          }
-        }
-        for (var entry : views.shadowQueues()) {
-          var view = entry.getValue();
-          if (!view.tasks().isEmpty()
-              && (immediate || PortalFrameTerrainBudget.claim(entry.getKey()).canPrepare())
-              && (next == null || view.tasks().firstLong() < next.firstLong())) {
-            next = view.tasks();
-            position = view.camera();
-            owner = entry.getKey();
-          }
+          next = view.tasks();
+          position = view.camera();
+          owner = entry.getKey();
         }
         var sort = portalix$sorts.peek();
         if (sort != null

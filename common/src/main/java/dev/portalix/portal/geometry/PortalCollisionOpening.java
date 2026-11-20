@@ -18,11 +18,11 @@ public final class PortalCollisionOpening {
               new AABB(
                   -.5 - rim, -1 - rim, -PortalAperture.CAVITY_DEPTH - rim, .5 + rim, 1 + rim, 0)),
           List.of(
-              new Plane(new Vec3(1, 0, 0), .5),
+              new Plane(Vec3.X_AXIS, .5),
               new Plane(new Vec3(-1, 0, 0), .5),
-              new Plane(new Vec3(0, 1, 0), 1),
+              new Plane(Vec3.Y_AXIS, 1),
               new Plane(new Vec3(0, -1, 0), 1),
-              new Plane(new Vec3(0, 0, 1), 0),
+              new Plane(Vec3.Z_AXIS, 0),
               new Plane(new Vec3(0, 0, -1), PortalAperture.CAVITY_DEPTH)));
     }
   }
@@ -59,7 +59,7 @@ public final class PortalCollisionOpening {
     if (portal.normal().y == 1) return List.of();
     var local =
         new PortalEndpoint(
-            portal.dimension(), Vec3.ZERO, new Vec3(0, 0, 1), new Vec3(0, 1, 0), 1, 2);
+            portal.dimension(), Vec3.ZERO, Vec3.Z_AXIS, Vec3.Y_AXIS, 1, 2);
     var destination =
         new PortalEndpoint(
             portal.dimension(), portal.center(), portal.normal().scale(-1), portal.up(), 1, 2);

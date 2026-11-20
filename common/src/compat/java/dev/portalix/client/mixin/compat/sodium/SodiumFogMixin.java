@@ -14,9 +14,8 @@ public abstract class SodiumFogMixin {
   @Dynamic("Sodium FogStorage")
   @Inject(method = "sodium$getFogParameters", at = @At("HEAD"), cancellable = true, remap = false)
   private void portalix$fog(CallbackInfoReturnable<FogParameters> cir) {
-    var camera = PortalSceneManager.cameraState();
-    if (camera == null || camera.fogData == null) return;
-    var fog = camera.fogData;
+    var fog = PortalSceneManager.viewFog();
+    if (fog == null) return;
     cir.setReturnValue(
         new FogParameters(
             fog.color.x,

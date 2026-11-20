@@ -13,10 +13,6 @@ import net.minecraft.world.item.Item;
 
 public final class ModItems {
   private static final Map<PortalixVariant, Supplier<Item>> GUNS = registerGuns();
-  public static final Supplier<Item> PORTALIX = GUNS.get(PortalixVariant.STANDARD);
-  public static final Supplier<Item> POTATO_PORTALIX = GUNS.get(PortalixVariant.POTATO);
-  public static final Supplier<Item> ORANGE_PORTALIX = GUNS.get(PortalixVariant.ORANGE);
-  public static final Supplier<Item> BLUE_PORTALIX = GUNS.get(PortalixVariant.BLUE);
   public static final Supplier<Item> CONTROL_BOARD = register("control_board");
   public static final Supplier<Item> PORTAL_CORE = register("portal_core");
   public static final Supplier<Item> PORTALIX_SHELL = register("portalix_shell");

@@ -5,6 +5,7 @@ import dev.portalix.portal.traversal.PortalPassagePose;
 import dev.portalix.portal.traversal.PortalCrossingSync;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.network.RegistryFriendlyByteBuf;
+import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.entity.player.Player;
@@ -27,6 +28,12 @@ public final class NeoForgePortalData {
       TYPES.register("passage_pose", () -> AttachmentType.builder(PoseScale::new)
           .sync(new AttachmentSyncHandler<PoseScale>() {
             @Override
+            public boolean sendToPlayer(IAttachmentHolder holder, ServerPlayer player) {
+              var state = holder.getExistingDataOrNull(POSE);
+              return state == null || state.syncState != SyncState.DEFAULT;
+            }
+
+            @Override
             public void write(RegistryFriendlyByteBuf buffer, PoseScale attachment, boolean initial) {
               buffer.writeFloat(attachment.value);
             }
@@ -44,6 +51,12 @@ public final class NeoForgePortalData {
       TYPES.register("item_rotation", () -> AttachmentType.builder(ItemRotation::new)
           .sync(new AttachmentSyncHandler<ItemRotation>() {
             @Override
+            public boolean sendToPlayer(IAttachmentHolder holder, ServerPlayer player) {
+              var state = holder.getExistingDataOrNull(ROTATION);
+              return state == null || state.syncState != SyncState.DEFAULT;
+            }
+
+            @Override
             public void write(RegistryFriendlyByteBuf buffer, ItemRotation attachment, boolean initial) {
               FriendlyByteBuf.writeQuaternion(buffer, attachment.value);
             }
@@ -58,7 +71,7 @@ public final class NeoForgePortalData {
 
   private NeoForgePortalData() {}
 
-  public static void register(IEventBus bus) {
+  static void register(IEventBus bus) {
     TYPES.register(bus);
   }
 
@@ -81,13 +94,14 @@ public final class NeoForgePortalData {
     var state = item.getData(ROTATION);
     if (state.value.equals(rotation)) return;
     state.value = new Quaternionf(rotation);
-    state.dirty = !item.level().isClientSide();
+    state.syncState = item.level().isClientSide() ? SyncState.SYNCED : SyncState.DIRTY;
   }
 
-  public static void sync(Entity entity) {
+  static void sync(Entity entity) {
     var pose = entity.getExistingDataOrNull(POSE);
     var rotation = entity.getExistingDataOrNull(ROTATION);
-    if ((pose == null || !pose.dirty) && (rotation == null || !rotation.dirty)) return;
+    if ((pose == null || pose.syncState != SyncState.DIRTY)
+        && (rotation == null || rotation.syncState != SyncState.DIRTY)) return;
     if (entity.isPassenger() || !entity.getPassengers().isEmpty())
       PortalCrossingSync.afterPassengerUpdates(entity, () -> flush(entity));
     else flush(entity);
@@ -95,21 +109,24 @@ public final class NeoForgePortalData {
 
   private static void flush(Entity entity) {
     var pose = entity.getExistingDataOrNull(POSE);
-    if (pose != null && pose.dirty) {
-      pose.dirty = false;
+    if (pose != null && pose.syncState == SyncState.DIRTY) {
+      pose.syncState = SyncState.SYNCED;
       entity.syncData(POSE);
     }
     var rotation = entity.getExistingDataOrNull(ROTATION);
-    if (rotation != null && rotation.dirty) {
-      rotation.dirty = false;
+    if (rotation != null && rotation.syncState == SyncState.DIRTY) {
+      rotation.syncState = SyncState.SYNCED;
       entity.syncData(ROTATION);
     }
   }
 
+  // Allocation triggers a NeoForge sync before the first change can enter the tracking flush.
+  private enum SyncState { DEFAULT, DIRTY, SYNCED }
+
   private static final class PoseScale {
     private final Player player;
     private float value = 1;
-    private boolean dirty;
+    private SyncState syncState = SyncState.DEFAULT;
 
     private PoseScale(IAttachmentHolder holder) {
       player = (Player) holder;
@@ -118,13 +135,13 @@ public final class NeoForgePortalData {
     private void set(float scale) {
       if (value == scale) return;
       value = scale;
-      dirty = !player.level().isClientSide();
+      syncState = player.level().isClientSide() ? SyncState.SYNCED : SyncState.DIRTY;
       PortalPassagePose.changed(player);
     }
   }
 
   private static final class ItemRotation {
     private Quaternionf value = new Quaternionf();
-    private boolean dirty;
+    private SyncState syncState = SyncState.DEFAULT;
   }
 }

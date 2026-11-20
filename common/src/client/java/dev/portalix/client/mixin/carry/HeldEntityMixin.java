@@ -6,6 +6,7 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.culling.Frustum;
 import net.minecraft.client.renderer.entity.EntityRenderer;
 import net.minecraft.client.renderer.entity.state.EntityRenderState;
+import net.minecraft.client.renderer.entity.state.MinecartRenderState;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.phys.Vec3;
 import org.spongepowered.asm.mixin.Mixin;
@@ -38,7 +39,14 @@ public abstract class HeldEntityMixin {
       state.x = center.x;
       state.y = center.y - entity.getBbHeight() * 0.5;
       state.z = center.z;
+      state.passengerOffset = null;
     }
+  }
+
+  @Inject(method = "finalizeRenderState", at = @At("HEAD"))
+  private void portalix$carryMinecart(Entity entity, EntityRenderState state, CallbackInfo ci) {
+    if (state instanceof MinecartRenderState cart && PortalixClient.carryController().predicted(entity))
+      cart.renderPos = null;
   }
 
   @ModifyExpressionValue(

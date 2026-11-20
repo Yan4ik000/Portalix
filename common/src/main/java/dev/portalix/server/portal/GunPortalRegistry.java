@@ -7,6 +7,7 @@ import dev.portalix.item.PortalixIdentity;
 import dev.portalix.item.PortalixVariant;
 import dev.portalix.network.ModNetworking;
 import dev.portalix.network.portal.PortalStatePayload;
+import dev.portalix.portal.PortalLink;
 import dev.portalix.portal.PortalTopology;
 import dev.portalix.portal.placement.BlockPortalPlacement;
 import dev.portalix.portal.placement.PortalSurface;
@@ -54,6 +55,7 @@ public final class GunPortalRegistry {
   private final Set<UUID> dirty = new HashSet<>();
   private final PortalSpatialIndex spatial = new PortalSpatialIndex();
   private final Map<ResourceKey<Level>, Long2ObjectOpenHashMap<Set<UUID>>> footprints = new HashMap<>();
+  private final Map<ResourceKey<Level>, Map<UUID, List<PortalLink>>> linksByLevel = new HashMap<>();
   private final Map<UUID, Subscription> subscriptions = new HashMap<>();
 
   public GunPortalRegistry(MinecraftServer server) {
@@ -150,7 +152,7 @@ public final class GunPortalRegistry {
     else states.put(gun, state);
     addIndex(gun, blue);
     addIndex(gun, orange);
-    publishLinks();
+    updateLinks(gun, linkedDimension(previous), linkedDimension(state), state);
     Set<ServerPlayer> observers = new HashSet<>();
     for (var entry : subscriptions.entrySet()) {
       if (entry.getValue().known.containsKey(gun)) {
@@ -198,20 +200,30 @@ public final class GunPortalRegistry {
     return member == null ? null : member.portal;
   }
 
-  private void publishLinks() {
-    var links =
-        states.values().stream()
-            .flatMap(
-                state ->
-                    PortalTopology.linkPair(state.gun(), portal(state.blue()), portal(state.orange())).stream())
-            .toList();
-    for (var level : server.getAllLevels()) {
-      PortalTopology.updateLinks(
-          level,
-          links.stream()
-              .filter(link -> link.entrance().endpoint().dimension().equals(level.dimension()))
-              .toList());
+  private static ResourceKey<Level> linkedDimension(Pair pair) {
+    if (pair == null || pair.blue() == null || pair.orange() == null) return null;
+    var dimension = pair.blue().endpoint().dimension();
+    return dimension.equals(pair.orange().endpoint().dimension()) ? dimension : null;
+  }
+
+  private void updateLinks(UUID gun, ResourceKey<Level> before, ResourceKey<Level> after, Pair pair) {
+    if (before != null && !before.equals(after)) {
+      var links = linksByLevel.get(before);
+      links.remove(gun);
+      if (links.isEmpty()) linksByLevel.remove(before);
+      publishLinks(before, links);
     }
+    if (after != null) {
+      var links = linksByLevel.computeIfAbsent(after, ignored -> new HashMap<>());
+      links.put(gun, PortalTopology.linkPair(gun, portal(pair.blue()), portal(pair.orange())));
+      publishLinks(after, links);
+    }
+  }
+
+  private void publishLinks(ResourceKey<Level> dimension, Map<UUID, List<PortalLink>> pairs) {
+    var level = server.getLevel(dimension);
+    if (level != null)
+      PortalClosureResolver.updateLinks(level, pairs.values().stream().flatMap(List::stream).toList());
   }
 
   private void send(ServerPlayer observer, Pair state, boolean effects) {

@@ -3,7 +3,13 @@ package dev.portalix.test.client;
 import static dev.portalix.test.client.ClientAssertions.check;
 
 import dev.portalix.client.PortalixClient;
+import dev.portalix.client.carry.prediction.CarriedEntityPrediction;
+import dev.portalix.carry.CarryBindings;
+import dev.portalix.carry.EntityCarryWorld;
 import dev.portalix.item.PortalixVariant;
+import dev.portalix.network.carry.CarryGrabPayload;
+import dev.portalix.network.carry.CarryStatePayload;
+import dev.portalix.portal.PortalTopology;
 import dev.portalix.portal.camera.PortalEyePose;
 import dev.portalix.portal.traversal.PortalItemRotation;
 import java.util.ArrayList;
@@ -25,7 +31,8 @@ import org.joml.Vector3f;
 
 final class CarrySystemScene implements ClientSystemScene {
   private enum Step { START, PREPARE, EMPTY, SPAWN, TRACKED, BEFORE, GRAB, HELD, ENABLE_PHYSICS,
-    TURN, FOLLOW, DROP, FALL, DROP_VIEW, DROPPED, AIM, REGRAB, REHELD, RETURN_TO_OBSERVER, THROW_AIM, THROW, FLIGHT, THROWN, REMOVE, REMOVED, ABSENT, DONE }
+    TURN, FOLLOW, PORTAL_APPROACH, PORTAL_CROSS, PORTAL_SETTLE, DROP, FALL, DROP_VIEW, DROPPED,
+    AIM, REGRAB, REHELD, RETURN_TO_OBSERVER, THROW_AIM, THROW, FLIGHT, THROWN, REMOVE, REMOVED, ABSENT, DONE }
   private static final EntitySystemFixture.Kind[] KINDS = {EntitySystemFixture.Kind.ITEM, EntitySystemFixture.Kind.PIG};
   private static final AABB INITIAL_QUARTZ_CONTROL = new AABB(159, 99.99, 508, 160, 100.01, 510);
   private final Minecraft client;
@@ -72,14 +79,14 @@ final class CarrySystemScene implements ClientSystemScene {
       view.record("timeout");
       throw new AssertionError("Native carry client scene timed out at " + step + "/" + index + ": " + view.diagnostics()
           + ", yaw=" + client.player.getYRot() + ", pitch=" + client.player.getXRot()
-          + ", clientTarget=" + PortalixClient.carryState().localTarget() + ", observed=" + observed);
+          + ", clientTarget=" + heldTarget() + ", observed=" + observed);
     }
     var server = client.getSingleplayerServer();
     if (actor != null && step != Step.REMOVE && step != Step.REMOVED && step != Step.ABSENT) poll();
     switch (step) {
       case START -> {
         client.options.setCameraType(CameraType.FIRST_PERSON);
-        preparation = server.submit(() -> new EntitySystemFixture(server.getPlayerList().getPlayer(playerId), false));
+        preparation = server.submit(() -> new EntitySystemFixture(server.getPlayerList().getPlayer(playerId)));
         next(Step.PREPARE);
       }
       case PREPARE -> {
@@ -121,6 +128,7 @@ final class CarrySystemScene implements ClientSystemScene {
       }
       case HELD -> {
         if (!capture("carry-" + name() + "-held", false)) return false;
+        assertHoldFrameConsistency();
         heldPosition = entity().position();
         mutation = server.submit(() -> {
           var entity = fixture.entity(actor);
@@ -143,7 +151,36 @@ final class CarrySystemScene implements ClientSystemScene {
       }
       case FOLLOW -> {
         if (!capture("carry-" + name() + "-follows-camera", false)) return false;
-        heldPosition = entity().position();
+        next(Step.PORTAL_APPROACH);
+      }
+      case PORTAL_APPROACH -> {
+        check(held(), "Carried target lost ownership while approaching the portal");
+        if (!input.walkTo(EntitySystemFixture.BLUE.add(0, -1, -4))) return false;
+        next(Step.PORTAL_CROSS);
+      }
+      case PORTAL_CROSS -> {
+        check(held(), "Carried target lost ownership while crossing the portal");
+        if (Math.abs(client.player.getX() - EntitySystemFixture.ORANGE.x) < 1) {
+          input.stop();
+          next(Step.PORTAL_SETTLE);
+          return false;
+        }
+        boolean aimed = input.lookAt(client.player.getEyePosition().add(0, -2, 10));
+        input.forward(aimed);
+      }
+      case PORTAL_SETTLE -> {
+        check(held(), "Portal traversal lost the client or server carry binding");
+        if (age < 6 || observed == null || !observed.crossed()
+            || Math.abs(observed.ownerPosition().x - EntitySystemFixture.ORANGE.x) >= 1) return false;
+        var entity = entity();
+        check(entity != null, "Portal traversal lost the tracked carry entity");
+        float partial = client.getDeltaTracker().getGameTimeDeltaPartialTick(false);
+        Vec3 rendered = PortalixClient.carryController().renderCenter(entity, partial);
+        Vec3 authoritative = observed.position().add(0, entity.getBbHeight() / 2, 0);
+        if (rendered == null || rendered.distanceTo(authoritative) > .25
+            || entity.position().distanceTo(observed.position()) > .25) return false;
+        heldPosition = observed.position();
+        passed.add("carry/" + name() + " portal crossing preserves ownership and reconciles the rendered target");
         next(Step.DROP);
       }
       case DROP -> {
@@ -192,13 +229,13 @@ final class CarrySystemScene implements ClientSystemScene {
       }
       case RETURN_TO_OBSERVER -> {
         check(held(), "Regrabbed target was released while walking: clientTarget="
-            + PortalixClient.carryState().localTarget() + ", actor=" + actor + ", observed=" + observed);
+            + heldTarget() + ", actor=" + actor + ", observed=" + observed);
         if (!input.walkTo(EntitySystemFixture.OBSERVER)) return false;
         next(Step.THROW_AIM);
       }
       case THROW_AIM -> {
         check(held(), "Regrabbed target was released while aiming: clientTarget="
-            + PortalixClient.carryState().localTarget() + ", actor=" + actor + ", observed=" + observed);
+            + heldTarget() + ", actor=" + actor + ", observed=" + observed);
         if (!input.lookAt(client.player.getEyePosition().add(0, .5, 10)) || age < 20) return false;
         throwStart = entity().position();
         next(Step.THROW);
@@ -256,13 +293,74 @@ final class CarrySystemScene implements ClientSystemScene {
     if (observation.isDone()) { observed = observation.join(); observation = null; }
   }
 
+  private void assertHoldFrameConsistency() {
+    var entity = entity();
+    Vec3 nativePosition = entity.position();
+    var link = PortalTopology.links(client.level).stream().filter(candidate -> candidate.gun().equals(fixture.gunId)
+        && candidate.generation() == fixture.portalGeneration
+        && candidate.entrance().endpoint().center().equals(EntitySystemFixture.BLUE)).findFirst().orElseThrow();
+    double now = client.level.getGameTime();
+    long tick = client.level.getGameTime();
+    Vec3 centerOffset = new Vec3(0, entity.getBbHeight() / 2, 0);
+    var grab = new CarryGrabPayload(entity.getId(), entity.getUUID(), 1,
+        client.player.getId(), client.player.getUUID(), tick, nativePosition, Vec3.ZERO, List.of());
+    for (boolean reconciled : new boolean[] {false, true}) {
+      var reference = new CarriedEntityPrediction(entity, 1);
+      var rebased = new CarriedEntityPrediction(entity, 1);
+      reference.grab(grab, true, now, 1);
+      rebased.grab(grab, true, now, 1);
+      double present = now;
+      Vec3 acknowledgedPosition = null;
+      if (reconciled) {
+        reference.advance(client.player, now);
+        rebased.advance(client.player, now);
+        Vec3 predicted = reference.sample(now + 1, 1);
+        rebased.sample(now + 1, 1);
+        acknowledgedPosition = predicted.subtract(centerOffset).add(.125, 0, 0);
+        var acknowledgement = new CarryStatePayload(entity.getId(), entity.getUUID(), 1, tick + 1,
+            acknowledgedPosition, Vec3.ZERO, false, false);
+        reference.update(acknowledgement, now + 1, 1);
+        rebased.update(acknowledgement, now + 1, 1);
+        present = now + 5;
+        reference.tick(present);
+        rebased.tick(present);
+        reference.sample(present, 1);
+      }
+      Vec3 before = rebased.sample(present, 1);
+      Vec3 expected = reference.sample(present, 1);
+      Vec3 wrongFrame = link.transform().inversePoint(expected);
+      check(wrongFrame.distanceToSqr(expected) > 1,
+          "The fixture portal must change the held actor's input coordinates");
+      var sweep = new EntityCarryWorld(entity).sweep(before, wrongFrame);
+      check(sweep.path().end().distanceToSqr(wrongFrame) < 1e-12,
+          "A fixture collision would hide a stale input-frame prediction");
+      rebased.crossed(link);
+      if (reconciled) {
+        reference.update(new CarryStatePayload(entity.getId(), entity.getUUID(), 1, tick + 2,
+            acknowledgedPosition, Vec3.ZERO, false, false), present, 1);
+        rebased.update(new CarryStatePayload(entity.getId(), entity.getUUID(), 1, tick + 2,
+            link.transform().point(acknowledgedPosition.add(centerOffset)).subtract(centerOffset),
+            Vec3.ZERO, false, false), present, 1);
+      }
+      expected = reference.sample(present + .25, 1);
+      check(rebased.sample(present + .25, 1).distanceToSqr(expected) < 1e-12,
+          "Changing the carry input frame changed its world prediction " + (reconciled ? "after a second server snapshot" : "before first input"));
+    }
+    check(entity.position().equals(nativePosition), "Isolated prediction checks changed the native actor");
+    passed.add("carry/" + name() + " input-frame crossing preserves grab and reconciled prediction");
+  }
+
+  private int heldTarget() {
+    return client.player == null ? -1 : CarryBindings.heldEntityId(client.level, client.player.getId());
+  }
+
   private boolean held() {
-    return PortalixClient.carryState().localTarget() == actor.id() && observed != null
+    return heldTarget() == actor.id() && observed != null
         && observed.heldBy() == client.player.getId();
   }
 
   private boolean released() {
-    return PortalixClient.carryState().localTarget() < 0 && observed != null && observed.heldBy() < 0;
+    return heldTarget() < 0 && observed != null && observed.heldBy() < 0;
   }
 
   private boolean capture(String name, boolean initial) {

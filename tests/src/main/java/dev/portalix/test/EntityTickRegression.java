@@ -3,7 +3,7 @@ package dev.portalix.test;
 import static dev.portalix.test.ServerRegressionSuite.check;
 
 import dev.portalix.portal.PortalLink;
-import dev.portalix.portal.PortalTopology;
+import dev.portalix.server.portal.PortalClosureResolver;
 import dev.portalix.portal.traversal.EntityPortalState;
 import dev.portalix.portal.traversal.PortalCollisionWorld;
 import dev.portalix.portal.traversal.PortalEntityCollisions;
@@ -46,7 +46,7 @@ final class EntityTickRegression implements ServerRegressionSuite.Scenario {
           actors.add(new Actor(item, item.getUUID(), link));
         }
       }
-      PortalTopology.updateLinks(world.level, links);
+      PortalClosureResolver.updateLinks(world.level, links);
       started = now;
       return false;
     }

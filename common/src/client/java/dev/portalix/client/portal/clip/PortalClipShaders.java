@@ -8,12 +8,26 @@ import dev.portalix.client.render.GlslSource;
 import net.minecraft.resources.Identifier;
 
 public final class PortalClipShaders {
+  public enum ClipAbi {
+    VANILLA(PortalClipping.UNIFORM_NAME, "#ifdef PORTALIX_CLIP\n"),
+    IRIS("iris_" + PortalClipping.UNIFORM_NAME, "#if 1\n"),
+    IRIS_FALLBACK(PortalClipping.UNIFORM_NAME, "#if 1\n");
+
+    private final String uniformName;
+    private final String guard;
+
+    ClipAbi(String uniformName, String guard) {
+      this.uniformName = uniformName;
+      this.guard = guard;
+    }
+  }
+
   private PortalClipShaders() {}
 
   public static String shader(Identifier shader, String source, ShaderType type) {
     boolean hardwareClipping =
         RenderSystem.getDevice().getDeviceInfo().backendName().equals("OpenGL");
-    return patch(source, type, hardwareClipping, null, false, shader);
+    return patch(source, type, hardwareClipping, null, false, ClipAbi.VANILLA, shader);
   }
 
   public static String patch(
@@ -21,16 +35,18 @@ public final class PortalClipShaders {
       ShaderType type,
       boolean hardwareClipping,
       PortalShaderInterface shaderInterface,
-      boolean geometryStage) {
-    return patch(source, type, hardwareClipping, shaderInterface, geometryStage, null);
+      boolean geometryStage,
+      ClipAbi abi) {
+    return patch(source, type, hardwareClipping, shaderInterface, geometryStage, abi, null);
   }
 
-  static String patch(
+  private static String patch(
       String source,
       ShaderType type,
       boolean hardwareClipping,
       PortalShaderInterface shaderInterface,
       boolean geometryStage,
+      ClipAbi abi,
       Identifier shader) {
     if (source == null) return null;
     var parsed = new GlslSource(source);
@@ -58,10 +74,11 @@ public final class PortalClipShaders {
       boolean correction = !layout.vertexCorrection().isEmpty();
       String declarations =
           "\n"
-              + (correction ? "" : "#ifdef PORTALIX_CLIP\n")
-              + "layout(std140) uniform PortalClip { vec4 portalix_Plane; vec4 portalix_EntityPlane;"
+              + (correction ? "" : abi.guard)
+              + "layout(std140) uniform " + abi.uniformName
+              + " { vec4 portalix_Plane; vec4 portalix_EntityPlane;"
               + " vec4 portalix_Edges[4]; vec4 portalix_Mode; vec4 portalix_CameraFraction; };\n"
-              + (correction ? "#ifdef PORTALIX_CLIP\n" : "")
+              + (correction ? abi.guard : "")
               + "out float portalix_EntityDistance;\nout vec4 portalix_Aperture;\n"
               + "flat out float portalix_EntityMode;\n"
               + "flat out float portalix_Oval;\n"
@@ -71,7 +88,7 @@ public final class PortalClipShaders {
               + "#endif\n";
       String assignments =
           layout.vertexCorrection()
-              + "\n#ifdef PORTALIX_CLIP\n"
+              + "\n" + abi.guard
               + (hardwareClipping ? "gl_ClipDistance[0]" : "portalix_Distance")
               + " = "
               + (projected ? "dot(portalix_Plane, " + position + ")" : "1.0")
@@ -121,7 +138,8 @@ public final class PortalClipShaders {
       return renamed + declarations + "void main() { " + originalMain + "(); " + assignments + "}\n";
     }
     return renamed
-        + "\n#ifdef PORTALIX_CLIP\nin float portalix_EntityDistance;\nin vec4 portalix_Aperture;\n"
+        + "\n" + abi.guard
+        + "in float portalix_EntityDistance;\nin vec4 portalix_Aperture;\n"
         + "flat in float portalix_EntityMode;\n"
         + "flat in float portalix_Oval;\n"
         + "in vec3 portalix_ProjectedPosition;\nflat in vec4 portalix_ScenePlane;\n"

@@ -22,7 +22,6 @@ abstract class PortalArrowModelRotationMixin {
   private void portalix$rotateModel(
       ArrowRenderState state, PoseStack poses, SubmitNodeCollector collector,
       CameraRenderState camera, CallbackInfo callback) {
-    var rotation = ((PortalEntityRenderStateAccess) state).portalix$modelRotation();
-    if (rotation != null) poses.mulPose(rotation);
+    ((PortalEntityRenderStateAccess) state).portalix$applyModelRotation(poses);
   }
 }

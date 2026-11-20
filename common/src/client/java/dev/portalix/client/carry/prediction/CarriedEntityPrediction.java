@@ -1,25 +1,19 @@
 package dev.portalix.client.carry.prediction;
 
 import dev.portalix.carry.CarryAnchor;
-import dev.portalix.compat.minecraft.EntityMotion;
 import dev.portalix.carry.CarryBindings;
 import dev.portalix.carry.CarryCollisionWorld;
-import dev.portalix.carry.CarryFollowMotion;
-import dev.portalix.carry.CarryMotionPath;
 import dev.portalix.carry.EntityCarryWorld;
-import dev.portalix.gun.GunFireTiming;
+import dev.portalix.gun.GunPermissions;
 import dev.portalix.network.carry.CarryGrabPayload;
-import dev.portalix.network.carry.CarryInputPayload;
 import dev.portalix.network.carry.CarryReleasePayload;
 import dev.portalix.network.carry.CarryStatePayload;
 import dev.portalix.portal.PortalLink;
-import dev.portalix.portal.PortalLinkId;
-import dev.portalix.portal.PortalRoutes;
-import java.util.ArrayList;
-import java.util.List;
 import java.util.UUID;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.entity.vehicle.minecart.AbstractMinecart;
+import net.minecraft.world.entity.vehicle.minecart.NewMinecartBehavior;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 import org.joml.Quaternionf;
@@ -30,12 +24,12 @@ public final class CarriedEntityPrediction {
     LOCAL_HOLD,
     REMOTE_HOLD,
     FLIGHT,
-    HANDOFF,
     SETTLING
   }
 
   private final Entity entity;
   private final CarryCollisionWorld collisions;
+  private final CarrySnapshotClock snapshotClock = new CarrySnapshotClock();
   private CarryInterpolation visual;
   private Phase phase = Phase.VANILLA;
   private long generation;
@@ -43,9 +37,10 @@ public final class CarriedEntityPrediction {
   private int ownerId = -1;
   private UUID ownerUuid;
   private boolean released;
+  private boolean localOwner;
   private Hold hold;
   private CarryFlightPrediction flight;
-  private CarryHandoff transition;
+  private CarryPositionCorrection settleCorrection;
   private Vec3 physicalVelocity = Vec3.ZERO;
 
   public CarriedEntityPrediction(Entity entity, float partial) {
@@ -56,14 +51,6 @@ public final class CarriedEntityPrediction {
 
   public Entity entity() {
     return entity;
-  }
-
-  public boolean present() {
-    return !entity.isRemoved() && entity.level().getEntity(entity.getId()) == entity;
-  }
-
-  public long generation() {
-    return generation;
   }
 
   public Phase phase() {
@@ -82,268 +69,304 @@ public final class CarriedEntityPrediction {
     return visual.rotation();
   }
 
-  public void grab(CarryGrabPayload grab, boolean local, double now, float partial) {
-    if (!matches(grab.entityId(), grab.entityUuid()) || grab.generation() <= generation) return;
+  public boolean grab(CarryGrabPayload grab, boolean local, double now, float partial) {
+    if (!matches(grab.entityId(), grab.entityUuid()) || grab.generation() < generation) return false;
+    if (grab.generation() == generation) {
+      if (released || grab.tick() < serverTick || grab.ownerId() != ownerId
+          || ownerUuid == null || !ownerUuid.equals(grab.ownerUuid())) return false;
+      if (grab.tick() == serverTick && (phase == Phase.LOCAL_HOLD || phase == Phase.REMOTE_HOLD)) return true;
+    }
     capture(now, partial);
+    snapshotClock.receive(grab.tick(), now);
     generation = grab.generation();
     serverTick = grab.tick();
     ownerId = grab.ownerId();
     ownerUuid = grab.ownerUuid();
     released = false;
+    localOwner = local;
     physicalVelocity = grab.velocity();
-    transition = null;
+    settleCorrection = null;
     if (local) {
-      visual = new CarryInterpolation(visual.position(), visual.velocity());
-      hold = new Hold(visual, grab.velocity(), now);
-      hold.observedCrossings = CarryBindings.crossings(entity);
-      flight = null;
-      phase = Phase.LOCAL_HOLD;
+      startLocalHold(grab.tick(), grab.position(), grab.velocity(), now);
     } else {
       hold = null;
-      flight = extrapolation(grab.tick(), now, grab.position(), grab.velocity(), now);
+      flight = extrapolation(grab.tick(), grab.position(), grab.velocity(), now);
       phase = Phase.REMOTE_HOLD;
     }
+    return true;
   }
 
-  public CarryInputPayload advance(Player holder, long sequence, double now) {
+  private void startLocalHold(long tick, Vec3 position, Vec3 velocity, double now) {
+    Vec3 displayed = visual.position();
+    Vec3 movement = visual.velocity();
+    hold = new Hold(collisions, tick, center(position), velocity);
+    setHoldVisual(now, displayed, movement);
+    flight = null;
+    phase = Phase.LOCAL_HOLD;
+  }
+
+  public void advance(Player holder, double now) {
     if (phase != Phase.LOCAL_HOLD) throw new IllegalStateException("No local carry body");
-    sample(now, 0);
-    long acknowledged = CarryBindings.crossings(entity);
-    long crossed = acknowledged - hold.observedCrossings;
-    for (long i = 0; i < crossed && !hold.pendingCrossings.isEmpty(); i++)
-      hold.pendingCrossings.removeFirst();
-    hold.observedCrossings = acknowledged;
-    var references = new ArrayList<>(CarryBindings.route(entity));
-    references.addAll(hold.pendingCrossings);
-    var route = CarryAnchor.resolveRoute(entity, PortalRoutes.simplifyIds(references));
+    var route = CarryBindings.resolve(entity);
     if (route == null) {
-      lostOwner(now, 0);
-      return null;
+      suspend(now, 0);
+      return;
     }
-    Vec3 start = visual.position();
-    var hull = entity.getBoundingBox();
-    Vec3 desired =
-        CarryAnchor.routeHoldPosition(holder, route, hull.move(start.subtract(hull.getCenter())));
-    if (hold.path == null)
-      hold.motion = new CarryFollowMotion(visual.velocity().scale(1 / GunFireTiming.TICK_SECONDS));
-    hold.path = hold.motion.step(collisions, start, desired, GunFireTiming.TICK_SECONDS);
-    hold.pathStart = now;
-    hold.acknowledgements.submit(sequence, now + 1);
-    for (var node : hold.path.nodes())
-      if (node.crossing() != null)
-        hold.pendingCrossings.add(PortalLinkId.fromLink(node.crossing()));
-    return new CarryInputPayload(
-        entity.getId(),
-        entity.getUUID(),
-        generation,
-        sequence,
-        hold.path.nodes().stream()
-            .map(
-                n ->
-                    new CarryInputPayload.Node(
-                        n.point(),
-                        n.crossing() == null ? null : PortalLinkId.fromLink(n.crossing())))
-            .toList());
+    hold.prediction.advance(CarryAnchor.holdTarget(holder), route, now, snapshotClock.tickDuration());
   }
 
   public void update(CarryStatePayload update, double now, float partial) {
     if (!matches(update.entityId(), update.entityUuid()) || update.generation() < generation)
       return;
-    if (update.generation() > generation) {
-      if (!update.released()) return;
+    if (update.generation() == generation) {
+      if (update.tick() < serverTick || update.tick() == serverTick && !update.released()
+          || released && phase != Phase.FLIGHT) return;
+    } else if (!update.released()) return;
+    snapshotClock.receive(update.tick(), now);
+    if (update.released() && (update.generation() > generation || !released)) {
       capture(now, partial);
-      generation = update.generation();
-      ownerId = -1;
-      ownerUuid = null;
-      released = true;
-      hold = null;
-      transition = null;
-      flight = extrapolation(update.tick(), now, update.position(), update.velocity(), now);
+      beginRelease(update.generation());
+      flight = extrapolation(update.tick(), update.position(), update.velocity(), now);
       phase = Phase.FLIGHT;
-      serverTick = Long.MIN_VALUE;
     }
-    if (update.tick() < serverTick || update.tick() == serverTick && !update.released()) return;
     if (update.released()) {
       if (phase != Phase.FLIGHT) return;
-      sample(now, partial);
-      serverTick = update.tick();
-      physicalVelocity = update.velocity();
-      flight.update(
-          update.tick(),
-          center(update.position()),
-          update.velocity(),
-          now,
-          visual.inputPosition(),
-          visual.inputVelocity());
-      if (update.complete()) {
-        phase = Phase.HANDOFF;
-        Vec3 nativePosition = entity.getPositionCodec().getBase();
-
-        if (nativePosition.distanceToSqr(update.position()) <= 3.0 / (4096 * 4096))
-          nativePosition(nativePosition, now, partial);
-      }
+      updateExtrapolation(update, now, partial);
+      if (update.complete()) settle(now, partial);
     } else if (phase == Phase.LOCAL_HOLD) {
       serverTick = update.tick();
       physicalVelocity = update.velocity();
-      hold.acknowledgements.confirm(update.sequence());
+      reconcile(update, now, partial);
     } else if (phase == Phase.REMOTE_HOLD) {
-      sample(now, partial);
+      updateExtrapolation(update, now, partial);
+    } else if (ownerId >= 0 && !released) {
       serverTick = update.tick();
       physicalVelocity = update.velocity();
-      flight.update(
-          update.tick(),
-          center(update.position()),
-          update.velocity(),
-          now,
-          visual.inputPosition(),
-          visual.inputVelocity());
+      if (entity.level().getEntity(ownerId) instanceof Player owner
+          && owner.getUUID().equals(ownerUuid) && GunPermissions.canCarry(owner)
+          && CarryBindings.holderId(entity) == ownerId && CarryBindings.resolve(entity) != null) {
+        capture(now, partial);
+        settleCorrection = null;
+        if (localOwner) startLocalHold(serverTick, update.position(), physicalVelocity, now);
+        else {
+          flight = extrapolation(serverTick, update.position(), physicalVelocity, now);
+          phase = Phase.REMOTE_HOLD;
+        }
+      }
     }
+  }
+
+  private void updateExtrapolation(CarryStatePayload update, double now, float partial) {
+    sample(now, partial);
+    serverTick = update.tick();
+    physicalVelocity = update.velocity();
+    flight.update(
+        update.tick(),
+        center(update.position()),
+        update.velocity(),
+        snapshotClock.tickDuration(),
+        now,
+        visual.inputPosition(),
+        visual.inputVelocity());
   }
 
   public void release(CarryReleasePayload release, double now, float partial) {
     if (!matches(release.entityId(), release.entityUuid())
         || release.generation() < generation
-        || release.generation() == generation && released) return;
+        || release.generation() == generation && (released || release.tick() < serverTick)) return;
     capture(now, partial);
+    snapshotClock.receive(release.tick(), now);
+    double interval = snapshotClock.tickDuration();
     Vec3 movement = visual.inputVelocity();
-    if (release.thrown()) movement = movement.add(release.velocity().subtract(physicalVelocity));
-    double sourceTime = hold == null ? now : hold.acknowledgements.acknowledgedTime(release.sequence(), now);
-    generation = release.generation();
+    if (release.thrown())
+      movement = movement.add(release.velocity().subtract(physicalVelocity).scale(1 / interval));
+    beginRelease(release.generation());
     serverTick = release.tick();
-    released = true;
-    ownerId = -1;
-    ownerUuid = null;
-    hold = null;
-    transition = null;
     physicalVelocity = release.velocity();
     flight =
         new CarryFlightPrediction(
             release.tick(),
-            sourceTime,
             center(release.position()),
             release.velocity(),
+            interval,
             now,
             visual.inputPosition(),
             movement);
     phase = Phase.FLIGHT;
   }
 
-  public void lostOwner(double now, float partial) {
-    if (phase != Phase.LOCAL_HOLD && phase != Phase.REMOTE_HOLD) return;
-    sample(now, partial);
-    settle(now, partial);
+  private void beginRelease(long generation) {
+    CarryBindings.unbindTarget(entity);
+    this.generation = generation;
+    released = true;
+    ownerId = -1;
+    ownerUuid = null;
+    hold = null;
+    settleCorrection = null;
   }
 
-  public void nativePosition(Vec3 position, double now, float partial) {
-    if (phase != Phase.HANDOFF) return;
-    sample(now, partial);
+  public void lostOwner(double now, float partial) {
+    ownerId = -1;
+    ownerUuid = null;
+    suspend(now, partial);
+  }
 
-    EntityMotion.snapPosition(entity, position);
+  public void suspend(double now, float partial) {
+    if (phase != Phase.LOCAL_HOLD && phase != Phase.REMOTE_HOLD) return;
+    capture(now, partial);
     settle(now, partial);
   }
 
   private void settle(double now, float partial) {
-    transition =
-        new CarryHandoff(
+    settleCorrection =
+        new CarryPositionCorrection(
             visual.inputPosition().subtract(actual(partial)),
             visual.inputVelocity().subtract(actualMovement()),
             now);
-    ownerId = -1;
-    ownerUuid = null;
     hold = null;
     flight = null;
     phase = Phase.SETTLING;
   }
 
   public void tick(double now) {
-    if (phase != Phase.SETTLING || !transition.complete(now)) return;
+    if (phase == Phase.LOCAL_HOLD && hold.correction != null && hold.correction.complete(now))
+      hold.correction = null;
+    if (phase != Phase.SETTLING || !settleCorrection.complete(now)) return;
 
     visual = new CarryInterpolation(actual(0), actualMovement());
     phase = Phase.VANILLA;
-    transition = null;
+    settleCorrection = null;
   }
 
   public Vec3 sample(double now, float partial) {
+    return sample(now, partial, -1);
+  }
+
+  public Vec3 renderSample(double now, float partial, long frame) {
+    return sample(now, partial, frame);
+  }
+
+  private Vec3 sample(double now, float partial, long frame) {
     if (phase == Phase.VANILLA) return actual(partial);
     if (phase == Phase.LOCAL_HOLD) {
-      if (hold.path == null)
-        return visual.sample(collisions, hold.start.position(now), hold.start.velocity(now), now);
-      float pathPartial = hold.partial(now);
-      return visual.samplePath(hold.path, pathPartial, hold.pathStart);
+      if (now > visual.sampledAt()) visual.sample(hold.prediction.sample(now), now);
+      now = visual.sampledAt();
+      Vec3 position = visual.position();
+      if (hold.correction != null) {
+        if (frame >= 0 && hold.sampledFrame == frame && hold.sampledTime == now
+            && hold.sampledCorrection == hold.correction && position.equals(hold.sampledPosition))
+          return hold.displayedPosition;
+        Vec3 displayed = visual.offsetPosition(collisions, hold.correction.offset(now));
+        if (displayed != null) {
+          if (frame >= 0) {
+            hold.sampledFrame = frame;
+            hold.sampledTime = now;
+            hold.sampledCorrection = hold.correction;
+            hold.sampledPosition = position;
+            hold.displayedPosition = displayed;
+          }
+          return displayed;
+        }
+        hold.correction = null;
+      }
+      return position;
     }
     if (flight != null)
       return visual.sample(collisions, flight.position(now), flight.velocity(now), now);
     return visual.sample(
         collisions,
-        actual(partial).add(transition.offset(now)),
-        actualMovement().add(transition.movement(now)),
+        actual(partial).add(settleCorrection.offset(now)),
+        actualMovement().add(settleCorrection.velocity(now)),
         now);
   }
 
   public AABB bounds(double now) {
     AABB hull = entity.getBoundingBox();
     AABB bounds = hull.minmax(hull.move(visual.position().subtract(hull.getCenter())));
-    if (hold != null && hold.path != null) {
-      return bounds.minmax(hold.path.bounds(hull)).inflate(.1);
+    double padding = .1;
+    if (hold != null) {
+      if (hold.correction != null) padding += hold.correction.boundsPadding();
+      return bounds.minmax(hold.prediction.bounds(hull, now)).inflate(padding);
     }
-    CarryFlightPrediction motion = flight != null ? flight : hold != null ? hold.start : null;
-    if (motion != null) {
+    if (flight != null) {
       bounds =
           bounds
-              .minmax(hull.move(motion.position(now).subtract(hull.getCenter())))
-              .minmax(hull.move(motion.position(now + 1).subtract(hull.getCenter())));
-    } else if (transition != null)
-      bounds =
-          bounds.inflate(
-              transition.position().length()
-                  + transition.velocity().length() * CarryHandoff.DURATION);
-    return bounds.inflate(.1);
+              .minmax(hull.move(flight.position(now).subtract(hull.getCenter())))
+              .minmax(hull.move(flight.position(now + 1).subtract(hull.getCenter())));
+    } else if (settleCorrection != null) {
+      bounds = bounds.inflate(settleCorrection.boundsPadding());
+    }
+    return bounds.inflate(padding);
   }
 
   public void teleport(Vec3 position, double now) {
     physicalVelocity = entity.getDeltaMovement();
-    visual = new CarryInterpolation(center(position), physicalVelocity);
+    visual = new CarryInterpolation(center(position), physicalVelocity.scale(1 / snapshotClock.tickDuration()));
     if (phase == Phase.LOCAL_HOLD) {
-      hold = new Hold(visual, physicalVelocity, now);
-      hold.observedCrossings = CarryBindings.crossings(entity);
+      hold = new Hold(collisions, serverTick, center(position), physicalVelocity);
     } else if (phase == Phase.FLIGHT || phase == Phase.REMOTE_HOLD)
-      flight = extrapolation(serverTick, now, position, physicalVelocity, now);
+      flight = extrapolation(serverTick, position, physicalVelocity, now);
     else {
       phase = Phase.VANILLA;
       hold = null;
       flight = null;
-      transition = null;
+      settleCorrection = null;
     }
   }
 
   public void crossed(PortalLink link) {
-    physicalVelocity = entity.getDeltaMovement();
+    var transform = link.transform();
+    physicalVelocity = transform.vector(physicalVelocity);
     visual.rebase(link);
     if (phase == Phase.LOCAL_HOLD) {
+      hold.prediction.crossed(link);
+      if (hold.correction != null)
+        hold.correction = hold.correction.transform(transform);
       return;
     }
-    var transform = link.transform();
     if (flight != null) flight.transform(transform);
-    if (transition != null)
-      transition =
-          new CarryHandoff(
-              transform.vector(transition.position()),
-              transform.vector(transition.velocity()),
-              transition.start());
+    if (settleCorrection != null) settleCorrection = settleCorrection.transform(transform);
   }
 
   private void capture(double now, float partial) {
     if (phase == Phase.VANILLA) visual = new CarryInterpolation(actual(partial), actualMovement());
-    else sample(now, partial);
+    else {
+      Vec3 displayed = sample(now, partial);
+      if (phase == Phase.LOCAL_HOLD && hold.correction != null) {
+        visual.correct(displayed, hold.correction.velocity(visual.sampledAt()));
+        hold.correction = null;
+      }
+    }
+  }
+
+  private void reconcile(CarryStatePayload update, double now, float partial) {
+    Vec3 displayed = sample(now, partial);
+    double time = visual.sampledAt();
+    Vec3 movement = visual.velocity();
+    if (hold.correction != null)
+      movement = movement.add(visual.worldVector(hold.correction.velocity(time)));
+    if (hold.prediction.confirm(update.tick(), center(update.position()), update.velocity(),
+        time, snapshotClock.tickDuration()))
+      setHoldVisual(time, displayed, movement);
+  }
+
+  private void setHoldVisual(double now, Vec3 displayed, Vec3 movement) {
+    visual.sample(hold.prediction.sample(now), now);
+    Vec3 offset = visual.inputVector(displayed.subtract(visual.position()));
+    Vec3 velocity = visual.inputVector(movement.subtract(visual.velocity()));
+    hold.correction = (offset.lengthSqr() > 1e-12 || velocity.lengthSqr() > 1e-12)
+            && visual.offsetPosition(collisions, offset) != null
+        ? new CarryPositionCorrection(offset, velocity, now)
+        : null;
   }
 
   private CarryFlightPrediction extrapolation(
-      long tick, double sourceTime, Vec3 position, Vec3 velocity, double now) {
+      long tick, Vec3 position, Vec3 velocity, double now) {
     return new CarryFlightPrediction(
         tick,
-        sourceTime,
         center(position),
         velocity,
+        snapshotClock.tickDuration(),
         now,
         visual.inputPosition(),
         visual.inputVelocity());
@@ -358,30 +381,32 @@ public final class CarriedEntityPrediction {
   }
 
   private Vec3 actual(float partial) {
-    return center(entity.getPosition(partial));
+    if (entity instanceof AbstractMinecart cart
+        && cart.getBehavior() instanceof NewMinecartBehavior behavior && behavior.cartHasPosRotLerp())
+      return center(behavior.getCartLerpPosition(partial));
+    Vec3 feet = entity.oldPosition().lerp(entity.position(), partial);
+    if (entity.getVehicle() instanceof AbstractMinecart cart
+        && cart.getBehavior() instanceof NewMinecartBehavior behavior && behavior.cartHasPosRotLerp())
+      feet = feet.add(behavior.getCartLerpPosition(partial)
+          .subtract(cart.oldPosition().lerp(cart.position(), partial)));
+    return center(feet);
   }
 
   private Vec3 actualMovement() {
-    return entity.position().subtract(entity.xo, entity.yo, entity.zo);
+    return actual(1).subtract(actual(0));
   }
 
   private static final class Hold {
-    final CarryAcknowledgements acknowledgements = new CarryAcknowledgements();
-    final CarryFlightPrediction start;
-    CarryFollowMotion motion;
-    CarryMotionPath path;
-    double pathStart;
-    final List<PortalLinkId> pendingCrossings = new ArrayList<>();
-    long observedCrossings;
+    final CarryHoldPrediction prediction;
+    CarryPositionCorrection correction;
+    long sampledFrame = -1;
+    double sampledTime;
+    CarryPositionCorrection sampledCorrection;
+    Vec3 sampledPosition;
+    Vec3 displayedPosition;
 
-    Hold(CarryInterpolation visual, Vec3 velocity, double now) {
-      start =
-          new CarryFlightPrediction(
-              0, now, visual.position(), velocity, now, visual.position(), visual.velocity());
-    }
-
-    float partial(double now) {
-      return (float) Math.clamp(now - pathStart, 0, 1);
+    Hold(CarryCollisionWorld collisions, long tick, Vec3 position, Vec3 velocity) {
+      prediction = new CarryHoldPrediction(collisions, tick, position, velocity);
     }
   }
 }

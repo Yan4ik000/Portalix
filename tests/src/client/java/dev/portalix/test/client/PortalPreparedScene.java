@@ -1,8 +1,10 @@
 package dev.portalix.test.client;
 
 import dev.portalix.client.portal.scene.PortalSceneManager;
+import dev.portalix.portal.PortalLink;
 import dev.portalix.portal.PortalTopology;
 import java.util.concurrent.CompletableFuture;
+import java.util.stream.Stream;
 import net.minecraft.client.CameraType;
 import net.minecraft.client.Minecraft;
 import net.minecraft.core.Direction;
@@ -36,19 +38,28 @@ abstract class PortalPreparedScene implements ClientSystemScene {
     if (!preparation.isDone()) return false;
     fixture = preparation.join();
     if (setup == null) {
-      setup = originalServer.submit(() -> fixture.prepare(Direction.SOUTH, Direction.SOUTH, 0, 3, false));
+      setup = originalServer.submit(() -> fixture.prepare(Direction.SOUTH, Direction.SOUTH, 0, 3));
       return false;
     }
     if (!setup.isDone()) return false;
     arrangement = setup.join();
     if (client.player.position().distanceTo(arrangement.feet()) > .1 || !client.levelRenderer.hasRenderedAllSections()) return false;
-    var links = PortalTopology.links(client.level).stream().filter(link -> link.gun().equals(fixture.gunId())
-        && link.generation() == arrangement.generation()).toList();
+    var links = arrangementLinks().toList();
     if (links.size() != 2) return false;
     if (links.stream().noneMatch(PortalSceneManager::hasRenderedView)
         || links.stream().anyMatch(link -> !PortalOpeningReadiness.fullyOpen(link))) return false;
     frames.monitor(true);
     return true;
+  }
+
+  private Stream<PortalLink> arrangementLinks() {
+    return PortalTopology.links(client.level).stream().filter(link -> link.gun().equals(fixture.gunId())
+        && link.generation() == arrangement.generation());
+  }
+
+  protected Stream<PortalLink> openEntrances() {
+    return arrangementLinks().filter(link -> link.entrance().endpoint().equals(arrangement.entrance())
+        && PortalOpeningReadiness.fullyOpen(link));
   }
 
   public CompletableFuture<Void> cleanup() {

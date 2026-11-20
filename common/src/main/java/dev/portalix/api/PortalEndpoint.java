@@ -15,7 +15,7 @@ public record PortalEndpoint(
     if (width != 1.0 || height != 2.0) {
       throw new IllegalArgumentException("Only 1x2 portals are supported");
     }
-    if (!finite(center) || !finite(normal) || !finite(up)) {
+    if (!center.isFinite() || !normal.isFinite() || !up.isFinite()) {
       throw new IllegalArgumentException("Portal geometry must be finite and non-degenerate");
     }
     normal = unit(normal);
@@ -25,10 +25,6 @@ public record PortalEndpoint(
       throw new IllegalArgumentException("Portal up must not be parallel to its normal");
     }
     up = unit(up);
-  }
-
-  private static boolean finite(Vec3 v) {
-    return Double.isFinite(v.x) && Double.isFinite(v.y) && Double.isFinite(v.z);
   }
 
   private static Vec3 unit(Vec3 vector) {

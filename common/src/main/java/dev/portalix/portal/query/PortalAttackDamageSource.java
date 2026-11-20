@@ -23,10 +23,8 @@ public final class PortalAttackDamageSource extends DamageSource {
 
   public static DamageSource throughPortal(
       Player player, Entity target, ItemStack weapon, DamageSource original) {
-    var range = player.getAttackRangeWith(weapon);
-    double maximum = range.effectiveMaxRange(player) + range.hitboxMargin() + 3;
     var selected =
-        PortalInteractionPath.closest(player, PortalPassagePose.interactionBounds(target), maximum);
+        PortalInteractionPath.attack(player, weapon, PortalPassagePose.interactionBounds(target), 3);
     if (selected.isEmpty()) return original;
     var route = selected.orElseThrow();
     if (route.links().isEmpty()) return original;

@@ -8,7 +8,6 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.renderer.SubmitNodeCollector;
 import net.minecraft.client.renderer.state.level.LevelRenderState;
-import net.minecraft.core.BlockPos;
 import net.minecraft.world.phys.Vec3;
 import org.joml.Vector3f;
 
@@ -28,10 +27,6 @@ public final class GunRenderEvents {
         camera.initialized ? camera.cullFrustum::isVisible : bounds -> true);
     PortalixClient.portals().submit(view, collector.order(-1));
     PortalixClient.shotEffects().submit(view, collector.order(0));
-  }
-
-  public static boolean hidesBlockOutline(BlockPos pos) {
-    return PortalixClient.portals().hidesBlockOutline(pos);
   }
 
   public static void renderCrosshair(GuiGraphicsExtractor graphics) {

@@ -9,6 +9,7 @@ import dev.portalix.client.render.ParticleView;
 import dev.portalix.network.portal.PortalStatePayload;
 import dev.portalix.portal.PortalLink;
 import dev.portalix.portal.PortalTopology;
+import dev.portalix.portal.geometry.PortalAperture;
 import dev.portalix.sound.GunSounds;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -18,7 +19,7 @@ import java.util.UUID;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.OrderedSubmitNodeCollector;
 import net.minecraft.client.resources.sounds.SoundInstance;
-import net.minecraft.core.BlockPos;
+import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.Vec3;
 
 public final class ClientPortalRegistry {
@@ -31,11 +32,13 @@ public final class ClientPortalRegistry {
   private final Minecraft client = Minecraft.getInstance();
   private final SoundVoiceLimiter responses = new SoundVoiceLimiter(client);
 
-  public boolean hidesBlockOutline(BlockPos pos) {
+  public boolean hidesBlockOutline(BlockHitResult hit) {
     if (client.level == null) return false;
     for (PortalVisual portal : portals.values()) {
       if (!portal.endpoint.dimension().equals(client.level.dimension())) continue;
-      if (portal.footprint.contains(pos)) return true;
+      if (portal.footprint.contains(hit.getBlockPos())
+          && portal.endpoint.normal().dot(Vec3.atLowerCornerOf(hit.getDirection().getUnitVec3i())) > 0
+          && PortalAperture.containsPassage(portal.endpoint, hit.getLocation())) return true;
     }
     return false;
   }

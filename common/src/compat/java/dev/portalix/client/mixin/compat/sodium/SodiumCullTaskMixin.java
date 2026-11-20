@@ -3,8 +3,6 @@ package dev.portalix.client.mixin.compat.sodium;
 import com.llamalad7.mixinextras.injector.wrapmethod.WrapMethod;
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import dev.portalix.client.compat.sodium.SodiumCullRequest;
-import dev.portalix.client.portal.clip.PortalCullPlane;
-import dev.portalix.client.portal.terrain.PortalOcclusionContext;
 import net.caffeinemc.mods.sodium.client.render.chunk.async.CullResult;
 import net.caffeinemc.mods.sodium.client.render.chunk.async.CullTask;
 import net.caffeinemc.mods.sodium.client.render.chunk.occlusion.OcclusionCuller;
@@ -20,11 +18,10 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 @Pseudo
 @Mixin(value = CullTask.class, remap = false)
 abstract class SodiumCullTaskMixin implements SodiumCullRequest.SnapshotAccess {
-  @Unique private PortalCullPlane portalix$exit;
   @Unique private SodiumCullRequest.Snapshot portalix$snapshot;
 
   @Inject(method = "<init>", at = @At("TAIL"))
-  private void portalix$snapshotExit(
+  private void portalix$createSnapshot(
       Viewport viewport,
       float regularDistance,
       float localDistance,
@@ -33,7 +30,6 @@ abstract class SodiumCullTaskMixin implements SodiumCullRequest.SnapshotAccess {
       boolean culling,
       Level level,
       CallbackInfo ci) {
-    portalix$exit = SodiumCullRequest.plane(viewport);
     portalix$snapshot = new SodiumCullRequest.Snapshot(
         SodiumCullRequest.Footprint.of(viewport, Math.max(regularDistance, localDistance)));
   }
@@ -44,8 +40,7 @@ abstract class SodiumCullTaskMixin implements SodiumCullRequest.SnapshotAccess {
   }
 
   @WrapMethod(method = "runTask")
-  private CullResult portalix$clippedVisibility(Operation<CullResult> original) {
-    return ScopedValue.where(SodiumCullRequest.Snapshot.ACTIVE, portalix$snapshot)
-        .call(() -> PortalOcclusionContext.call(portalix$exit, original::call));
+  private CullResult portalix$captureSnapshot(Operation<CullResult> original) {
+    return ScopedValue.where(SodiumCullRequest.Snapshot.ACTIVE, portalix$snapshot).call(original::call);
   }
 }

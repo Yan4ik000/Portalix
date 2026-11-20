@@ -3,6 +3,7 @@ package dev.portalix.test;
 import static dev.portalix.test.ServerRegressionSuite.check;
 
 import dev.portalix.item.ModItems;
+import dev.portalix.item.PortalixVariant;
 import dev.portalix.item.PortalixIdentity;
 import dev.portalix.network.gun.GunCommand;
 import dev.portalix.portal.PortalTopology;
@@ -27,7 +28,7 @@ final class GunShootingRegression implements ServerRegressionSuite.Scenario {
     this.world = world;
     session = new PortalServerSession(world.level.getServer());
     noGravity = world.player.isNoGravity();
-    var stack = new ItemStack(ModItems.PORTALIX.get());
+    var stack = new ItemStack(ModItems.gun(PortalixVariant.STANDARD));
     gun = PortalixIdentity.ensure(stack);
   }
 
@@ -37,7 +38,7 @@ final class GunShootingRegression implements ServerRegressionSuite.Scenario {
     session.tick(world.level.getServer());
     if (started < 0) {
       world.player.setNoGravity(true);
-      var stack = new ItemStack(ModItems.PORTALIX.get());
+      var stack = new ItemStack(ModItems.gun(PortalixVariant.STANDARD));
       stack.set(PortalixIdentity.ID.get(), gun);
       world.player.setItemSlot(EquipmentSlot.MAINHAND, stack);
       world.clear(new Vec3(160, 104, 152), 8);

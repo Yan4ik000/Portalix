@@ -69,7 +69,7 @@ final class EntityTraversalSystemScene implements ClientSystemScene {
     switch (step) {
       case START -> {
         client.options.setCameraType(CameraType.FIRST_PERSON);
-        preparation = server.submit(() -> new EntitySystemFixture(server.getPlayerList().getPlayer(playerId), true));
+        preparation = server.submit(() -> new EntitySystemFixture(server.getPlayerList().getPlayer(playerId)));
         next(Step.PREPARE);
       }
       case PREPARE -> {

@@ -46,7 +46,10 @@ public final class ServerRegressionSuite {
       case PLAYER_TRAVERSAL -> PlayerTraversalRegression.run(world);
       case PROJECTILES -> NativeProjectileRegression.run(world);
       case COMBAT -> { return new CombatRegression(world); }
-      case CARRY -> CarryRegression.run(world);
+      case CARRY -> {
+        CarryRegression.run(world);
+        return new CarryRegression(world);
+      }
       case CHUNKS -> { return new ChunkLifecycleRegression(world); }
       case CONTENT -> ContentRegression.run(world);
     }

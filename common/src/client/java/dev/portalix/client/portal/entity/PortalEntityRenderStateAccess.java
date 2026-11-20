@@ -1,5 +1,6 @@
 package dev.portalix.client.portal.entity;
 
+import com.mojang.blaze3d.vertex.PoseStack;
 import java.util.List;
 import org.joml.Quaternionf;
 import org.jspecify.annotations.Nullable;
@@ -13,7 +14,7 @@ public interface PortalEntityRenderStateAccess {
 
   void portalix$carryRotation(Quaternionf rotation);
 
-  Quaternionf portalix$modelRotation();
+  void portalix$applyModelRotation(PoseStack poses);
 
   void portalix$modelRotation(Quaternionf rotation);
 }

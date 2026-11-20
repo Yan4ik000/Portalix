@@ -4,8 +4,10 @@ import static dev.portalix.test.client.ClientAssertions.check;
 
 import dev.portalix.client.portal.camera.PortalCameraController;
 import dev.portalix.client.portal.scene.PortalSceneManager;
+import dev.portalix.platform.ModPresence;
 import dev.portalix.portal.PortalTopology;
 import dev.portalix.portal.PortalLink;
+import dev.portalix.portal.query.PlayerPortalVisibility;
 import dev.portalix.portal.traversal.EntityPortalState;
 import dev.portalix.portal.traversal.PortalPassagePose;
 import dev.portalix.portal.traversal.PortalTraversalReadiness;
@@ -27,7 +29,7 @@ import org.joml.Vector3f;
 
 /** Camera arrangements start independently; only the movement under assertion is performed by input. */
 final class CameraSystemScene implements ClientSystemScene {
-  private enum Kind { STILL, BOOM, CROSS, RESET }
+  private enum Kind { STILL, BOOM, EXTENDED_BOOM, CROSS, RESET }
   private enum Phase { SETUP, READY, ACTION, NEXT, DONE }
   private record Case(String id, Kind kind, Direction entry, Direction exit, float roll,
                       double distance, int fov, CameraType perspective) {}
@@ -50,6 +52,7 @@ final class CameraSystemScene implements ClientSystemScene {
   private final int originalFov;
   private final CameraType originalPerspective;
   private final boolean originalHidden;
+  private final List<Case> cases = new ArrayList<>(CASES);
   private final List<String> passed = new ArrayList<>();
   private final List<PortalLink> bodyCameraPath = new ArrayList<>();
   private long observedBodyEvent = Long.MIN_VALUE;
@@ -87,6 +90,9 @@ final class CameraSystemScene implements ClientSystemScene {
     originalFov = client.options.fov().get();
     originalPerspective = client.options.getCameraType();
     originalHidden = client.gui.hud.isHidden();
+    if (ModPresence.INSTANCE.isLoaded("neoforge"))
+      cases.addFirst(new Case("neoforge-detached-distance-event", Kind.EXTENDED_BOOM,
+          Direction.SOUTH, Direction.SOUTH, 0, 10, 70, CameraType.THIRD_PERSON_FRONT));
   }
 
   @Override public List<String> passed() { return List.copyOf(passed); }
@@ -154,7 +160,7 @@ final class CameraSystemScene implements ClientSystemScene {
           var server = client.getSingleplayerServer();
           setup = server.submit(() -> {
             if (fixture == null) fixture = new PortalSystemFixture(server.getPlayerList().getPlayer(player), 512, 0);
-            var arrangement = fixture.prepare(spec().entry, spec().exit, spec().roll, spec().distance, false);
+            var arrangement = fixture.prepare(spec().entry, spec().exit, spec().roll, spec().distance);
             if (spec().kind == Kind.BOOM) obstacle = fixture.cameraObstacle();
             return arrangement;
           });
@@ -188,6 +194,7 @@ final class CameraSystemScene implements ClientSystemScene {
             })) next(Phase.NEXT);
           }
           case BOOM -> boom();
+          case EXTENDED_BOOM -> extendedBoom();
           case CROSS -> crossing();
           case RESET -> reset();
         }
@@ -195,7 +202,7 @@ final class CameraSystemScene implements ClientSystemScene {
       case NEXT -> {
         if (!frames.pause()) return false;
         passed.add("camera/" + spec().id);
-        if (++index == CASES.size()) {
+        if (++index == cases.size()) {
           phase = Phase.DONE;
           return true;
         }
@@ -238,6 +245,32 @@ final class CameraSystemScene implements ClientSystemScene {
         check(pose.player.distanceTo(scene.feet()) < .12, "F5 changed the stationary body position");
       })) next(Phase.NEXT);
     }
+  }
+
+  private void extendedBoom() {
+    if (action == 0) {
+      ClientRegressionRunner.setDetachedCameraDistance(12);
+      if (!perspective(spec().perspective)) return;
+      if (!image("event-distance", this::cameraThroughPortal, frame -> {
+        double depth = pose.camera.subtract(scene.exit().center()).dot(scene.exit().normal());
+        check(Math.abs(depth - 2) < .05, "The camera did not use the detached distance event: " + depth);
+        check(pose.player.distanceTo(scene.feet()) < .12, "The extended camera moved the player");
+      })) return;
+      action = 1;
+    }
+    if (authoritative == null) {
+      var server = client.getSingleplayerServer();
+      var player = client.player.getUUID();
+      var exit = scene.exit();
+      authoritative = server.submit(() -> PlayerPortalVisibility.of(server.getPlayerList().getPlayer(player))
+          .observers().stream().anyMatch(observer -> observer.arrival() && observer.exit().equals(exit)));
+    }
+    if (!authoritative.isDone()) return;
+    boolean accepted = authoritative.join();
+    authoritative = null;
+    if (!accepted) return;
+    ClientRegressionRunner.setDetachedCameraDistance(Float.NaN);
+    next(Phase.NEXT);
   }
 
   private void crossing() {
@@ -359,7 +392,7 @@ final class CameraSystemScene implements ClientSystemScene {
       check(pose.path.isEmpty(), "Unlink left a stale eye-space camera path");
       check(PortalSceneManager.portalImage(scene.entrance()) == null, "Unlinked portal retained a live scene image");
     })) {
-      setup = client.getSingleplayerServer().submit(() -> fixture.prepare(Direction.SOUTH, Direction.SOUTH, 0, 1.2, false));
+      setup = client.getSingleplayerServer().submit(() -> fixture.prepare(Direction.SOUTH, Direction.SOUTH, 0, 1.2));
       action = 3;
     }
     if (action == 3) {
@@ -464,6 +497,7 @@ final class CameraSystemScene implements ClientSystemScene {
 
   @Override public CompletableFuture<Void> cleanup() {
     input.stop();
+    ClientRegressionRunner.setDetachedCameraDistance(Float.NaN);
     client.options.fov().set(originalFov);
     client.options.setCameraType(originalPerspective);
     if (client.gui.hud.isHidden() != originalHidden) client.gui.hud.toggle();
@@ -474,7 +508,7 @@ final class CameraSystemScene implements ClientSystemScene {
     }));
   }
 
-  private Case spec() { return CASES.get(index); }
+  private Case spec() { return cases.get(index); }
   private String name(String suffix) { return "camera-" + spec().id + "-" + suffix; }
   private void next(Phase value) { input.stop(); phase = value; age = 0; }
   private static Case still(String id, double distance, int fov) {

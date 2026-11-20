@@ -1,7 +1,6 @@
 package dev.portalix.network.carry;
 
 import dev.portalix.PortalixMod;
-import dev.portalix.network.PayloadCodecs;
 import java.util.UUID;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.StreamCodec;
@@ -12,7 +11,6 @@ public record CarryStatePayload(
     int entityId,
     UUID entityUuid,
     long generation,
-    long sequence,
     long tick,
     Vec3 position,
     Vec3 velocity,
@@ -27,10 +25,9 @@ public record CarryStatePayload(
             buffer.writeVarInt(payload.entityId);
             buffer.writeUUID(payload.entityUuid);
             buffer.writeVarLong(payload.generation);
-            buffer.writeVarLong(payload.sequence);
             buffer.writeVarLong(payload.tick);
-            PayloadCodecs.writeVector(buffer, payload.position);
-            PayloadCodecs.writeVector(buffer, payload.velocity);
+            Vec3.STREAM_CODEC.encode(buffer, payload.position);
+            Vec3.STREAM_CODEC.encode(buffer, payload.velocity);
             buffer.writeBoolean(payload.released);
             buffer.writeBoolean(payload.complete);
           },
@@ -40,9 +37,8 @@ public record CarryStatePayload(
                   buffer.readUUID(),
                   buffer.readVarLong(),
                   buffer.readVarLong(),
-                  buffer.readVarLong(),
-                  PayloadCodecs.readVector(buffer),
-                  PayloadCodecs.readVector(buffer),
+                  Vec3.STREAM_CODEC.decode(buffer),
+                  Vec3.STREAM_CODEC.decode(buffer),
                   buffer.readBoolean(),
                   buffer.readBoolean()));
 

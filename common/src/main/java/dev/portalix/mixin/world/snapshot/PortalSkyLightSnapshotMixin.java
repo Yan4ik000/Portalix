@@ -31,12 +31,8 @@ abstract class PortalSkyLightSnapshotMixin implements SkyLightColumnAccess {
           "copy()Lnet/minecraft/world/level/lighting/SkyLightSectionStorage$SkyDataLayerStorageMap;",
       at = @At("RETURN"))
   private void portalix$copy(CallbackInfoReturnable<DataLayerStorageMap<?>> ci) {
-    ((SkyLightColumnAccess) ci.getReturnValue()).portalix$copyColumnsFrom(this);
-  }
-
-  @Override
-  public void portalix$copyColumnsFrom(SkyLightColumnAccess source) {
-    portalix$columns = ((PortalSkyLightSnapshotMixin) (Object) source).portalix$columns.copy();
+    var snapshot = (PortalSkyLightSnapshotMixin) (Object) ci.getReturnValue();
+    snapshot.portalix$columns = portalix$columns.copy();
   }
 
   @Override

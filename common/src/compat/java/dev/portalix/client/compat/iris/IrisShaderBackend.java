@@ -1,24 +1,39 @@
 package dev.portalix.client.compat.iris;
 
 import com.mojang.blaze3d.pipeline.RenderPipeline;
+import com.mojang.blaze3d.vertex.VertexFormat;
 import dev.portalix.client.compat.RenderScope;
 import dev.portalix.client.compat.ShaderBackend;
-import dev.portalix.client.mixin.compat.iris.IrisRenderingPipelineAccessor;
+import dev.portalix.client.compat.minecraft.PipelineVariant;
+import dev.portalix.client.compat.sodium.SodiumShaderAbi;
 import dev.portalix.client.portal.render.PortalScreenRegion;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import net.caffeinemc.mods.sodium.client.render.chunk.vertex.format.ChunkMeshFormats;
+import net.irisshaders.iris.Iris;
 import net.irisshaders.iris.api.v0.IrisApi;
 import net.irisshaders.iris.api.v0.IrisProgram;
 import net.irisshaders.iris.api.v0.IrisShadowProgram;
 import net.irisshaders.iris.pipeline.IrisPipelines;
+import net.irisshaders.iris.pipeline.IrisRenderingPipeline;
+import net.irisshaders.iris.shaderpack.materialmap.WorldRenderingSettings;
 import net.minecraft.client.renderer.RenderPipelines;
+import net.minecraft.client.renderer.ShaderDefines;
 import net.minecraft.client.renderer.rendertype.PreparedRenderType;
 import net.minecraft.world.item.Item;
 import org.joml.Matrix4f;
 
 public final class IrisShaderBackend implements ShaderBackend {
+  private static final ShaderDefines SEPARATE_OCCLUSION =
+      ShaderDefines.builder().define(SodiumShaderAbi.SEPARATE_OCCLUSION).build();
+  private final Map<TerrainFormat, RenderPipeline> terrainFallbacks = new HashMap<>();
+
+  private record TerrainFormat(RenderPipeline pipeline, VertexFormat format, boolean separateOcclusion) {}
+
   @Override
   public boolean active() {
-    return IrisApi.getInstance().isShaderPackInUse();
+    return Iris.getPipelineManager().getPipelineNullable() instanceof IrisRenderingPipeline;
   }
 
   @Override
@@ -35,7 +50,7 @@ public final class IrisShaderBackend implements ShaderBackend {
   @Override
   public boolean vanillaEntityShadows() {
     if (!active()) return true;
-    var pipeline = net.irisshaders.iris.Iris.getPipelineManager().getPipelineNullable();
+    var pipeline = Iris.getPipelineManager().getPipelineNullable();
     return pipeline == null || !pipeline.shouldDisableVanillaEntityShadows();
   }
 
@@ -49,9 +64,22 @@ public final class IrisShaderBackend implements ShaderBackend {
   @Override
   public boolean overridesGeometry(RenderPipeline pipeline) {
     if (!active()) return false;
-    var current = net.irisshaders.iris.Iris.getPipelineManager().getPipelineNullable();
-    return current instanceof net.irisshaders.iris.pipeline.IrisRenderingPipeline iris
+    var current = Iris.getPipelineManager().getPipelineNullable();
+    return current instanceof IrisRenderingPipeline iris
         && IrisPipelines.getPipeline(iris, pipeline) != null;
+  }
+
+  @Override
+  public RenderPipeline terrainPipeline(RenderPipeline pipeline, VertexFormat format) {
+    if (format == ChunkMeshFormats.COMPACT.getVertexFormat() || active()) return pipeline;
+    // Iris keeps the compact binding as its override key, even for shared extended meshes.
+    var terrain = new TerrainFormat(pipeline, format, WorldRenderingSettings.INSTANCE.shouldUseSeparateAo());
+    return terrainFallbacks.computeIfAbsent(terrain, key -> {
+      var variant = new PipelineVariant(key.pipeline, key.pipeline.getLocation().withSuffix("_portalix_terrain"))
+          .geometry(key.format, key.pipeline.getPrimitiveTopology());
+      if (key.separateOcclusion) variant.shaderDefines(SEPARATE_OCCLUSION);
+      return variant.build();
+    });
   }
 
   @Override
@@ -74,10 +102,8 @@ public final class IrisShaderBackend implements ShaderBackend {
   @Override
   public void invalidatePrimaryHistory() {
     if (!active()) return;
-    var primary = net.irisshaders.iris.Iris.getPipelineManager().getPipelineNullable();
-    if (primary instanceof net.irisshaders.iris.pipeline.IrisRenderingPipeline iris)
-      ((IrisTargetHistory) ((IrisRenderingPipelineAccessor) iris).portalix$targets())
-          .portalix$invalidateHistory();
+    var primary = Iris.getPipelineManager().getPipelineNullable();
+    if (primary instanceof IrisPipelineHistory history) history.portalix$invalidateHistory();
   }
 
   @Override
@@ -107,6 +133,7 @@ public final class IrisShaderBackend implements ShaderBackend {
 
   @Override
   public void clearEffects() {
+    terrainFallbacks.clear();
     IrisEffectFramebuffer.clear();
   }
 

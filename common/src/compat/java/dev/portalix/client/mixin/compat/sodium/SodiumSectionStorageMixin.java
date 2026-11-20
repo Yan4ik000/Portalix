@@ -31,7 +31,6 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 abstract class SodiumSectionStorageMixin implements SodiumColumnRetirement {
   @Shadow @Final @Mutable private Long2ReferenceMap<RenderSection> sections;
   @Shadow @Final @Mutable private Long2ReferenceMap<RenderSection> queuedPuts;
-  @Shadow @Final private LongSet queuedRemovals;
   @Shadow private boolean isQueueing;
   @Shadow private int lastPutQueueSize;
   @Shadow private int lastRemoveQueueSize;

@@ -1,5 +1,6 @@
 package dev.portalix.client.portal;
 
+import dev.portalix.client.PortalixClient;
 import dev.portalix.client.portal.camera.PortalCameraController;
 import dev.portalix.portal.PortalLink;
 import dev.portalix.portal.PortalRoutes;
@@ -63,9 +64,7 @@ public final class PortalMousePicking {
 
   private static PortalRaycast.Result blockTrace(
       Entity source, PortalCameraController.View pose, double reach) {
-    return PortalRaycast.cast(source, pose.position(), pose.forward().scale(reach),
-        (from, to) -> source.level().clipIncludingBorder(
-            new ClipContext(from, to, ClipContext.Block.OUTLINE, ClipContext.Fluid.NONE, source)));
+    return PortalRaycast.castInteraction(source, pose.position(), pose.forward().scale(reach));
   }
 
   private static PortalRaycast.Result ordinary(
@@ -163,6 +162,8 @@ public final class PortalMousePicking {
 
   public static boolean outlineIn(List<PortalLink> path) {
     var client = Minecraft.getInstance();
+    if (client.hitResult instanceof BlockHitResult hit && hit.getType() == HitResult.Type.BLOCK
+        && PortalixClient.portals().hidesBlockOutline(hit)) return false;
     if (selected == null || selected.hit() != client.hitResult) return path.isEmpty();
     var camera = PortalCameraController.currentView();
     var frame = new ArrayList<PortalLink>();

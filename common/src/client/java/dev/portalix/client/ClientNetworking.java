@@ -2,6 +2,7 @@ package dev.portalix.client;
 
 import dev.portalix.client.platform.ClientPlatform;
 import dev.portalix.client.portal.ClientPortalMovement;
+import dev.portalix.client.portal.PortalViewReadiness;
 import java.util.function.BiConsumer;
 import net.minecraft.client.Minecraft;
 import net.minecraft.network.protocol.common.ServerboundCustomPayloadPacket;
@@ -18,6 +19,7 @@ public final class ClientNetworking {
   public static void register(Registration registration) {
     ClientPayloadHandlers.register(registration);
     ClientPortalMovement.register(registration);
+    PortalViewReadiness.registerNetworking(registration);
   }
 
   public static boolean canServerReceive(CustomPacketPayload.Type<?> type) {

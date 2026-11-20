@@ -13,7 +13,9 @@ import net.minecraft.gametest.framework.GameTestRunner;
 import net.minecraft.network.Connection;
 import net.minecraft.network.protocol.PacketFlow;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.network.CommonListenerCookie;
+import net.minecraft.server.network.ServerConfigurationPacketListenerImpl;
 import org.slf4j.Logger;
 
 public final class RegressionGameTest {
@@ -26,32 +28,24 @@ public final class RegressionGameTest {
   }
 
   public static void run(GameTestHelper helper, ServerRegressionSuite.Group group,
-      Consumer<Connection> configureConnection) {
+      Consumer<ServerConfigurationPacketListenerImpl> configureConnection) {
     var level = helper.getLevel();
     if (!level.getServer().isSameThread())
       throw new IllegalStateException("GameTest fixtures must execute synchronously on the server thread");
-    var profile = new GameProfile(UUID.randomUUID(), "PortalixTest");
-    var cookie = CommonListenerCookie.createInitial(profile, false);
-    // Native GameTest players are subclasses; NeoForge excludes them from configuration handshake state.
-    var player = new ServerPlayer(level.getServer(), level, profile, cookie.clientInformation()) {};
-    var connection = new Connection(PacketFlow.SERVERBOUND);
-    var channel = new EmbeddedChannel(connection);
-    var fixture = new Fixture(player, channel);
+    var participant = new Participant(level, "PortalixTest");
+    var fixture = new Fixture(participant);
     ((GameTestHelperAccessor) helper).portalix$testInfo().addListener(new GameTestListener() {
       public void testStructureLoaded(GameTestInfo info) {}
       public void testPassed(GameTestInfo info, GameTestRunner runner) { fixture.close(); }
-      public void testFailed(GameTestInfo info, GameTestRunner runner) {
-        fixture.close();
-      }
+      public void testFailed(GameTestInfo info, GameTestRunner runner) { fixture.close(); }
       public void testAddedForRerun(GameTestInfo original, GameTestInfo copy, GameTestRunner runner) { fixture.close(); }
     });
     try {
-      configureConnection.accept(connection);
-      level.getServer().getPlayerList().placeNewPlayer(connection, player, cookie);
+      participant.connect(configureConnection);
       helper.onEachTick(() -> {
         if (fixture.closed) return;
         try {
-          if (fixture.world == null) fixture.world = new RegressionWorld(level, player, channel);
+          if (fixture.world == null) fixture.world = new RegressionWorld(level, participant.player, participant.channel, configureConnection);
           if (!fixture.started) {
             if (!fixture.world.ready()) return;
             fixture.scenario = ServerRegressionSuite.start(fixture.world, group);
@@ -66,7 +60,6 @@ public final class RegressionGameTest {
       });
     } catch (RuntimeException | AssertionError failure) {
       failed(helper, group, fixture, failure);
-      return;
     }
   }
 
@@ -82,17 +75,49 @@ public final class RegressionGameTest {
     helper.fail(group.id() + ": " + failure.getMessage());
   }
 
+  static final class Participant implements AutoCloseable {
+    ServerPlayer player;
+    final Connection connection = new Connection(PacketFlow.SERVERBOUND);
+    final EmbeddedChannel channel = new EmbeddedChannel(connection);
+    private final CommonListenerCookie cookie;
+    private boolean closed;
+
+    Participant(ServerLevel level, String name) {
+      var profile = new GameProfile(UUID.randomUUID(), name);
+      cookie = CommonListenerCookie.createInitial(profile, false);
+      player = new ServerPlayer(level.getServer(), level, profile, cookie.clientInformation());
+    }
+
+    void connect(Consumer<ServerConfigurationPacketListenerImpl> configure) {
+      configure.accept(new ServerConfigurationPacketListenerImpl(player.level().getServer(), connection, cookie));
+      player.level().getServer().getPlayerList().placeNewPlayer(connection, player, cookie);
+    }
+
+    public void close() {
+      if (closed) return;
+      closed = true;
+      try {
+        var players = player.level().getServer().getPlayerList();
+        if (players.getPlayer(player.getUUID()) == player) players.remove(player);
+      } finally {
+        try {
+          if (player.connection != null) player.connection.resumeFlushing();
+        } finally {
+          channel.finishAndReleaseAll();
+        }
+      }
+    }
+  }
+
   private static final class Fixture implements AutoCloseable {
-    private final ServerPlayer player;
-    private final EmbeddedChannel channel;
+    private final Participant participant;
     private ServerRegressionSuite.Scenario scenario;
     private boolean started;
     private RegressionWorld world;
     private boolean closed;
 
-    private Fixture(ServerPlayer player, EmbeddedChannel channel) {
-      this.player = player;
-      this.channel = channel;
+    private Fixture(Participant participant) {
+      this.participant = participant;
     }
 
     public void close() {
@@ -100,24 +125,13 @@ public final class RegressionGameTest {
       closed = true;
       try {
         if (scenario != null) scenario.close();
-      }
-      finally {
+      } finally {
         try {
           if (world != null) world.close();
         } finally {
-          try {
-            var players = player.level().getServer().getPlayerList();
-            if (players.getPlayer(player.getUUID()) == player) players.remove(player);
-          } finally {
-            try {
-              if (player.connection != null) player.connection.resumeFlushing();
-            } finally {
-              channel.finishAndReleaseAll();
-            }
-          }
+          participant.close();
         }
       }
     }
   }
-
 }

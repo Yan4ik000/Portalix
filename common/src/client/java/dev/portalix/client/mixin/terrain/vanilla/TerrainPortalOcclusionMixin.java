@@ -5,7 +5,7 @@ import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
 import com.llamalad7.mixinextras.sugar.Local;
 import com.llamalad7.mixinextras.sugar.Share;
 import com.llamalad7.mixinextras.sugar.ref.LocalBooleanRef;
-import dev.portalix.client.portal.terrain.PortalOcclusionContext;
+import dev.portalix.client.portal.terrain.PortalOcclusionOpenings;
 import it.unimi.dsi.fastutil.longs.LongArrayList;
 import net.minecraft.client.renderer.SectionOcclusionGraph;
 import net.minecraft.client.renderer.ViewArea;
@@ -40,7 +40,7 @@ abstract class TerrainPortalOcclusionMixin {
       @Share("opening") LocalBooleanRef opening) {
     var section = original.call(graph, camera, parent, direction);
     if (section != null) {
-      opening.set(PortalOcclusionContext.open(parent.getSectionNode()));
+      opening.set(PortalOcclusionOpenings.contains(parent.getSectionNode()));
       return section;
     }
     long neighbor = parent.getNeighborSectionNode(direction);

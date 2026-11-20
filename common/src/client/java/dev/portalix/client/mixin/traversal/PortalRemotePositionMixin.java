@@ -7,13 +7,10 @@ import dev.portalix.client.portal.RemotePortalInterpolation;
 import dev.portalix.client.portal.ClientPortalMovement;
 import dev.portalix.portal.traversal.EntityPortalState;
 import dev.portalix.portal.traversal.PortalEntityMovement;
-import dev.portalix.portal.traversal.PortalPassagePose;
-import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 import java.util.Set;
 import net.minecraft.client.multiplayer.ClientPacketListener;
-import net.minecraft.network.syncher.SynchedEntityData;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.PositionMoveRotation;
 import net.minecraft.world.entity.Relative;
@@ -55,45 +52,20 @@ abstract class PortalRemotePositionMixin {
   }
 
   @WrapOperation(
-      method = "handleSetEntityData",
-      at =
-          @At(
-              value = "INVOKE",
-              target =
-                  "Lnet/minecraft/network/syncher/SynchedEntityData;assignValues(Ljava/util/List;)V"))
-  private void portalix$pose(
-      SynchedEntityData data,
-      List<SynchedEntityData.DataValue<?>> values,
-      Operation<Void> original,
-      @Local Entity entity) {
-    var interpolation = RemotePortalInterpolation.of(entity);
-    if (interpolation == null || !interpolation.active()) {
-      original.call(data, values);
-      return;
-    }
-    var immediate = new ArrayList<SynchedEntityData.DataValue<?>>();
-    for (var value : values) {
-      if (PortalPassagePose.isPoseField(entity, value.id()))
-        interpolation.scale((Float) value.value());
-      else immediate.add(value);
-    }
-    original.call(data, immediate);
-  }
-
-  @WrapOperation(
       method = "setValuesFromPositionPacket(Lnet/minecraft/world/entity/PositionMoveRotation;Ljava/util/Set;Lnet/minecraft/world/entity/Entity;Z)Z",
       at = @At(value = "INVOKE", target =
           "Lnet/minecraft/world/entity/PositionMoveRotation;of(Lnet/minecraft/world/entity/Entity;)Lnet/minecraft/world/entity/PositionMoveRotation;"),
       require = 1, allow = 1)
   private static PositionMoveRotation portalix$correctionBaseline(Entity entity,
       Operation<PositionMoveRotation> original, @Local(argsOnly = true) Set<Relative> relatives) {
+    if (!relatives.isEmpty()) ClientPortalMovement.restoreTeleportFrame(entity);
     boolean predicted = EntityPortalState.of(entity).hasPredictions();
     boolean interpolating = entity.isInterpolating();
     // Relative packets use the native interpolation target, independently of the displayed pose.
     var nativeBaseline = original.call(entity);
     var remote = RemotePortalInterpolation.of(entity);
     if (remote != null) remote.finishAccepted();
-    ClientPortalMovement.corrected(entity, relatives);
+    ClientPortalMovement.corrected(entity);
     PortalEntityMovement.cancelPredictions(entity);
     var interpolation = entity.getInterpolation();
     if (interpolation != null) interpolation.cancel();

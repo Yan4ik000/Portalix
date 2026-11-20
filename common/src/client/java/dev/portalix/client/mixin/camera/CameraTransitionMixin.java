@@ -196,21 +196,27 @@ abstract class CameraTransitionMixin implements CameraOrientationAccess {
   @WrapOperation(
       method = "alignWithEntity",
       at = @At(value = "INVOKE", target = "Lnet/minecraft/client/Camera;getMaxZoom(F)F"))
-  private float portalix$requestedDistance(Camera camera, float distance, Operation<Float> original) {
-    return camera.entity() instanceof LocalPlayer player && !player.isSleeping()
-        ? distance
-        : original.call(camera, distance);
+  private float portalix$requestedDistance(Camera camera, float distance, Operation<Float> original,
+      @Share("boom") LocalRef<PortalCameraController.Boom> boom) {
+    if (camera.entity() instanceof LocalPlayer player && !player.isSleeping()) {
+      var resolved = PortalCameraController.portalBoom(camera, portalix$partialTick, distance);
+      if (resolved != null) {
+        boom.set(resolved);
+        return distance;
+      }
+      PortalCameraController.nativeThirdPerson();
+    }
+    return original.call(camera, distance);
   }
 
   @WrapOperation(
       method = "alignWithEntity",
       at = @At(value = "INVOKE", target = "Lnet/minecraft/client/Camera;move(FFF)V"))
   private void portalix$thirdPerson(
-      Camera camera, float forwards, float up, float right, Operation<Void> original) {
-    if (camera.isDetached()
-        && camera.entity() instanceof LocalPlayer player
-        && !player.isSleeping())
-      PortalCameraController.thirdPerson(camera, portalix$partialTick, -forwards);
+      Camera camera, float forwards, float up, float right, Operation<Void> original,
+      @Share("boom") LocalRef<PortalCameraController.Boom> boom) {
+    var resolved = boom.get();
+    if (resolved != null) PortalCameraController.thirdPerson(camera, resolved);
     else original.call(camera, forwards, up, right);
   }
 

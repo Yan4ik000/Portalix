@@ -5,6 +5,7 @@ import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
 import dev.portalix.client.portal.clip.PortalCullPlane;
 import dev.portalix.client.portal.clip.PortalFrustumPlanes;
 import dev.portalix.client.portal.clip.PortalFrustumState;
+import dev.portalix.client.portal.clip.PortalTerrainWindow;
 import net.minecraft.client.renderer.culling.Frustum;
 import net.minecraft.world.phys.Vec3;
 import org.joml.FrustumIntersection;
@@ -29,6 +30,7 @@ public abstract class PortalFrustumMixin implements PortalFrustumState {
   @Unique private boolean portalix$aperture;
   @Unique private PortalCullPlane portalix$exit;
   @Unique private Vec3 portalix$preparationCell;
+  @Unique private PortalTerrainWindow portalix$terrainWindow;
 
   @WrapOperation(
       method = {"calculateFrustum", "set"},
@@ -79,11 +81,22 @@ public abstract class PortalFrustumMixin implements PortalFrustumState {
     portalix$preparationCell = origin;
   }
 
+  @Override
+  public PortalTerrainWindow portalix$terrainWindow() {
+    return portalix$terrainWindow;
+  }
+
+  @Override
+  public void portalix$terrainWindow(PortalTerrainWindow window) {
+    portalix$terrainWindow = window;
+  }
+
   @Inject(method = "set", at = @At("TAIL"))
   private void portalix$copyWindow(Frustum source, CallbackInfo ci) {
     portalix$aperture = ((PortalFrustumState) source).portalix$isAperture();
     portalix$exit = ((PortalFrustumState) source).portalix$exitPlane();
     portalix$preparationCell = ((PortalFrustumState) source).portalix$preparationCell();
+    portalix$terrainWindow = ((PortalFrustumState) source).portalix$terrainWindow();
   }
 
   @Inject(method = "cubeInFrustum(DDDDDD)I", at = @At("HEAD"), cancellable = true)
@@ -95,11 +108,12 @@ public abstract class PortalFrustumMixin implements PortalFrustumState {
       double maxY,
       double maxZ,
       CallbackInfoReturnable<Integer> cir) {
-    if (portalix$preparationCell != null)
-      cir.setReturnValue(PortalFrustumPlanes.intersectPreparationCell(
-          intersection, portalix$preparationCell, minX, minY, minZ, maxX, maxY, maxZ));
-    else if (portalix$exit != null && !portalix$exit.intersects(minX, minY, minZ, maxX, maxY, maxZ))
+    if (portalix$exit != null && !portalix$exit.intersects(minX, minY, minZ, maxX, maxY, maxZ))
       cir.setReturnValue(FrustumIntersection.OUTSIDE);
+    else if (portalix$preparationCell != null)
+      cir.setReturnValue(portalix$constrainBox(PortalFrustumPlanes.intersectPreparationCell(
+          intersection, portalix$preparationCell, minX, minY, minZ, maxX, maxY, maxZ),
+          minX, minY, minZ, maxX, maxY, maxZ));
   }
 
   @Inject(method = "cubeInFrustum(DDDDDD)I", at = @At("RETURN"), cancellable = true)
@@ -111,16 +125,29 @@ public abstract class PortalFrustumMixin implements PortalFrustumState {
       double maxY,
       double maxZ,
       CallbackInfoReturnable<Integer> cir) {
-    if (portalix$exit != null
-        && cir.getReturnValueI() == FrustumIntersection.INSIDE
-        && !portalix$exit.contains(minX, minY, minZ, maxX, maxY, maxZ))
-      cir.setReturnValue(FrustumIntersection.INTERSECT);
+    int result = cir.getReturnValueI();
+    int clipped = portalix$constrainBox(result, minX, minY, minZ, maxX, maxY, maxZ);
+    if (clipped != result) cir.setReturnValue(clipped);
+  }
+
+  @Unique
+  private int portalix$constrainBox(int result, double minX, double minY, double minZ,
+      double maxX, double maxY, double maxZ) {
+    if (result != FrustumIntersection.INSIDE && result != FrustumIntersection.INTERSECT) return result;
+    if (portalix$terrainWindow != null) {
+      int range = portalix$terrainWindow.classifyBox(minX, minY, minZ, maxX, maxY, maxZ);
+      if (range != FrustumIntersection.INSIDE) return range;
+    }
+    return result == FrustumIntersection.INSIDE && portalix$exit != null
+        && !portalix$exit.contains(minX, minY, minZ, maxX, maxY, maxZ)
+        ? FrustumIntersection.INTERSECT : result;
   }
 
   @Inject(method = "pointInFrustum", at = @At("HEAD"), cancellable = true)
   private void portalix$exitPoint(
       double x, double y, double z, CallbackInfoReturnable<Boolean> cir) {
-    if (portalix$exit != null && portalix$exit.distance(x, y, z) < 0) cir.setReturnValue(false);
+    if (portalix$terrainWindow != null && !portalix$terrainWindow.containsPoint(x, y, z)
+        || portalix$exit != null && portalix$exit.distance(x, y, z) < 0) cir.setReturnValue(false);
   }
 
   @Inject(method = "offsetToFullyIncludeCameraCube", at = @At("HEAD"), cancellable = true)

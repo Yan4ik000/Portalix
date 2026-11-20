@@ -1,5 +1,6 @@
 package dev.portalix.client.mixin.entity;
 
+import com.mojang.blaze3d.vertex.PoseStack;
 import dev.portalix.client.portal.entity.PortalEntityRenderStateAccess;
 import dev.portalix.client.portal.entity.PortalEntitySlice;
 import java.util.List;
@@ -16,8 +17,8 @@ public abstract class PortalEntityStateMixin implements PortalEntityRenderStateA
   @Unique private Quaternionf portalix$modelRotation;
 
   @Override
-  public Quaternionf portalix$modelRotation() {
-    return portalix$modelRotation;
+  public void portalix$applyModelRotation(PoseStack poses) {
+    if (portalix$modelRotation != null) poses.mulPose(portalix$modelRotation);
   }
 
   @Override

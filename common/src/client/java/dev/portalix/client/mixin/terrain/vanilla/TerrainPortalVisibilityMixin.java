@@ -27,6 +27,7 @@ abstract class TerrainPortalVisibilityMixin {
   @Shadow @Final private LevelRenderState levelRenderState;
   @Unique private List<PortalLink> portalix$cameraPath = List.of();
   @Unique private Quaternionf portalix$visibleOrientation;
+  @Unique private int portalix$visibleRadius;
 
   @WrapOperation(
       method = "extract",
@@ -41,7 +42,11 @@ abstract class TerrainPortalVisibilityMixin {
     var path = PortalSceneManager.cameraPath();
     boolean frameChanged = !path.equals(portalix$cameraPath);
     portalix$cameraPath = path;
+    int radius = levelRenderer.viewArea().getViewDistance();
+    boolean resized = radius != portalix$visibleRadius;
+    portalix$visibleRadius = radius;
     return changed
+        || resized
         || frameChanged
         || portalix$visibleOrientation == null
         || Math.abs(portalix$visibleOrientation.dot(levelRenderState.cameraRenderState.orientation))

@@ -6,46 +6,58 @@ import com.llamalad7.mixinextras.injector.ModifyExpressionValue;
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
 import com.llamalad7.mixinextras.sugar.Local;
-import com.mojang.blaze3d.GpuFormat;
-import com.mojang.blaze3d.systems.GpuDevice;
 import com.mojang.blaze3d.textures.GpuTexture;
 import dev.portalix.client.compat.iris.IrisScene;
 import dev.portalix.client.compat.iris.IrisTargetHistory;
 import net.irisshaders.iris.targets.RenderTargets;
+import net.irisshaders.iris.targets.RenderTarget;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
+import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
+import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.ModifyVariable;
+import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 @Mixin(RenderTargets.class)
 abstract class IrisDepthTargetMixin implements IrisTargetHistory {
-  @Shadow private GpuTexture currentDepthTexture;
-  @Shadow private GpuTexture noHand;
-  @Shadow private int cachedWidth;
-  @Shadow private int cachedHeight;
   @Shadow private boolean fullClearRequired;
+  @Unique private boolean portalix$prewarmed;
+  @Unique private boolean portalix$setupReset;
 
   @Override
   public void portalix$invalidateHistory() {
     fullClearRequired = true;
+    portalix$setupReset = true;
   }
 
-  @WrapOperation(method = "<init>", at = @At(value = "INVOKE", target =
-      "Lcom/mojang/blaze3d/systems/GpuDevice;createTexture(Ljava/lang/String;ILcom/mojang/blaze3d/GpuFormat;IIII)Lcom/mojang/blaze3d/textures/GpuTexture;"),
-      require = 2, allow = 2)
-  private GpuTexture portalix$prewarmDepth(
-      GpuDevice device, String label, int usage, GpuFormat format, int width, int height,
-      int layers, int levels, Operation<GpuTexture> original) {
-    if (IrisScene.prewarming())
-      return original.call(device, label, usage, format, 1, 1, layers, levels);
-    return original.call(device, label, usage, format, width, height, layers, levels);
+  @Override
+  public boolean portalix$consumeSetupReset() {
+    boolean reset = portalix$setupReset;
+    portalix$setupReset = false;
+    return reset;
   }
 
-  // Enter only the native depth reallocation branch when a warmed view first renders at the same size.
-  @ModifyVariable(method = "resizeIfNeeded", at = @At(value = "LOAD", ordinal = 1),
-      name = "depthFormatChanged", require = 1, allow = 1)
-  private boolean portalix$allocateViewDepth(boolean changed) {
-    return changed || noHand.getWidth(0) != cachedWidth || noHand.getHeight(0) != cachedHeight;
+  @Inject(method = "<init>", at = @At("TAIL"))
+  private void portalix$prepared(CallbackInfo ci) {
+    portalix$prewarmed = IrisScene.prewarming();
+  }
+
+  @WrapOperation(method = "create", at = @At(value = "INVOKE", target =
+      "Lnet/irisshaders/iris/targets/RenderTarget$Builder;setDimensions(II)Lnet/irisshaders/iris/targets/RenderTarget$Builder;"),
+      allow = 1)
+  private RenderTarget.Builder portalix$prewarmColor(
+      RenderTarget.Builder builder, int width, int height, Operation<RenderTarget.Builder> original) {
+    return IrisScene.prewarming()
+        ? original.call(builder, 1, 1)
+        : original.call(builder, width, height);
+  }
+
+  @ModifyVariable(method = "resizeIfNeeded", at = @At("STORE"), name = "sizeChanged", allow = 1)
+  private boolean portalix$allocatePreparedTargets(boolean changed) {
+    boolean prepared = portalix$prewarmed;
+    portalix$prewarmed = false;
+    return changed || prepared;
   }
 
   @Definition(
@@ -55,8 +67,8 @@ abstract class IrisDepthTargetMixin implements IrisTargetHistory {
   @ModifyExpressionValue(method = "resizeIfNeeded", at = @At("MIXINEXTRAS:EXPRESSION"), allow = 1)
   private boolean portalix$depthIdentity(
       boolean changed, @Local(argsOnly = true) GpuTexture depth) {
-    boolean replaced = currentDepthTexture != depth;
-    if (replaced) fullClearRequired = true;
+    boolean replaced = ((RenderTargets) (Object) this).getDepthTexture() != depth;
+    if (replaced) portalix$invalidateHistory();
     return changed || replaced;
   }
 }

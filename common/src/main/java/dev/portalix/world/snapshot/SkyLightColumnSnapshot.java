@@ -85,7 +85,7 @@ public final class SkyLightColumnSnapshot {
 
   public int put(long column, int top) {
     var leaf = leaf(column);
-    int previous = get(column);
+    int previous = leaf == null ? defaultValue : leaf.columns.getOrDefault(column, defaultValue);
     if (leaf == null || !leaf.columns.containsKey(column) || previous != top)
       root = update(root, column, HashCommon.mix(column), 0, top, false);
     return previous;

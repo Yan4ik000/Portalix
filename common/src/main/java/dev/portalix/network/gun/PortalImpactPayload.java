@@ -2,7 +2,6 @@ package dev.portalix.network.gun;
 
 import dev.portalix.PortalixMod;
 import dev.portalix.item.PortalixVariant;
-import dev.portalix.network.PayloadCodecs;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
@@ -24,9 +23,9 @@ public record PortalImpactPayload(
       CustomPacketPayload.codec(
           (payload, buffer) -> {
             buffer.writeLong(payload.sequence);
-            PayloadCodecs.writeVector(buffer, payload.origin);
-            PayloadCodecs.writeVector(buffer, payload.position);
-            PayloadCodecs.writeVector(buffer, payload.normal);
+            Vec3.STREAM_CODEC.encode(buffer, payload.origin);
+            Vec3.STREAM_CODEC.encode(buffer, payload.position);
+            Vec3.STREAM_CODEC.encode(buffer, payload.normal);
             buffer.writeBoolean(payload.orange);
             buffer.writeBoolean(payload.placed);
             buffer.writeLong(payload.serverTick);
@@ -35,9 +34,9 @@ public record PortalImpactPayload(
           buffer ->
               new PortalImpactPayload(
                   buffer.readLong(),
-                  PayloadCodecs.readVector(buffer),
-                  PayloadCodecs.readVector(buffer),
-                  PayloadCodecs.readVector(buffer),
+                  Vec3.STREAM_CODEC.decode(buffer),
+                  Vec3.STREAM_CODEC.decode(buffer),
+                  Vec3.STREAM_CODEC.decode(buffer),
                   buffer.readBoolean(),
                   buffer.readBoolean(),
                   buffer.readLong(),

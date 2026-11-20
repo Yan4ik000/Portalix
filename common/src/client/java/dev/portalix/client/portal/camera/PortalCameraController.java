@@ -6,7 +6,10 @@ import dev.portalix.client.mixin.scene.GameRendererAccessor;
 import dev.portalix.portal.PortalLink;
 import dev.portalix.portal.PortalRoutes;
 import dev.portalix.portal.PortalTopology;
+import dev.portalix.portal.PortalViewLimits;
 import dev.portalix.portal.camera.PortalCameraCollision;
+import dev.portalix.portal.camera.PortalCameraCorrections;
+import dev.portalix.portal.camera.PortalCameraDistance;
 import dev.portalix.portal.camera.PortalCameraOrbit;
 import dev.portalix.portal.camera.PortalCameraReorientation;
 import dev.portalix.portal.camera.PortalEyePose;
@@ -15,7 +18,10 @@ import dev.portalix.portal.camera.PortalThirdPersonCamera;
 import dev.portalix.portal.geometry.PortalAperture;
 import dev.portalix.portal.traversal.EntityPortalState;
 import dev.portalix.portal.traversal.PortalEntityMovement;
+import dev.portalix.client.portal.scene.PortalSceneManager;
+import dev.portalix.client.portal.scene.PortalViewHorizon;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.function.Supplier;
 import net.minecraft.client.Camera;
@@ -24,7 +30,9 @@ import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.client.renderer.state.level.CameraRenderState;
 import net.minecraft.util.Mth;
 import net.minecraft.world.entity.Entity;
+import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
+import org.jspecify.annotations.Nullable;
 import org.joml.Matrix3f;
 import org.joml.Quaternionf;
 import org.joml.Vector3f;
@@ -44,6 +52,8 @@ public final class PortalCameraController {
   private static boolean mirrored;
   private static float frameSeconds;
   private static View view;
+  private static List<PortalLink> waitingPath = List.of();
+  private static int requestedBoom;
   private static final List<PortalLink> pendingBodyCrossings = new ArrayList<>();
   private static List<PortalLink> previousEyePath = List.of();
   private static Entity cameraSpaceOwner;
@@ -55,12 +65,25 @@ public final class PortalCameraController {
   }
 
   public static void reset() {
-    var player = Minecraft.getInstance().player;
-    if (player != null) EntityPortalState.of(player).resetCamera();
-    clearTracking();
+    PortalViewHorizon.reset();
+    resetPose();
     pendingBodyCrossings.clear();
     previousEyePath = List.of();
     cameraSpaceOwner = null;
+  }
+
+  public static void resetPose() {
+    PortalSceneManager.invalidateViewDemand();
+    var player = Minecraft.getInstance().player;
+    if (player != null) EntityPortalState.of(player).resetCamera();
+    clearTracking();
+  }
+
+  public static void correctSceneRoute(List<PortalLink> route) {
+    if (route.isEmpty()) return;
+    PortalViewHorizon.reset();
+    if (cameraSpaceOwner != Minecraft.getInstance().player) return;
+    for (var link : route) PortalRoutes.append(pendingBodyCrossings, link);
   }
 
   private static void clearTracking() {
@@ -69,6 +92,8 @@ public final class PortalCameraController {
     lastCrossing = Long.MIN_VALUE;
     ORBIT.clear();
     view = null;
+    waitingPath = List.of();
+    requestedBoom = 0;
   }
 
   public static void bodyCrossed(
@@ -79,6 +104,7 @@ public final class PortalCameraController {
     trackCameraSpaceOwner(camera.entity());
     if (trackedPlayer != null && trackedPlayer != player) clearTracking();
     if (eventId <= lastCrossing) return;
+    PortalViewHorizon.bodyCrossed(link, player.level().getGameTime());
     if (camera.entity() == player) {
       var history = EntityPortalState.of(player).cameraHistory();
       float partial = (float) (history.lastCrossingTime() - (player.tickCount - 1));
@@ -108,7 +134,10 @@ public final class PortalCameraController {
     }
     synchronizeAngles(player);
     lastCrossing = eventId;
-    if (camera.entity() == player) PortalRoutes.append(pendingBodyCrossings, link);
+    if (camera.entity() == player) {
+      PortalRoutes.append(pendingBodyCrossings, link);
+      PortalSceneManager.invalidateViewDemand();
+    }
   }
 
   public static PortalLookAngles mouse(LocalPlayer player, double horizontal, double vertical) {
@@ -134,6 +163,8 @@ public final class PortalCameraController {
 
   public static void prepare(Camera camera, float seconds) {
     Minecraft minecraft = Minecraft.getInstance();
+    waitingPath = List.of();
+    requestedBoom = 0;
     trackCameraSpaceOwner(camera.entity());
     if (trackedPlayer != null && trackedPlayer != minecraft.player) clearTracking();
     if (camera.entity() != minecraft.player || minecraft.player == null) {
@@ -150,23 +181,12 @@ public final class PortalCameraController {
     if (tracking || ORBIT.active()) followExternalLook(player);
     var cameraType = minecraft.options.getCameraType();
     if (!cameraType.isFirstPerson()) {
-      if (!ORBIT.active() || mirrored != cameraType.isMirrored()) {
-        var rotation =
-            ORBIT.active()
-                ? ORBIT.bodyOrientation()
-                : tracking
-                    ? ORIENTATION.orientation()
-                    : PortalLookAngles.rotation(player.getYRot(), player.getXRot());
-        ORBIT.initialize(rotation, null, List.of());
-        tracking = false;
-        mirrored = cameraType.isMirrored();
-        trackedPlayer = player;
-        appliedYaw = player.getYRot();
-        appliedPitch = player.getXRot();
-      }
-      ORBIT.advance(seconds);
       frameSeconds = seconds;
-      synchronizeAngles(player);
+      if (ORBIT.active() || tracking) {
+        prepareOrbit(player);
+        ORBIT.advance(seconds);
+        synchronizeAngles(player);
+      }
       return;
     }
     if (ORBIT.active()) {
@@ -204,6 +224,14 @@ public final class PortalCameraController {
     return view;
   }
 
+  public static List<PortalLink> waitingPath() {
+    return waitingPath;
+  }
+
+  public static int requestedBoom() {
+    return requestedBoom;
+  }
+
   /** Consumed once after resolving the main camera, before extracting its render view. */
   public static List<PortalLink> consumeCameraTransitions() {
     var minecraft = Minecraft.getInstance();
@@ -229,22 +257,78 @@ public final class PortalCameraController {
     cameraSpaceOwner = owner;
   }
 
-  public static void thirdPerson(Camera camera, float partialTick, float distance) {
+  private static void prepareOrbit(LocalPlayer player) {
+    boolean front = Minecraft.getInstance().options.getCameraType().isMirrored();
+    if (ORBIT.active() && mirrored == front) return;
+    var rotation = ORBIT.active() ? ORBIT.bodyOrientation()
+        : tracking ? ORIENTATION.orientation()
+        : PortalLookAngles.rotation(player.getYRot(), player.getXRot());
+    ORBIT.initialize(rotation, null, List.of());
+    tracking = false;
+    mirrored = front;
+    trackedPlayer = player;
+    appliedYaw = player.getYRot();
+    appliedPitch = player.getXRot();
+  }
+
+  public static @Nullable Boom portalBoom(Camera camera, float partialTick, float distance) {
     var player = (LocalPlayer) camera.entity();
+    if (!Float.isFinite(distance)) return null;
+    requestedBoom = Mth.ceil(Math.min(Math.abs(distance), PortalCameraDistance.MAX_MODDED_LOADING_DISTANCE));
+    if (!PortalEntityMovement.vehicleAllowed(player)) return null;
+    var history = EntityPortalState.of(player).cameraHistory();
+    double time = player.tickCount - 1 + partialTick;
+    boolean transitioning = ORBIT.transitioning() || history.hasPosition(player.tickCount)
+        || history.eyeCorrection(time).lengthSqr() >= 1e-10;
+    if (!transitioning && links.get().isEmpty()) return null;
+
+    var target = new PortalThirdPersonCamera.Target(
+        PortalEyePose.interpolatedCenter(player, partialTick), camera.position());
     var rotation = cameraRotation(camera);
+    var bob = bobOffset(partialTick, rotation);
+    if (!transitioning) {
+      Vec3 focus = target.eye().add(bob);
+      Vec3 end = focus.add(vector(rotation.transform(new Vector3f(0, 0, distance))));
+      var pivotVolume = new AABB(target.center(), focus).inflate(PortalCameraCollision.RADIUS);
+      var boomVolume = new AABB(focus, end).inflate(PortalCameraCollision.RADIUS);
+      boolean touchesPortal = false;
+      for (var link : PortalTopology.intersecting(player.level(), pivotVolume.minmax(boomVolume))) {
+        var portal = link.entrance().endpoint();
+        if (PortalCameraCollision.touchesOpening(portal, target.center(), pivotVolume)
+            || PortalCameraCollision.touchesOpening(portal, focus, boomVolume)) {
+          touchesPortal = true;
+          break;
+        }
+      }
+      if (!touchesPortal) return null;
+    }
+    return new Boom(target, rotation, bob, history, time, distance);
+  }
+
+  public static void nativeThirdPerson() {
+    ORBIT.clear();
+    view = null;
+  }
+
+  public static void thirdPerson(Camera camera, Boom boom) {
+    var player = (LocalPlayer) camera.entity();
+    prepareOrbit(player);
+    var candidates = links.get();
+    var ready = new HashSet<PortalLink>();
+    for (var link : candidates) if (PortalEntityMovement.canTraverse(player, link)) ready.add(link);
     var pose =
         ORBIT.resolve(
-            new PortalThirdPersonCamera.Target(
-                PortalEyePose.interpolatedCenter(player, partialTick),
-                camera.position()),
-            rotation,
-            bobOffset(partialTick, rotation),
-            EntityPortalState.of(player).cameraHistory(),
-            player.tickCount - 1 + partialTick,
-            distance,
-            readyLinks(player),
-            (body, movement, opening) -> PortalCameraWorld.query(player, body, movement, opening),
+            boom.target(),
+            boom.rotation(),
+            boom.bob(),
+            boom.history(),
+            boom.time(),
+            boom.distance(),
+            candidates,
+            ready::contains,
+            (body, movement, opening) -> PortalCameraWorld.query(player, body, movement, opening, ready.contains(opening)),
             frameSeconds);
+    waitingPath = pose.waitingPath();
     synchronizeAngles(player);
     apply(
         camera,
@@ -310,6 +394,7 @@ public final class PortalCameraController {
     Vec3 center = PortalEyePose.interpolatedCenter(player, partialTick);
     var path = new ArrayList<PortalLink>();
     for (var link : state.cameraHistory().rewind(time)) {
+      if (!PortalViewLimits.canCross(path, link)) break;
       position = link.transform().point(position);
       center = link.transform().point(center);
       rotation.premul(link.transform().rotation());
@@ -317,6 +402,14 @@ public final class PortalCameraController {
     }
     var eyePath = PortalEyePose.eyePath(player, center, position);
     for (var eyeLink : eyePath) {
+      if (!PortalViewLimits.canCross(path, eyeLink)) {
+        var portal = eyeLink.entrance().endpoint();
+        var ray = position.subtract(center);
+        double t = PortalAperture.signedDistance(portal, center) / -ray.dot(portal.normal());
+        position = center.add(ray.scale(t)).add(portal.normal().scale(MIN_CAMERA_CLEARANCE));
+        break;
+      }
+      center = eyeLink.transform().point(center);
       position = eyeLink.transform().point(position);
       rotation.premul(eyeLink.transform().rotation());
       PortalRoutes.append(path, eyeLink);
@@ -342,12 +435,6 @@ public final class PortalCameraController {
       }
     }
     return position;
-  }
-
-  private static List<PortalLink> readyLinks(LocalPlayer player) {
-    return links.get().stream()
-        .filter(link -> PortalEntityMovement.canTraverse(player, link))
-        .toList();
   }
 
   public static boolean active() {
@@ -439,6 +526,10 @@ public final class PortalCameraController {
   private static Vec3 vector(Vector3f vector) {
     return new Vec3(vector.x, vector.y, vector.z);
   }
+
+  public record Boom(
+      PortalThirdPersonCamera.Target target, Quaternionf rotation, Vec3 bob,
+      PortalCameraCorrections history, double time, float distance) {}
 
   public record View(
       Vec3 position,

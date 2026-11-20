@@ -16,7 +16,7 @@ public final class PortalAperture {
   public static final float SURFACE_UV_SCALE = 1.075F;
   private static final double FLOOR_PASSAGE_SCALE = .9;
   private static final Vec3[] WORLD_AXES = {
-    new Vec3(1, 0, 0), new Vec3(0, 1, 0), new Vec3(0, 0, 1)
+    Vec3.X_AXIS, Vec3.Y_AXIS, Vec3.Z_AXIS
   };
 
   private PortalAperture() {}
@@ -72,6 +72,23 @@ public final class PortalAperture {
 
   public static boolean contains(PortalEndpoint portal, Vec3 point) {
     return contains(portal, point, portal.width() / 2, portal.height() / 2);
+  }
+
+  public static Vec3 halfExtents(PortalEndpoint portal) {
+    var right = portal.right();
+    var up = portal.up();
+    double halfWidth = portal.width() / 2;
+    double halfHeight = portal.height() / 2;
+    return new Vec3(
+        Math.abs(right.x * halfWidth) + Math.abs(up.x * halfHeight),
+        Math.abs(right.y * halfWidth) + Math.abs(up.y * halfHeight),
+        Math.abs(right.z * halfWidth) + Math.abs(up.z * halfHeight));
+  }
+
+  /** All endpoints are 1x2. If either end is a floor, its ellipse limits the whole passage. */
+  public static PortalEndpoint limitingAperture(PortalLink link) {
+    var exit = link.exit().endpoint();
+    return exit.normal().y == 1 ? exit : link.entrance().endpoint();
   }
 
   public static double passageHalfWidth(PortalEndpoint portal) {
@@ -192,6 +209,15 @@ public final class PortalAperture {
             + Math.abs(axis.dot(right)) * portal.width() / 2
             + Math.abs(axis.dot(portal.up())) * portal.height() / 2;
     return Math.abs(relative.dot(axis)) > radius + 1.0E-10;
+  }
+
+  public static Optional<Crossing> crossing(PortalLink link, Vec3 start, Vec3 displacement) {
+    var entrance = link.entrance().endpoint();
+    var crossing = crossing(entrance, start, displacement);
+    var exit = link.exit().endpoint();
+    if (crossing.isPresent() && entrance.normal().y != 1 && exit.normal().y == 1
+        && !containsPassage(exit, link.transform().point(crossing.get().point()))) return Optional.empty();
+    return crossing;
   }
 
   public static Optional<Crossing> crossing(PortalEndpoint portal, Vec3 start, Vec3 displacement) {

@@ -4,7 +4,13 @@ import static dev.portalix.test.PortalFixtures.*;
 import static org.junit.jupiter.api.Assertions.*;
 
 import dev.portalix.api.PortalEndpoint;
+import dev.portalix.api.PortalInstance;
+import dev.portalix.portal.PortalLink;
+import dev.portalix.portal.PortalViewLimits;
 import dev.portalix.portal.geometry.PortalTransform;
+import dev.portalix.portal.traversal.PortalCollisionWorld;
+import java.util.List;
+import java.util.UUID;
 import java.util.stream.Stream;
 import net.minecraft.world.phys.Vec3;
 import org.joml.Matrix3f;
@@ -44,6 +50,23 @@ class PortalCameraTest {
         }
       }
     }
+  }
+
+  @Test
+  void cameraStopsAtTheLastEncodableFrameAndCanReturnThroughItsExit() {
+    var up = new Vec3(0, 1, 0);
+    var a = endpoint(Vec3.ZERO, new Vec3(0, 0, 1), up);
+    var b = endpoint(new Vec3(0, 0, 1), new Vec3(0, 0, -1), up);
+    var link = new PortalLink(new UUID(0, 1), 1,
+        new PortalInstance(a, 0, 1, null), new PortalInstance(b, 0, 2, null));
+    var links = List.of(link, link.inverse());
+    var empty = PortalCollisionWorld.solid(List.of());
+    PortalCameraCollision.Query world = (body, motion, opening) -> empty;
+    var outward = PortalCameraCollision.solve(new Vec3(0, 0, .5), new Vec3(0, 0, -1), 80, links, world);
+    assertEquals(PortalViewLimits.CAMERA_DEPTH, outward.links().size());
+    assertTrue(outward.position().z > 0 && outward.position().z < .001);
+    var returning = PortalCameraCollision.solve(outward.position(), new Vec3(0, 0, 1), 1.5, links, world, outward.links());
+    assertEquals(List.of(link.inverse()), returning.links());
   }
 
   @Test

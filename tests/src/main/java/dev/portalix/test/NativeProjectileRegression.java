@@ -4,6 +4,7 @@ import static dev.portalix.test.ServerRegressionSuite.check;
 import static dev.portalix.test.ServerRegressionSuite.near;
 
 import dev.portalix.item.ModItems;
+import dev.portalix.item.PortalixVariant;
 import dev.portalix.portal.PortalLink;
 import dev.portalix.portal.traversal.EntityPortalState;
 import java.util.ArrayList;
@@ -105,7 +106,7 @@ final class NativeProjectileRegression {
       for (Entity entity : world.level.getAllEntities())
         if (entity instanceof Projectile && !existing.contains(entity.getUUID())) spawned.add(entity);
       spawned.forEach(Entity::discard);
-      world.player.setItemSlot(EquipmentSlot.MAINHAND, new ItemStack(ModItems.PORTALIX.get()));
+      world.player.setItemSlot(EquipmentSlot.MAINHAND, new ItemStack(ModItems.gun(PortalixVariant.STANDARD)));
     }
   }
 

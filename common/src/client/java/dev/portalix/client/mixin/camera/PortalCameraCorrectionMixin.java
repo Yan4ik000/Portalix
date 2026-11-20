@@ -1,17 +1,13 @@
 package dev.portalix.client.mixin.camera;
 
-import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
-import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
+import com.llamalad7.mixinextras.injector.ModifyExpressionValue;
 import dev.portalix.client.portal.camera.PortalCameraController;
+import dev.portalix.client.portal.ClientPortalMovement;
 import dev.portalix.portal.traversal.EntityPortalState;
-import dev.portalix.portal.traversal.PortalPassagePose;
-import java.util.List;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientPacketListener;
 import net.minecraft.network.protocol.game.ClientboundPlayerPositionPacket;
-import net.minecraft.network.protocol.game.ClientboundSetEntityDataPacket;
 import net.minecraft.network.protocol.game.ClientboundTeleportEntityPacket;
-import net.minecraft.network.syncher.SynchedEntityData;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
@@ -19,32 +15,18 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 @Mixin(ClientPacketListener.class)
 public abstract class PortalCameraCorrectionMixin {
-  @WrapOperation(
-      method = "handleSetEntityData",
-      at =
-          @At(
-              value = "INVOKE",
-              target =
-                  "Lnet/minecraft/network/syncher/SynchedEntityData;assignValues(Ljava/util/List;)V"))
-  private void portalix$predictedPose(
-      SynchedEntityData data,
-      List<SynchedEntityData.DataValue<?>> values,
-      Operation<Void> original,
-      ClientboundSetEntityDataPacket packet) {
-    var player = Minecraft.getInstance().player;
-
-    if (player != null && packet.id() == player.getId() && !player.isPassenger())
-      values =
-          values.stream()
-              .filter(value -> !PortalPassagePose.isPoseField(player, value.id()))
-              .toList();
-    original.call(data, values);
+  @ModifyExpressionValue(method = "handleMovePlayer", at = @At(value = "INVOKE",
+      target = "Lnet/minecraft/world/entity/player/Player;isPassenger()Z"), require = 1, allow = 1)
+  private boolean portalix$applyBundledRiderPosition(boolean passenger) {
+    if (!passenger || ClientPortalMovement.hasPositionCorrection()) return false;
+    ClientPortalMovement.corrected(Minecraft.getInstance().player);
+    return true;
   }
 
   @Inject(method = "handleMovePlayer", at = @At("RETURN"))
   private void portalix$playerCorrection(
       ClientboundPlayerPositionPacket packet, CallbackInfo callback) {
-    PortalCameraController.reset();
+    ClientPortalMovement.positionCorrected();
   }
 
   @Inject(method = "handleTeleportEntity", at = @At("RETURN"))

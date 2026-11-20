@@ -64,34 +64,27 @@ abstract class TerrainMeshPublicationMixin {
   }
 
   @Unique
-  private boolean portalix$acceptUpload(CompiledSectionMesh mesh) {
+  private void portalix$publishBuffer(
+      CompiledSectionMesh mesh, ChunkSectionLayer layer, CallbackInfo ci) {
     if (((SectionRenderDispatcherAccessor) this$0).portalix$closed()
         || sectionMesh.get() != mesh && ((SectionMeshTaskAccess) mesh).portalix$cancelled()) {
       releaseSectionMesh(mesh);
-      return false;
+      ci.cancel();
+      return;
     }
-    return true;
+    ((SectionMeshBuffersAccess) mesh)
+        .portalix$slice(layer, this$0.getRenderSectionSlice(mesh, layer));
   }
 
   @Inject(method = "vertexBufferUploadCallback", at = @At("HEAD"), cancellable = true)
   private void portalix$vertexUpload(
       CompiledSectionMesh mesh, ChunkSectionLayer layer, CallbackInfo ci) {
-    if (!portalix$acceptUpload(mesh)) {
-      ci.cancel();
-      return;
-    }
-    ((SectionMeshBuffersAccess) mesh)
-        .portalix$slice(layer, this$0.getRenderSectionSlice(mesh, layer));
+    portalix$publishBuffer(mesh, layer, ci);
   }
 
   @Inject(method = "indexBufferUploadCallback", at = @At("HEAD"), cancellable = true)
   private void portalix$indexUpload(
       CompiledSectionMesh mesh, ChunkSectionLayer layer, boolean sorted, CallbackInfo ci) {
-    if (!portalix$acceptUpload(mesh)) {
-      ci.cancel();
-      return;
-    }
-    ((SectionMeshBuffersAccess) mesh)
-        .portalix$slice(layer, this$0.getRenderSectionSlice(mesh, layer));
+    portalix$publishBuffer(mesh, layer, ci);
   }
 }

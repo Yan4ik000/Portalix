@@ -1,8 +1,8 @@
 package dev.portalix.client.portal.terrain;
 
+import dev.portalix.client.portal.scene.PortalSceneManager;
 import dev.portalix.client.mixin.terrain.ViewAreaAccessor;
 import dev.portalix.client.mixin.terrain.vanilla.FrustumAccessor;
-import dev.portalix.client.portal.clip.PortalCullPlane;
 import dev.portalix.client.portal.clip.PortalFrustumState;
 import it.unimi.dsi.fastutil.ints.IntArrays;
 import java.util.Arrays;
@@ -13,6 +13,7 @@ import net.minecraft.client.renderer.chunk.SectionMesh;
 import net.minecraft.client.renderer.chunk.SectionRenderDispatcher.RenderSection;
 import net.minecraft.client.renderer.culling.Frustum;
 import net.minecraft.client.renderer.state.level.CameraRenderState;
+import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.core.SectionPos;
 import net.minecraft.server.level.ChunkTrackingView;
@@ -35,11 +36,11 @@ public final class PortalInitialTerrainVisibility {
       ViewArea area,
       PortalTerrainColumns terrain,
       CameraRenderState camera,
-      PortalCullPlane plane,
       Frustum frustum,
       List<RenderSection> visible,
       List<RenderSection> nearby) {
-    var center = SectionPos.of(camera.pos);
+    var origin = PortalSceneManager.terrainOrigin(camera.pos);
+    var center = SectionPos.of(origin);
     int radius = area.getViewDistance();
     int diameter = radius * 2 + 1;
     int height = area.sectionCount();
@@ -92,14 +93,15 @@ public final class PortalInitialTerrainVisibility {
           states[index] = REACHED;
           queue[tail++] = index;
         }
+      var originBlock = BlockPos.containing(origin);
       IntArrays.quickSort(
           queue,
           0,
           tail,
           (first, second) -> {
-            double firstDistance = seedDistance(first, diameter, height, minX, minY, minZ, camera);
+            double firstDistance = seedDistance(first, diameter, height, minX, minY, minZ, originBlock);
             double secondDistance =
-                seedDistance(second, diameter, height, minX, minY, minZ, camera);
+                seedDistance(second, diameter, height, minX, minY, minZ, originBlock);
             int comparison = Double.compare(firstDistance, secondDistance);
             return comparison != 0 ? comparison : Integer.compare(first, second);
           });
@@ -111,9 +113,6 @@ public final class PortalInitialTerrainVisibility {
       int x = column / diameter;
       int z = column % diameter;
       int y = index % height;
-      int blockX = (minX + x) * 16;
-      int blockY = (minY + y) * 16;
-      int blockZ = (minZ + z) * 16;
       long[] occupied = columns[column];
       int sectionIndex = minY + y - terrain.minY();
       boolean empty = (occupied[sectionIndex / Long.SIZE] & 1L << (sectionIndex % Long.SIZE)) == 0;
@@ -123,11 +122,7 @@ public final class PortalInitialTerrainVisibility {
         long node = SectionPos.asLong(minX + x, minY + y, minZ + z);
         var section = sections.getValue(node);
         mesh = section.getSectionMesh();
-        open =
-            PortalOcclusionOpenings.contains(node)
-                || plane != null
-                    && !plane.intersects(
-                        blockX, blockY, blockZ, blockX + 16, blockY + 16, blockZ + 16);
+        open = PortalOcclusionOpenings.contains(node);
         tree.add(section);
       }
       for (var direction : DIRECTIONS) {
@@ -194,11 +189,11 @@ public final class PortalInitialTerrainVisibility {
   }
 
   private static double seedDistance(
-      int index, int diameter, int height, int minX, int minY, int minZ, CameraRenderState camera) {
+      int index, int diameter, int height, int minX, int minY, int minZ, BlockPos origin) {
     int column = index / height;
-    double x = (minX + column / diameter) * 16 + 8 - camera.blockPos.getX();
-    double y = (minY + index % height) * 16 + 8 - camera.blockPos.getY();
-    double z = (minZ + column % diameter) * 16 + 8 - camera.blockPos.getZ();
+    double x = (minX + column / diameter) * 16 + 8 - origin.getX();
+    double y = (minY + index % height) * 16 + 8 - origin.getY();
+    double z = (minZ + column % diameter) * 16 + 8 - origin.getZ();
     return x * x + y * y + z * z;
   }
 }

@@ -21,7 +21,8 @@ public record EntityPortalCrossingPayload(
     float pitch,
     float headYaw,
     float bodyYaw,
-    float poseScale)
+    float poseScale,
+    long resumeLoadingAt)
     implements CustomPacketPayload {
   public EntityPortalCrossingPayload {
     crossings = List.copyOf(crossings);
@@ -36,37 +37,39 @@ public record EntityPortalCrossingPayload(
             buffer.writeVarInt(payload.entityId);
             buffer.writeUUID(payload.entityUuid);
             buffer.writeCollection(payload.crossings, EntityPortalCrossingPayload::writeCrossing);
-            PayloadCodecs.writeVector(buffer, payload.position);
-            PayloadCodecs.writeVector(buffer, payload.velocity);
+            Vec3.STREAM_CODEC.encode(buffer, payload.position);
+            Vec3.STREAM_CODEC.encode(buffer, payload.velocity);
             buffer.writeFloat(payload.yaw);
             buffer.writeFloat(payload.pitch);
             buffer.writeFloat(payload.headYaw);
             buffer.writeFloat(payload.bodyYaw);
             buffer.writeFloat(payload.poseScale);
+            buffer.writeVarLong(payload.resumeLoadingAt);
           },
           buffer ->
               new EntityPortalCrossingPayload(
                   buffer.readVarInt(),
                   buffer.readUUID(),
                   buffer.readList(EntityPortalCrossingPayload::readCrossing),
-                  PayloadCodecs.readVector(buffer),
-                  PayloadCodecs.readVector(buffer),
+                  Vec3.STREAM_CODEC.decode(buffer),
+                  Vec3.STREAM_CODEC.decode(buffer),
                   buffer.readFloat(),
                   buffer.readFloat(),
                   buffer.readFloat(),
                   buffer.readFloat(),
-                  buffer.readFloat()));
+                  buffer.readFloat(),
+                  buffer.readVarLong()));
 
   private static void writeCrossing(FriendlyByteBuf buffer, Crossing crossing) {
     buffer.writeVarLong(crossing.eventId());
     PayloadCodecs.writePortalLink(buffer, crossing.link());
-    PayloadCodecs.writeVector(buffer, crossing.beforeFeet());
-    PayloadCodecs.writeVector(buffer, crossing.afterFeet());
-    PayloadCodecs.writeVector(buffer, crossing.velocity());
+    Vec3.STREAM_CODEC.encode(buffer, crossing.beforeFeet());
+    Vec3.STREAM_CODEC.encode(buffer, crossing.afterFeet());
+    Vec3.STREAM_CODEC.encode(buffer, crossing.velocity());
     buffer.writeFloat(crossing.yaw());
     buffer.writeFloat(crossing.pitch());
     buffer.writeDouble(crossing.moveFraction());
-    PayloadCodecs.writeVector(buffer, crossing.previousFeet());
+    Vec3.STREAM_CODEC.encode(buffer, crossing.previousFeet());
     buffer.writeFloat(crossing.beforeEyeHeight());
     buffer.writeFloat(crossing.beforeYaw());
     buffer.writeFloat(crossing.beforePitch());
@@ -79,13 +82,13 @@ public record EntityPortalCrossingPayload(
     return new Crossing(
         event,
         link,
-        PayloadCodecs.readVector(buffer),
-        PayloadCodecs.readVector(buffer),
-        PayloadCodecs.readVector(buffer),
+        Vec3.STREAM_CODEC.decode(buffer),
+        Vec3.STREAM_CODEC.decode(buffer),
+        Vec3.STREAM_CODEC.decode(buffer),
         buffer.readFloat(),
         buffer.readFloat(),
         buffer.readDouble(),
-        PayloadCodecs.readVector(buffer),
+        Vec3.STREAM_CODEC.decode(buffer),
         buffer.readFloat(),
         buffer.readFloat(),
         buffer.readFloat(),

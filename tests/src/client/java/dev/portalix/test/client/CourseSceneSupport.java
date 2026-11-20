@@ -1,8 +1,8 @@
 package dev.portalix.test.client;
 
 import dev.portalix.test.WorldScenarioFixture;
-import dev.portalix.test.client.mixin.PortalServerSessionAccessor;
-import dev.portalix.test.client.mixin.PortalServerEventsAccessor;
+import dev.portalix.test.mixin.PortalServerSessionAccessor;
+import dev.portalix.test.mixin.PortalServerEventsAccessor;
 import dev.portalix.test.client.mixin.ServerChunkCacheAccessor;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;

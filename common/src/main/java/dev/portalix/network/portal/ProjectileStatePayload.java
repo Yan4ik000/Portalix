@@ -1,7 +1,6 @@
 package dev.portalix.network.portal;
 
 import dev.portalix.PortalixMod;
-import dev.portalix.network.PayloadCodecs;
 import java.util.UUID;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.StreamCodec;
@@ -27,8 +26,8 @@ public record ProjectileStatePayload(
             buffer.writeUUID(packet.entityUuid);
             buffer.writeVarLong(packet.tick);
             buffer.writeVarLong(packet.event);
-            PayloadCodecs.writeVector(buffer, packet.position);
-            PayloadCodecs.writeVector(buffer, packet.velocity);
+            Vec3.STREAM_CODEC.encode(buffer, packet.position);
+            Vec3.STREAM_CODEC.encode(buffer, packet.velocity);
             buffer.writeFloat(packet.yaw);
             buffer.writeFloat(packet.pitch);
           },
@@ -38,8 +37,8 @@ public record ProjectileStatePayload(
                   buffer.readUUID(),
                   buffer.readVarLong(),
                   buffer.readVarLong(),
-                  PayloadCodecs.readVector(buffer),
-                  PayloadCodecs.readVector(buffer),
+                  Vec3.STREAM_CODEC.decode(buffer),
+                  Vec3.STREAM_CODEC.decode(buffer),
                   buffer.readFloat(),
                   buffer.readFloat()));
 

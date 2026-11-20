@@ -63,7 +63,8 @@ public final class RemoteGunAnimations {
       Entity entity = entity(playerId);
       if (player.presence.expired(entity == null ? null : entity.getUUID())) {
         needsStateSync |= player.presence.pendingSpawn();
-        carryState.clearOwner(playerId);
+        if (entity == null) carryState.untrackOwner(playerId);
+        else carryState.clearOwner(playerId);
         sounds.onUnequipped(playerId);
         iterator.remove();
       } else {

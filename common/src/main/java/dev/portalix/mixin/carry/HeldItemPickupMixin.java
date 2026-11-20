@@ -25,10 +25,4 @@ public abstract class HeldItemPickupMixin {
   private void portalix$merge(CallbackInfoReturnable<Boolean> result) {
     if (CarryBindings.holderId((ItemEntity) (Object) this) >= 0) result.setReturnValue(false);
   }
-
-  @Inject(method = "tryToMerge", at = @At("HEAD"), cancellable = true)
-  private void portalix$mergePair(ItemEntity other, CallbackInfo result) {
-    if (CarryBindings.holderId((ItemEntity) (Object) this) >= 0
-        || CarryBindings.holderId(other) >= 0) result.cancel();
-  }
 }

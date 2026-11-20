@@ -60,4 +60,11 @@ public final class CarryOwnerState {
 
     CarryBindings.unbindOwner(level, owner);
   }
+
+  public void untrackOwner(int owner) {
+    holdStarted.remove(owner);
+    ClientLevel level = client.level;
+    if (level != null && level.getEntity(heldEntityId(owner)) == null)
+      CarryBindings.unbindOwner(level, owner);
+  }
 }

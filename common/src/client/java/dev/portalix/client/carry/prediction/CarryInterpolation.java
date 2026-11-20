@@ -1,20 +1,19 @@
 package dev.portalix.client.carry.prediction;
 
 import dev.portalix.carry.CarryCollisionWorld;
-import dev.portalix.carry.CarryMotionPath;
 import dev.portalix.portal.PortalLink;
+import dev.portalix.portal.PortalRoutes;
 import java.util.ArrayList;
 import java.util.List;
 import net.minecraft.world.phys.Vec3;
 import org.joml.Quaternionf;
+import org.jspecify.annotations.Nullable;
 
 final class CarryInterpolation {
   private Vec3 position;
   private Vec3 velocity;
   private double sampledAt = Double.NEGATIVE_INFINITY;
   private final List<PortalLink> inputFrame = new ArrayList<>();
-  private CarryMotionPath sampledPath;
-  private int sampledCrossings;
 
   CarryInterpolation(Vec3 position, Vec3 velocity) {
     this.position = position;
@@ -29,14 +28,37 @@ final class CarryInterpolation {
     return velocity;
   }
 
+  double sampledAt() {
+    return sampledAt;
+  }
+
   Vec3 inputPosition() {
     Vec3 point = position;
     for (var link : inputFrame.reversed()) point = link.transform().inversePoint(point);
     return point;
   }
 
+  Vec3 worldVector(Vec3 vector) {
+    for (var link : inputFrame) vector = link.transform().vector(vector);
+    return vector;
+  }
+
+  @Nullable Vec3 offsetPosition(CarryCollisionWorld collisions, Vec3 offset) {
+    if (offset.equals(Vec3.ZERO)) return position;
+    Vec3 target = position.add(worldVector(offset));
+    return CarryHoldPrediction.canCorrectWithinSpace(collisions, position, target) ? target : null;
+  }
+
+  void correct(Vec3 correctedPosition, Vec3 movement) {
+    position = correctedPosition;
+    velocity = velocity.add(worldVector(movement));
+  }
+
   Vec3 inputVelocity() {
-    Vec3 movement = velocity;
+    return inputVector(velocity);
+  }
+
+  Vec3 inputVector(Vec3 movement) {
     for (var link : inputFrame.reversed()) movement = link.transform().inverse().vector(movement);
     return movement;
   }
@@ -48,13 +70,13 @@ final class CarryInterpolation {
   }
 
   private void crossed(PortalLink link) {
-    if (!inputFrame.isEmpty() && inputFrame.getLast().inverse().equals(link))
+    if (!inputFrame.isEmpty() && PortalRoutes.sameIdentity(inputFrame.getLast(), link.inverse()))
       inputFrame.removeLast();
     else inputFrame.add(link);
   }
 
   void rebase(PortalLink link) {
-    if (!inputFrame.isEmpty() && inputFrame.getFirst().equals(link)) inputFrame.removeFirst();
+    if (!inputFrame.isEmpty() && PortalRoutes.sameIdentity(inputFrame.getFirst(), link)) inputFrame.removeFirst();
     else inputFrame.addFirst(link.inverse());
   }
 
@@ -76,19 +98,11 @@ final class CarryInterpolation {
     return position;
   }
 
-  Vec3 samplePath(CarryMotionPath path, float partial, double startTick) {
-    double time = startTick + partial;
-    if (time <= sampledAt) return position;
-    if (sampledPath != path) {
-      sampledPath = path;
-      sampledCrossings = 0;
-    }
-    var crossed = path.crossings(partial);
-    for (int i = sampledCrossings; i < crossed.size(); i++) crossed(crossed.get(i));
-    sampledCrossings = crossed.size();
-    position = path.center(partial);
-    velocity = path.movement(partial);
+  void sample(CarryHoldPrediction.Sample sample, double time) {
+    position = sample.position();
+    velocity = sample.velocity();
+    inputFrame.clear();
+    inputFrame.addAll(sample.crossings());
     sampledAt = time;
-    return position;
   }
 }

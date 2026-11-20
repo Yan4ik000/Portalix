@@ -19,9 +19,12 @@ public record EntityCarryWorld(Entity entity) implements CarryCollisionWorld {
   public List<AABB> obstacles(AABB query, int maxShapes, int maxBoxes) {
     List<AABB> result = new ArrayList<>();
     int shapes = 0;
-    for (VoxelShape shape : WorldCollisionShapes.shapes(entity, query)) {
+    for (VoxelShape shape : WorldCollisionShapes.solidShapes(entity, query)) {
       if (++shapes > maxShapes || !add(result, shape, maxBoxes)) return null;
     }
+    var border = WorldCollisionShapes.borderBoxes(entity.level().getWorldBorder(), query);
+    if (!border.isEmpty() && (shapes >= maxShapes || result.size() + border.size() > maxBoxes)) return null;
+    result.addAll(border);
     return result;
   }
 
@@ -35,18 +38,10 @@ public record EntityCarryWorld(Entity entity) implements CarryCollisionWorld {
 
   @Override
   public CarryCollisionSweep.Result sweep(Vec3 center, Vec3 desired) {
-    return sweep(center, desired, true);
-  }
-
-  public CarryCollisionSweep.Result sweepWithinSpace(Vec3 center, Vec3 desired) {
-    return sweep(center, desired, false);
-  }
-
-  private CarryCollisionSweep.Result sweep(Vec3 center, Vec3 desired, boolean crossAtEnd) {
     Vec3 delta = desired.subtract(center);
     AABB bounds = bounds();
     AABB hull = bounds.move(center.subtract(bounds.getCenter()));
-    return PortalHullSweep.move(entity, hull, delta, crossAtEnd);
+    return PortalHullSweep.move(entity, hull, delta);
   }
 
   @Override

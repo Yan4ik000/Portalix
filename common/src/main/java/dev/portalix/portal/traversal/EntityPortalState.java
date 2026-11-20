@@ -32,14 +32,18 @@ public final class EntityPortalState {
   PortalEntityMovement.MoveResult lastMove;
   private final PortalCameraCorrections cameraHistory = new PortalCameraCorrections();
   private double cameraEyeHeightShift;
-  final List<PortalEntityMovement.Crossing> predictions = new ArrayList<>();
-  final List<PortalEntityMovement.Crossing> outgoingCrossings = new ArrayList<>();
-  final Set<UUID> crossingObservers = new HashSet<>();
-  final Map<ServerPlayer, List<Packet<? super ClientGamePacketListener>>> outgoingUpdates =
-      new HashMap<>();
+  private List<PortalEntityMovement.Crossing> predictions = List.of();
+  OutgoingCrossings outgoing;
   private long authoritativeEvent;
   private long authoritativeTick = Long.MIN_VALUE;
-  final Set<UUID> snapshotObservers = new HashSet<>();
+  private long movementRecordEpoch;
+  Set<ServerPlayer> snapshotObservers;
+
+  static final class OutgoingCrossings {
+    final List<PortalEntityMovement.Crossing> events = new ArrayList<>();
+    final Set<UUID> observers = new HashSet<>();
+    final Map<ServerPlayer, List<Packet<? super ClientGamePacketListener>>> updates = new HashMap<>();
+  }
 
   public static EntityPortalState of(Entity entity) {
     return ((Access) entity).portalix$motionState();
@@ -49,8 +53,33 @@ public final class EntityPortalState {
     return segmentMoving;
   }
 
+  void finishMovement() {
+    collisionLink = null;
+    collisionScene = null;
+    collisionQuery = null;
+    moving = false;
+  }
+
   public boolean hasPredictions() {
     return !predictions.isEmpty();
+  }
+
+  List<PortalEntityMovement.Crossing> predictions() {
+    return predictions;
+  }
+
+  void predict(PortalEntityMovement.Crossing crossing) {
+    if (predictions.isEmpty()) predictions = new ArrayList<>();
+    predictions.add(crossing);
+  }
+
+  void acknowledgePredictionsThrough(long event) {
+    predictions.removeIf(prediction -> prediction.eventId() <= event);
+    if (predictions.isEmpty()) clearPredictions();
+  }
+
+  void clearPredictions() {
+    predictions = List.of();
   }
 
   public long crossingSequence() {
@@ -65,7 +94,7 @@ public final class EntityPortalState {
   }
 
   void resetPredictions(long event) {
-    predictions.clear();
+    clearPredictions();
     sequence = event;
     if (lastCrossing != null && lastCrossing.eventId() > event) lastCrossing = null;
     collisionLink = null;
@@ -123,12 +152,10 @@ public final class EntityPortalState {
     resetPredictions(0);
     collisionScene = null;
     collisionQuery = null;
-    outgoingCrossings.clear();
-    crossingObservers.clear();
-    outgoingUpdates.clear();
+    outgoing = null;
     authoritativeEvent = 0;
     authoritativeTick = Long.MIN_VALUE;
-    snapshotObservers.clear();
+    snapshotObservers = null;
   }
 
   void cameraCrossed(
@@ -157,6 +184,18 @@ public final class EntityPortalState {
 
   public PortalEntityMovement.Crossing lastCrossing() {
     return lastCrossing;
+  }
+
+  public PortalEntityMovement.MoveResult lastMove() {
+    return lastMove;
+  }
+
+  public long movementRecordEpoch() {
+    return movementRecordEpoch;
+  }
+
+  public void clearedMovementRecords() {
+    movementRecordEpoch++;
   }
 
   void crossed(PortalEntityMovement.Crossing crossing) {

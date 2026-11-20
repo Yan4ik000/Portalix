@@ -1,9 +1,8 @@
 package dev.portalix.client;
 
 import com.mojang.blaze3d.systems.RenderSystem;
-import dev.portalix.client.carry.CarryOwnerState;
-import dev.portalix.client.compat.minecraft.MinecraftSoundOcclusion;
 import dev.portalix.client.carry.ClientCarryController;
+import dev.portalix.client.compat.minecraft.MinecraftSoundOcclusion;
 import dev.portalix.client.gun.GunInputHandler;
 import dev.portalix.client.gun.animation.GunAnimator;
 import dev.portalix.client.gun.render.GunRenderEvents;
@@ -14,6 +13,7 @@ import dev.portalix.client.portal.PortalViewReadiness;
 import dev.portalix.client.portal.audio.PortalAudioRouter;
 import dev.portalix.client.portal.camera.PortalCameraController;
 import dev.portalix.portal.PortalTopology;
+import dev.portalix.portal.traversal.PortalPassagePose;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.player.LocalPlayer;
@@ -38,10 +38,6 @@ public final class PortalixClient {
     return current.shots;
   }
 
-  public static CarryOwnerState carryState() {
-    return current.carryState;
-  }
-
   public static GunInputHandler input() {
     return current.input;
   }
@@ -56,7 +52,10 @@ public final class PortalixClient {
 
   static void replaceSession(ClientLevel level, LocalPlayer player) {
     RenderSystem.assertOnRenderThread();
-    if (current != null) current.close();
+    if (current != null) {
+      if (current.level != level && player != null) PortalPassagePose.set(player, false);
+      current.close();
+    }
     current = new PortalClientSession(level, player);
   }
 

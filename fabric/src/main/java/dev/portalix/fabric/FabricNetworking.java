@@ -9,7 +9,22 @@ import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
 import net.minecraft.server.level.ServerPlayer;
 
-public final class FabricNetworking implements ModNetworking.Registration {
+final class FabricNetworking implements ModNetworking.Registration {
+  @Override
+  public <T extends CustomPacketPayload> void optionalBidirectional(
+      CustomPacketPayload.Type<T> type, StreamCodec<? super RegistryFriendlyByteBuf, T> codec,
+      BiConsumer<ServerPlayer, T> receiver) {
+    clientbound(type, codec);
+    serverbound(type, codec, receiver);
+  }
+
+  @Override
+  public <T extends CustomPacketPayload> void optionalServerbound(
+      CustomPacketPayload.Type<T> type, StreamCodec<? super RegistryFriendlyByteBuf, T> codec,
+      BiConsumer<ServerPlayer, T> receiver) {
+    serverbound(type, codec, receiver);
+  }
+
   @Override
   public <T extends CustomPacketPayload> void clientbound(
       CustomPacketPayload.Type<T> type, StreamCodec<? super RegistryFriendlyByteBuf, T> codec) {

@@ -1,11 +1,10 @@
 package dev.portalix.client.compat.sodium;
 
+import dev.portalix.client.portal.scene.PortalSceneManager;
 import dev.portalix.client.mixin.compat.sodium.RenderRegionAccessor;
 import dev.portalix.client.compat.PortalTerrainBackend;
 import dev.portalix.client.mixin.compat.sodium.RenderSectionAccessor;
-import dev.portalix.client.portal.clip.PortalCullPlane;
-import dev.portalix.client.portal.scene.PortalSceneManager;
-import dev.portalix.client.portal.terrain.PortalTerrainDemand;
+import dev.portalix.client.portal.terrain.PortalFrameTerrainBudget;
 import dev.portalix.portal.PortalLink;
 import dev.portalix.portal.PortalTopology;
 import java.util.HashMap;
@@ -14,7 +13,6 @@ import java.util.IdentityHashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Set;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
@@ -29,7 +27,6 @@ import net.caffeinemc.mods.sodium.client.render.chunk.region.RenderRegionManager
 import net.caffeinemc.mods.sodium.client.render.chunk.storage.SectionStorage;
 import net.caffeinemc.mods.sodium.client.render.viewport.Viewport;
 import net.caffeinemc.mods.sodium.client.render.viewport.ViewportProvider;
-import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.renderer.LevelRenderer;
 import net.minecraft.client.renderer.state.level.CameraRenderState;
@@ -71,22 +68,21 @@ public final class SodiumViewCullingState {
     }
   }
 
-  public record PrimaryResult(SectionTree tree, DeferredTaskList tasks) {}
+  public record PrimaryResult(SectionTree tree, SectionTree wide, DeferredTaskList tasks) {}
 
   public record PrimaryView(
       SectionTree tree, SortedRenderLists lists, DeferredTaskList tasks, Vector3dc camera) {}
 
   public record Queued(LevelRenderer view, SodiumCullRequest request) {}
 
-  public record Visibility(SectionTree tree, DeferredTaskList tasks, long[] demand,
-      PortalCullPlane plane, SodiumCullRequest.Snapshot snapshot) {
-    public boolean fresh(PortalCullPlane plane) {
-      return snapshot != null && snapshot.visibilityFresh() && snapshot.workFresh()
-          && Objects.equals(this.plane, plane);
+  public record Visibility(SectionTree tree, SectionTree wide, DeferredTaskList tasks, long[] demand,
+      SodiumCullRequest.Snapshot snapshot) {
+    public boolean fresh() {
+      return snapshot != null && snapshot.visibilityFresh() && snapshot.workFresh();
     }
   }
 
-  public record RenderLists(long cameraRevision, long contentRevision, float distance,
+  public record RenderLists(long cameraRevision, SectionPos eyeSection, long contentRevision, float distance,
       SectionTree source, SectionTree visibility, SortedRenderLists lists, DeferredTaskList tasks,
       SodiumCullRequest.Footprint footprint) {}
 
@@ -119,23 +115,22 @@ public final class SodiumViewCullingState {
     var completed = pending;
     if (completed.nativePrimary && !completed.discarded && !closed) {
       var tasks = consumePrimary.get();
-      publishPrimary(tasks, completed.snapshot, false);
+      publishPrimary(tasks, completed.snapshot);
       pending = null;
       return !primaryFresh();
     }
     try {
       var result = task.getResult();
       if (closed || completed.discarded) return false;
-      // A virtual camera may start inside solid terrain. Its REGULAR result stays confined
-      // to that origin until a new main cull can safely supply LOCAL/WIDE trees.
       var tree = result.getCullTreeRegular();
+      var wide = result.getCullTreeWide();
       var tasks = result.getPendingTaskLists();
       if (completed.view == null) {
-        publishPrimary(tasks, completed.snapshot, completed.request.plane() != null);
-        promote.accept(new PrimaryResult(tree, tasks));
+        publishPrimary(tasks, completed.snapshot);
+        promote.accept(new PrimaryResult(tree, wide, tasks));
         return !primaryFresh();
       } else {
-        publish(completed.view, tree, tasks, completed.request.plane(), completed.snapshot, PortalTopology.links(level));
+        publish(completed.view, tree, wide, tasks, completed.snapshot, PortalTopology.links(level));
       }
       return false;
     } finally {
@@ -187,17 +182,18 @@ public final class SodiumViewCullingState {
     return selected;
   }
 
-  public RenderLists cachedLists(LevelRenderer view, long cameraRevision, float distance, SectionTree source) {
+  public RenderLists cachedLists(LevelRenderer view, long cameraRevision, SectionPos eyeSection,
+      float distance, SectionTree source) {
     var cached = lists.get(view);
-    return cached != null && cached.cameraRevision == cameraRevision
+    return cached != null && cached.cameraRevision == cameraRevision && cached.eyeSection.equals(eyeSection)
         && cached.contentRevision == listRevision && cached.distance == distance && cached.source == source
         ? cached : null;
   }
 
-  public void rememberLists(LevelRenderer view, long cameraRevision, float distance, SectionTree source,
+  public void rememberLists(LevelRenderer view, long cameraRevision, SectionPos eyeSection, float distance, SectionTree source,
       SectionTree visibility, SortedRenderLists renderLists, DeferredTaskList tasks,
       SodiumCullRequest.Footprint footprint) {
-    lists.put(view, new RenderLists(cameraRevision, listRevision, distance, source, visibility,
+    lists.put(view, new RenderLists(cameraRevision, eyeSection, listRevision, distance, source, visibility,
         renderLists, tasks, footprint));
   }
 
@@ -223,25 +219,24 @@ public final class SodiumViewCullingState {
     if (snapshot != null) snapshots.add(snapshot);
   }
 
-  private void publish(LevelRenderer view, SectionTree tree, DeferredTaskList tasks,
-      PortalCullPlane plane, SodiumCullRequest.Snapshot snapshot, List<PortalLink> links) {
-    views.put(view, new Visibility(tree, tasks, ((SodiumTaskListAccess) tasks).portalix$sectionSnapshot(), plane, snapshot));
+  private void publish(LevelRenderer view, SectionTree tree, SectionTree wide, DeferredTaskList tasks,
+      SodiumCullRequest.Snapshot snapshot, List<PortalLink> links) {
+    views.put(view, new Visibility(tree, wide, tasks, ((SodiumTaskListAccess) tasks).portalix$sectionSnapshot(), snapshot));
     for (var link : links) {
       var portal = link.entrance();
       var position = portal.endpoint().center();
-      if (tree.isValidFor(new Viewport(null, new Vector3d(position.x, position.y, position.z)), 0))
-        returnTrees.put(portal.identity(), tree);
+      if (wide.isValidFor(new Viewport(null, new Vector3d(position.x, position.y, position.z)), 0))
+        returnTrees.put(portal.identity(), wide);
     }
   }
 
-  private void publishPrimary(DeferredTaskList tasks, SodiumCullRequest.Snapshot snapshot, boolean clipped) {
+  private void publishPrimary(DeferredTaskList tasks, SodiumCullRequest.Snapshot snapshot) {
     PortalTerrainBackend.invalidatePrimaryDemand();
     // Native completion changes its task queue, not the draw tree/lists already extracted.
     if (parkedPrimary != null)
       parkedPrimary = new PrimaryView(parkedPrimary.tree, parkedPrimary.lists, tasks, parkedPrimary.camera);
     primaryDemand = ((SodiumTaskListAccess) tasks).portalix$sectionSnapshot();
     primarySnapshot = snapshot;
-    if (clipped && snapshot != null) snapshot.invalidate();
   }
 
   public boolean primaryFresh() {
@@ -278,14 +273,13 @@ public final class SodiumViewCullingState {
     return true;
   }
 
-  public Visibility exchange(LevelRenderer view, LevelRenderer primary, SectionTree source,
+  public Visibility exchange(LevelRenderer view, LevelRenderer primary, SectionTree source, SectionTree sourceWide,
       DeferredTaskList tasks, Vector3dc camera) {
     var destination = views.remove(view);
-    if (source != null) views.put(view, new Visibility(source, tasks, primaryDemand, null, primarySnapshot));
+    if (source != null) views.put(view, new Visibility(source, sourceWide, tasks, primaryDemand, primarySnapshot));
     primaryDemand = destination == null ? new long[0] : destination.demand;
     primarySnapshot = destination == null ? null : destination.snapshot;
     primaryFootprint = primarySnapshot == null ? null : primarySnapshot.footprint();
-    if (destination != null && destination.plane != null && primarySnapshot != null) primarySnapshot.invalidate();
     lists.remove(view);
     var primaryRequest = requests.remove(null);
     requests.remove(view);
@@ -308,12 +302,28 @@ public final class SodiumViewCullingState {
     return destination;
   }
 
-  public Set<Map.Entry<LevelRenderer, SodiumTerrainQueue>> terrainQueues() {
-    return terrainQueues.entrySet();
+  public Map.Entry<LevelRenderer, SodiumTerrainQueue> nextQueue(
+      DeferredTaskList primary, boolean immediate) {
+    var next = nearerQueue(terrainQueues, primary, null, immediate);
+    return nearerQueue(shadowQueues, primary, next, immediate);
   }
 
-  public Set<Map.Entry<LevelRenderer, SodiumTerrainQueue>> shadowQueues() {
-    return shadowQueues.entrySet();
+  private static Map.Entry<LevelRenderer, SodiumTerrainQueue> nearerQueue(
+      Map<LevelRenderer, SodiumTerrainQueue> queues,
+      DeferredTaskList primary,
+      Map.Entry<LevelRenderer, SodiumTerrainQueue> next,
+      boolean immediate) {
+    var tasks = next == null ? primary : next.getValue().tasks();
+    for (var entry : queues.entrySet()) {
+      var candidate = entry.getValue().tasks();
+      if (!candidate.isEmpty()
+          && (immediate || PortalFrameTerrainBudget.claim(entry.getKey()).canPrepare())
+          && (tasks == null || candidate.firstLong() < tasks.firstLong())) {
+        next = entry;
+        tasks = candidate;
+      }
+    }
+    return next;
   }
 
   public void queueTerrain(LevelRenderer view, DeferredTaskList tasks, Vector3dc camera) {
@@ -365,7 +375,8 @@ public final class SodiumViewCullingState {
     lists.entrySet().removeIf(entry -> {
       if (!entry.getValue().footprint.contains(x, y, z)) return false;
       if (graph || work) PortalSceneManager.invalidateTerrainPreparation(entry.getKey());
-      return changedLists;
+      // A fallback traversal collects both draw lists and the consumable build queue.
+      return changedLists || work && entry.getValue().source == null;
     });
     return primary;
   }
@@ -412,7 +423,9 @@ public final class SodiumViewCullingState {
 
   public SectionTree reusableTree(Viewport viewport, float distance) {
     for (var tree : returnTrees.values()) if (tree.isValidFor(viewport, distance)) return tree;
-    for (var view : views.values()) if (view.tree.isValidFor(viewport, distance)) return view.tree;
+    for (var view : views.values()) {
+      if (view.wide != null && view.wide.isValidFor(viewport, distance)) return view.wide;
+    }
     return null;
   }
 
@@ -420,21 +433,22 @@ public final class SodiumViewCullingState {
     // Like Sodium's current tree, retained trees admit newly published geometry immediately.
     for (var tree : returnTrees.values())
       tree.patchMarkPresent(section.getChunkX(), section.getChunkY(), section.getChunkZ());
-    for (var view : views.values())
+    for (var view : views.values()) {
       view.tree.patchMarkPresent(section.getChunkX(), section.getChunkY(), section.getChunkZ());
+      if (view.wide != null) view.wide.patchMarkPresent(section.getChunkX(), section.getChunkY(), section.getChunkZ());
+    }
   }
 
   public boolean completeView(LevelRenderer renderer, CameraRenderState camera, boolean primary,
       SectionTree primaryTree, float distance, SectionStorage sections, RenderRegionManager regions) {
     if (camera.cullFrustum == null) return false;
     var viewport = ((ViewportProvider) camera.cullFrustum).sodium$createViewport();
-    if (!camera.smartCull) return unculledComplete(viewport, camera, regions);
+    if (!camera.smartCull) return unculledComplete(viewport, regions);
     var visibility = primary ? null : views.get(renderer);
     var tree = primary ? primaryTree : visibility == null ? null : visibility.tree;
     var snapshot = primary ? primarySnapshot : visibility == null ? null : visibility.snapshot;
     if (tree == null || snapshot == null || !snapshot.visibilityFresh() || !snapshot.workFresh()
-        || !primary && !Objects.equals(visibility.plane, SodiumCullRequest.plane(viewport))
-        || !tree.isValidFor(viewport, distance) || !PortalTerrainDemand.resident(camera)) return false;
+        || !tree.isValidFor(viewport, distance)) return false;
     var demand = primary ? primaryDemand : visibility.demand;
     for (long node : demand) {
       int x = SectionPos.x(node), y = SectionPos.y(node), z = SectionPos.z(node);
@@ -448,9 +462,8 @@ public final class SodiumViewCullingState {
     return complete[0];
   }
 
-  private static boolean unculledComplete(Viewport viewport, CameraRenderState camera, RenderRegionManager regions) {
-    if (!PortalTerrainDemand.resident(camera)) return false;
-    int radius = Minecraft.getInstance().options.getEffectiveRenderDistance();
+  private static boolean unculledComplete(Viewport viewport, RenderRegionManager regions) {
+    int radius = PortalSceneManager.terrainRadius();
     var center = viewport.getChunkCoord();
     for (var region : regions.getLoadedRegions()) {
       for (var section : ((RenderRegionAccessor) region).portalix$sections()) {

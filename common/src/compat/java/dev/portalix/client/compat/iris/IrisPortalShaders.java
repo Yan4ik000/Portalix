@@ -3,6 +3,7 @@ package dev.portalix.client.compat.iris;
 import com.mojang.blaze3d.shaders.ShaderType;
 import com.mojang.blaze3d.systems.RenderSystem;
 import dev.portalix.client.portal.clip.PortalClipShaders;
+import dev.portalix.client.portal.clip.PortalClipShaders.ClipAbi;
 import dev.portalix.client.portal.clip.PortalShaderInterface;
 import dev.portalix.client.render.GlslSource;
 import java.util.HashMap;
@@ -116,9 +117,8 @@ public final class IrisPortalShaders {
                       shader.terrain,
                       "vec4 portalix_UnclippedPosition = " + position + "; ",
                       shader.shadow),
-                  shader.stage == IrisStage.GEOMETRY)
-              .replace("#ifdef PORTALIX_CLIP", "#if 1")
-              .replace("uniform PortalClip", "uniform iris_PortalClip");
+                  shader.stage == IrisStage.GEOMETRY,
+                  ClipAbi.IRIS);
         });
   }
 
@@ -133,14 +133,12 @@ public final class IrisPortalShaders {
             new GlslSource(shader.source), shader.projected, shader.shadow, shader.terrain,
             shader.fallback, shader.position)
         : new PortalShaderInterface(shader.projected, shader.terrain, "", shader.shadow);
-    String patched = PortalClipShaders.patch(
-            shader.source,
-            type,
-            true,
-            shaderInterface,
-            false)
-        .replace("#ifdef PORTALIX_CLIP", "#if 1");
-    return shader.fallback
-        ? patched : patched.replace("uniform PortalClip", "uniform iris_PortalClip");
+    return PortalClipShaders.patch(
+        shader.source,
+        type,
+        true,
+        shaderInterface,
+        false,
+        shader.fallback ? ClipAbi.IRIS_FALLBACK : ClipAbi.IRIS);
   }
 }

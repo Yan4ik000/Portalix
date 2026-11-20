@@ -1,6 +1,7 @@
 package dev.portalix.server.portal;
 
 import dev.portalix.portal.PortalLink;
+import dev.portalix.portal.PortalTopology;
 import dev.portalix.portal.geometry.PortalPenetrationResolver;
 import dev.portalix.portal.traversal.EntityPortalState;
 import dev.portalix.portal.traversal.PortalEntityCollisions;
@@ -10,6 +11,7 @@ import dev.portalix.resource.SourceUnits;
 import dev.portalix.server.EntityObservers;
 import dev.portalix.server.PortalServerEvents;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
@@ -26,7 +28,19 @@ import net.minecraft.world.phys.Vec3;
 public final class PortalClosureResolver {
   private PortalClosureResolver() {}
 
-  public static List<Release> prepare(ServerLevel level, List<PortalLink> retired) {
+  public static void updateLinks(ServerLevel level, List<PortalLink> links) {
+    var current = PortalTopology.links(level);
+    var releases = List.<Release>of();
+    if (!current.isEmpty()) {
+      var retained = new HashSet<>(links);
+      var retired = current.stream().filter(link -> !retained.contains(link)).toList();
+      releases = prepare(level, retired);
+    }
+    PortalTopology.updateLinks(level, links);
+    releases.forEach(Release::resolve);
+  }
+
+  private static List<Release> prepare(ServerLevel level, List<PortalLink> retired) {
     if (retired.isEmpty()) return List.of();
     var releases = new ArrayList<Release>();
     var candidates = new LinkedHashSet<Entity>();
@@ -47,8 +61,8 @@ public final class PortalClosureResolver {
     return releases;
   }
 
-  public record Release(ServerLevel level, Entity entity, Vec3 direction) {
-    public void resolve() {
+  private record Release(ServerLevel level, Entity entity, Vec3 direction) {
+    void resolve() {
       var displacement =
           PortalPenetrationResolver.displacement(
               PortalPassengerGroup.hulls(entity),

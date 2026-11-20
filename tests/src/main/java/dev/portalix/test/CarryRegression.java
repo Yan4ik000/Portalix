@@ -3,160 +3,265 @@ package dev.portalix.test;
 import static dev.portalix.test.ServerRegressionSuite.check;
 import static dev.portalix.test.ServerRegressionSuite.near;
 
+import dev.portalix.api.CarryPermission;
+import dev.portalix.api.PortalEndpoint;
+import dev.portalix.carry.CarryAnchor;
 import dev.portalix.carry.CarryBindings;
+import dev.portalix.mixin.traversal.EntityCollisionAccessor;
 import dev.portalix.item.ModItems;
-import dev.portalix.network.carry.CarryInputPayload;
+import dev.portalix.item.PortalixVariant;
+import dev.portalix.item.PortalixIdentity;
 import dev.portalix.network.gun.GunStatePayload;
-import dev.portalix.portal.PortalLinkId;
-import dev.portalix.portal.PortalTopology;
+import dev.portalix.server.portal.PortalClosureResolver;
 import dev.portalix.portal.query.PlayerPortalVisibility;
 import dev.portalix.server.GunStateBroadcaster;
 import dev.portalix.server.carry.CarryController;
 import java.util.List;
 import java.util.UUID;
+import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.entity.EntitySpawnReason;
 import net.minecraft.world.entity.EntityTypes;
 import net.minecraft.world.entity.Mob;
 import net.minecraft.world.entity.Entity;
-import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.GameType;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.phys.Vec3;
 
-final class CarryRegression {
-  private CarryRegression() {}
+final class CarryRegression implements ServerRegressionSuite.Scenario {
+  private static final ScopedValue<Entity> THROW_VETO = ScopedValue.newInstance();
+
+  static {
+    CarryPermission.EVENT.register((player, entity, operation, point) ->
+        operation != CarryPermission.Operation.THROW || !THROW_VETO.isBound() || entity != THROW_VETO.get());
+  }
+
+  private final RegressionWorld world;
+  private CarryController controller;
+  private Entity target;
+  private PortalEndpoint entrance;
+  private PortalEndpoint exit;
+  private int actorIndex;
+  private int stage;
+  private int preparedAt;
+  private int previousTick;
+
+  CarryRegression(RegressionWorld world) { this.world = world; }
 
   static void run(RegressionWorld world) {
-    for (Item gun : new Item[] {ModItems.PORTALIX.get(), ModItems.POTATO_PORTALIX.get(),
-        ModItems.ORANGE_PORTALIX.get(), ModItems.BLUE_PORTALIX.get()}) {
-      world.clear(new Vec3(160, 105, 160), 5);
-      world.player.snapTo(160.5, 104, 160.5, 0, 0);
-      world.player.setItemSlot(EquipmentSlot.MAINHAND, new ItemStack(gun));
-      var controller = new CarryController(new GunStateBroadcaster(player ->
-          new GunStatePayload(player.getId(), player.getUUID(), -1,
-              GunStatePayload.EMPTY_TARGET, 0, 0, false)));
-      Vec3 center = world.player.getEyePosition().add(0, 0, 1.5);
-      var target = world.item(center);
-      UUID owner = world.player.getUUID();
-      try {
+    world.clear(new Vec3(160, 105, 160), 5);
+    world.player.snapTo(160.5, 104, 160.5, 0, 0);
+    var controller = new CarryController(new GunStateBroadcaster(player ->
+        new GunStatePayload(player.getId(), player.getUUID(), -1,
+            GunStatePayload.EMPTY_TARGET, 0, 0, false)));
+    Vec3 center = world.player.getEyePosition().add(0, 0, 1.5);
+    var target = world.item(center);
+    UUID owner = world.player.getUUID();
+    try {
+      for (var variant : List.of(PortalixVariant.POTATO, PortalixVariant.ORANGE, PortalixVariant.BLUE)) {
+        world.player.setItemSlot(EquipmentSlot.MAINHAND, new ItemStack(ModItems.gun(variant)));
         controller.toggleGrab(world.player);
         check(controller.targetId(owner) == target.getId()
             && controller.targetUuid(owner).equals(target.getUUID()),
-            gun + " did not grab the object in front of the player");
-        check(CarryBindings.holderId(target) == world.player.getId()
-            && CarryBindings.heldEntityId(world.level, world.player.getId()) == target.getId(),
-            "Grab did not establish both ownership directions");
-        check(controller.requestRelease(world.player, false), "Drop was not queued");
-        controller.tick(world.level.getServer());
-        check(!controller.isHolding(owner) && CarryBindings.holderId(target) == -1,
-            "Drop did not release the object");
-        near(target.getDeltaMovement(), Vec3.ZERO, 1e-8, "A stationary drop gained momentum");
-
-        controller.toggleGrab(world.player);
-        check(controller.isHolding(owner), "Object could not be grabbed for a throw");
-        check(controller.requestRelease(world.player, true), "Throw was not queued");
-        controller.tick(world.level.getServer());
-        check(!controller.isHolding(owner) && CarryBindings.holderId(target) == -1,
-            "Throw retained the ownership binding");
-        check(target.getDeltaMovement().z > 1 && Math.abs(target.getDeltaMovement().x) < 1e-8,
-            "Throw impulse does not follow the holder's view");
-
-        target.setDeltaMovement(Vec3.ZERO);
-        world.player.setGameMode(GameType.ADVENTURE);
-        controller.toggleGrab(world.player);
-        check(!controller.isHolding(owner), "Adventure player grabbed an entity");
-        world.player.setGameMode(GameType.CREATIVE);
-        world.player.setItemSlot(EquipmentSlot.MAINHAND, ItemStack.EMPTY);
-        controller.toggleGrab(world.player);
-        check(!controller.isHolding(owner), "Player grabbed an entity without a portalix");
-      } finally {
+            variant + " did not grab the object in front of the player");
         controller.clear();
       }
+
+      var standard = new ItemStack(ModItems.gun(PortalixVariant.STANDARD));
+      world.player.setItemSlot(EquipmentSlot.MAINHAND, standard);
+      controller.toggleGrab(world.player);
+      check(controller.targetId(owner) == target.getId()
+          && controller.targetUuid(owner).equals(target.getUUID())
+          && CarryBindings.holderId(target) == world.player.getId()
+          && CarryBindings.heldEntityId(world.level, world.player.getId()) == target.getId(),
+          "Grab did not establish both ownership directions");
+      var anchor = CarryAnchor.routeHoldPosition(world.player, List.of(), target.getBoundingBox());
+      target.setPos(anchor.subtract(0, target.getBbHeight() / 2, 0));
+      var movements = ((EntityCollisionAccessor) target).portalix$movementRecords();
+      int before = movements.size();
+      controller.tick(world.level.getServer());
+      check(movements.size() == before, "A stationary hold recorded a native movement");
+      check(controller.requestRelease(world.player, false), "Drop was not queued");
+      controller.tick(world.level.getServer());
+      check(!controller.isHolding(owner) && CarryBindings.holderId(target) == -1,
+          "Drop did not release the object");
+      near(target.getDeltaMovement(), Vec3.ZERO, 1e-8, "A stationary drop gained momentum");
+
+      target.setPos(center.subtract(0, target.getBbHeight() / 2, 0));
+      controller.toggleGrab(world.player);
+      check(controller.isHolding(owner), "Object could not be grabbed before changing guns");
+      var recolored = new ItemStack(ModItems.gun(PortalixVariant.BLUE));
+      recolored.set(PortalixIdentity.ID.get(), PortalixIdentity.get(standard));
+      world.player.setItemSlot(EquipmentSlot.MAINHAND, recolored);
+      controller.tick(world.level.getServer());
+      check(!controller.isHolding(owner) && CarryBindings.holderId(target) == -1,
+          "Equipping another Portalix retained the previous gun's hold");
+      world.player.setItemSlot(EquipmentSlot.MAINHAND, standard);
+
+      controller.toggleGrab(world.player);
+      check(controller.isHolding(owner), "Object could not be grabbed for a throw");
+      check(controller.requestRelease(world.player, true), "Throw was not queued");
+      controller.tick(world.level.getServer());
+      check(!controller.isHolding(owner) && CarryBindings.holderId(target) == -1,
+          "Throw retained the ownership binding");
+      check(target.getDeltaMovement().z > 1 && Math.abs(target.getDeltaMovement().x) < 1e-8,
+          "Throw impulse does not follow the holder's view");
+
+      target.setDeltaMovement(Vec3.ZERO);
+      world.player.setGameMode(GameType.ADVENTURE);
+      controller.toggleGrab(world.player);
+      check(!controller.isHolding(owner), "Adventure player grabbed an entity");
+      world.player.setGameMode(GameType.CREATIVE);
+      world.player.setItemSlot(EquipmentSlot.MAINHAND, ItemStack.EMPTY);
+      controller.toggleGrab(world.player);
+      check(!controller.isHolding(owner), "Player grabbed an entity without a portalix");
+    } finally {
+      controller.clear();
       world.reset();
     }
     animals(world);
-    portalPaths(world);
+    slowedHold(world);
   }
 
-  private static void portalPaths(RegressionWorld world) {
-    for (boolean animal : new boolean[] {false, true}) {
-      var entrance = world.endpoint(Direction.NORTH, new Vec3(144, 104, 144));
-      var exit = world.endpoint(Direction.EAST, new Vec3(192, 104, 192));
-      world.surface(entrance, Blocks.STONE.defaultBlockState(), Blocks.AIR.defaultBlockState());
-      world.surface(exit, Blocks.STONE.defaultBlockState(), Blocks.AIR.defaultBlockState());
-      var link = world.link(entrance, exit);
-      world.publish(link);
-      PlayerPortalVisibility.of(world.player).ready(link);
-      PlayerPortalVisibility.of(world.player).ready(link.inverse());
+  @Override
+  public boolean tick() {
+    int now = world.level.getServer().getTickCount();
+    if (target == null) {
+      preparePortal();
+      preparedAt = previousTick = now;
+      stage = 0;
+      return false;
+    }
+    check(now > previousTick, "Carry scenario did not advance the server clock");
+    previousTick = now;
+    controller.tick(world.level.getServer());
+    String scenario = actorIndex == 0 ? "item" : "animal";
+    UUID owner = world.player.getUUID();
+    Vec3 destination = exit.center().add(.75, 0, 0);
+    if (stage == 0) {
+      check(controller.isHolding(owner), scenario + " server carry simulation lost ownership");
+      if (now - preparedAt < 24) return false;
+      near(target.getBoundingBox().getCenter(), destination, 1e-6,
+          scenario + " server carry simulation did not follow the holder through the portal");
+      near(target.getDeltaMovement(), Vec3.ZERO, 1e-8,
+          scenario + " native held tick moved the target after its portal crossing");
       world.player.snapTo(entrance.center().x, entrance.center().y - world.player.getEyeHeight(),
-          entrance.center().z - 2.25, 0, 0);
-      world.player.setDeltaMovement(Vec3.ZERO);
-      world.player.setItemSlot(EquipmentSlot.MAINHAND, new ItemStack(ModItems.PORTALIX.get()));
-      Vec3 start = entrance.center().add(0, 0, -.75);
-      Entity target;
-      if (animal) {
-        var pig = EntityTypes.PIG.create(world.level, EntitySpawnReason.COMMAND);
-        check(pig != null, "Portal carry animal factory failed");
-        world.add(pig);
-        pig.setNoAi(true);
-        pig.setPos(start.subtract(0, pig.getBbHeight() / 2, 0));
-        target = pig;
-      } else target = world.item(start);
-      target.setDeltaMovement(Vec3.ZERO);
-      target.setYRot(37);
-      target.setXRot(0);
-      target.setOldPosAndRot();
-      var controller = new CarryController(new GunStateBroadcaster(player ->
-          new GunStatePayload(player.getId(), player.getUUID(), -1,
-              GunStatePayload.EMPTY_TARGET, 0, 0, false)));
-      String scenario = animal ? "animal" : "item";
-      UUID owner = world.player.getUUID();
-      try {
-        controller.toggleGrab(world.player);
-        check(controller.targetId(owner) == target.getId() && controller.targetUuid(owner).equals(target.getUUID()), scenario + " portal fixture did not establish a local grab");
-        Vec3 destination = exit.center().add(.75, 0, 0);
-        controller.receiveInput(world.player, new CarryInputPayload(target.getId(), target.getUUID(), 1, 1,
-            List.of(new CarryInputPayload.Node(start, null),
-                new CarryInputPayload.Node(entrance.center(), null),
-                new CarryInputPayload.Node(exit.center(), PortalLinkId.fromLink(link)),
-                new CarryInputPayload.Node(destination, null))));
-        check(controller.isHolding(owner), scenario + " legitimate carry path through the portal was rejected");
-        near(target.getBoundingBox().getCenter(), destination, 1e-6,
-            scenario + " accepted portal carry path did not reach the authored exit position");
+          entrance.center().z - 1.125, 0, 0);
+      world.player.setOldPosAndRot();
+      stage = 1;
+      return false;
+    }
+    Vec3 followed = destination.add(.25, 0, 0);
+    if (stage == 1) {
+      check(controller.isHolding(owner) && controller.targetUuid(owner).equals(target.getUUID())
+          && CarryBindings.holderId(target) == world.player.getId()
+          && CarryBindings.heldEntityId(world.level, world.player.getId()) == target.getId(),
+          scenario + " movement beyond the portal lost ownership or its remote route");
+      near(target.getBoundingBox().getCenter(), followed, 1e-6,
+          scenario + " subsequent server carry simulation did not follow the holder");
+      PortalClosureResolver.updateLinks(world.level, List.of());
+      stage = 2;
+      return false;
+    }
+    check(!controller.isHolding(owner) && CarryBindings.holderId(target) == -1
+        && CarryBindings.heldEntityId(world.level, world.player.getId()) == -1,
+        scenario + " retired portal route retained a hold or either ownership binding");
+    near(target.getBoundingBox().getCenter(), followed, 1e-6,
+        scenario + " releasing an obsolete portal route teleported the target");
+    near(target.getDeltaMovement(), new Vec3(.25, 0, 0), 1e-6,
+        scenario + " route invalidation lost the last server-simulated movement on release");
+    check(world.level.getEntity(target.getId()) == target && target.isAlive()
+        && world.level.noCollision(target, target.getBoundingBox().deflate(1e-6)),
+        scenario + " route invalidation removed the native target or left it inside the backing wall");
+    controller.clear();
+    controller = null;
+    target = null;
+    world.reset();
+    return ++actorIndex == 2;
+  }
+
+  private void preparePortal() {
+    entrance = world.endpoint(Direction.NORTH, new Vec3(144, 104, 144));
+    exit = world.endpoint(Direction.EAST, new Vec3(192, 104, 192));
+    world.surface(entrance, Blocks.STONE.defaultBlockState(), Blocks.AIR.defaultBlockState());
+    world.surface(exit, Blocks.STONE.defaultBlockState(), Blocks.AIR.defaultBlockState());
+    var link = world.link(entrance, exit);
+    world.publish(link);
+    PlayerPortalVisibility.of(world.player).ready(link);
+    PlayerPortalVisibility.of(world.player).ready(link.inverse());
+    world.player.snapTo(entrance.center().x, entrance.center().y - world.player.getEyeHeight(),
+        entrance.center().z - 2.25, 0, 0);
+    world.player.setDeltaMovement(Vec3.ZERO);
+    world.player.setItemSlot(EquipmentSlot.MAINHAND, new ItemStack(ModItems.gun(PortalixVariant.STANDARD)));
+    Vec3 start = entrance.center().add(0, 0, -.75);
+    if (actorIndex == 1) {
+      var pig = EntityTypes.PIG.create(world.level, EntitySpawnReason.COMMAND);
+      check(pig != null, "Portal carry animal factory failed");
+      world.add(pig);
+      pig.setNoAi(true);
+      pig.setPos(start.subtract(0, pig.getBbHeight() / 2, 0));
+      target = pig;
+    } else target = world.item(start);
+    target.setDeltaMovement(Vec3.ZERO);
+    target.setYRot(37);
+    target.setXRot(0);
+    target.setOldPosAndRot();
+    controller = new CarryController(new GunStateBroadcaster(player ->
+        new GunStatePayload(player.getId(), player.getUUID(), -1,
+            GunStatePayload.EMPTY_TARGET, 0, 0, false)));
+    UUID owner = world.player.getUUID();
+    controller.toggleGrab(world.player);
+    check(controller.targetId(owner) == target.getId() && controller.targetUuid(owner).equals(target.getUUID()),
+        "Portal fixture did not establish a local grab");
+    near(target.getBoundingBox().getCenter(), start, 1e-6,
+        "Grabbing moved the target before a server simulation step");
+    world.player.snapTo(entrance.center().x, entrance.center().y - world.player.getEyeHeight(),
+        entrance.center().z - 1.375, 0, 0);
+    world.player.setOldPosAndRot();
+  }
+
+  @Override
+  public void close() {
+    if (controller != null) controller.clear();
+  }
+
+  private static void slowedHold(RegressionWorld world) {
+    var player = world.player;
+    world.clear(new Vec3(160, 105, 160), 5);
+    player.snapTo(160.5, 104, 160.5, 0, 0);
+    player.setItemSlot(EquipmentSlot.MAINHAND, new ItemStack(ModItems.gun(PortalixVariant.STANDARD)));
+    var pig = EntityTypes.PIG.create(world.level, EntitySpawnReason.COMMAND);
+    check(pig != null, "Could not create the held mob");
+    world.add(pig);
+    pig.setPos(player.getEyePosition().add(0, -pig.getBbHeight() / 2, 1.5));
+    var controller = new CarryController(new GunStateBroadcaster(owner ->
+        new GunStatePayload(owner.getId(), owner.getUUID(), -1, GunStatePayload.EMPTY_TARGET, 0, 0, false)));
+    try {
+      controller.toggleGrab(player);
+      check(controller.targetId(player.getUUID()) == pig.getId(), "Could not grab the mob before entering the web");
+      var anchor = CarryAnchor.routeHoldPosition(player, List.of(), pig.getBoundingBox());
+      pig.setPos(anchor.subtract(0, pig.getBbHeight() / 2, 0));
+      controller.tick(world.level.getServer());
+      world.block(BlockPos.containing(anchor), Blocks.COBWEB.defaultBlockState());
+      world.level.tickNonPassenger(pig);
+      Vec3 before = pig.position();
+      player.setPos(player.position().add(.4, 0, 0));
+      player.setOldPosAndRot();
+      ScopedValue.where(THROW_VETO, (Entity) pig).run(() -> {
+        controller.requestRelease(player, true);
         controller.tick(world.level.getServer());
-        world.level.tickNonPassenger(target);
-        near(target.getBoundingBox().getCenter(), destination, 1e-6,
-            scenario + " native held tick moved the target after its portal crossing");
-        near(target.getDeltaMovement(), Vec3.ZERO, 1e-8,
-            scenario + " accepted carry movement leaked free-flight velocity");
-        Vec3 followed = destination.add(.25, 0, 0);
-        controller.receiveInput(world.player, new CarryInputPayload(target.getId(), target.getUUID(), 1, 2,
-            List.of(new CarryInputPayload.Node(destination, null), new CarryInputPayload.Node(followed, null))));
-        check(controller.isHolding(owner) && controller.targetUuid(owner).equals(target.getUUID())
-            && CarryBindings.holderId(target) == world.player.getId()
-            && CarryBindings.heldEntityId(world.level, world.player.getId()) == target.getId(),
-            scenario + " movement beyond the portal lost ownership or its remote route");
-        near(target.getBoundingBox().getCenter(), followed, 1e-6,
-            scenario + " subsequent accepted remote-space carry input did not move the native entity");
-        PortalTopology.updateLinks(world.level, List.of());
-        controller.tick(world.level.getServer());
-        check(!controller.isHolding(owner) && CarryBindings.holderId(target) == -1
-            && CarryBindings.heldEntityId(world.level, world.player.getId()) == -1,
-            scenario + " retired portal route retained a hold or either ownership binding");
-        near(target.getBoundingBox().getCenter(), followed, 1e-6,
-            scenario + " releasing an obsolete portal route teleported the target");
-        near(target.getDeltaMovement(), new Vec3(.25, 0, 0), 1e-6,
-            scenario + " route invalidation lost the last accepted movement on release");
-        check(world.level.getEntity(target.getId()) == target && target.isAlive()
-            && world.level.noCollision(target, target.getBoundingBox().deflate(1e-6)),
-            scenario + " route invalidation removed the native target or left it inside the backing wall");
-      } finally {
-        controller.clear();
-        world.reset();
-      }
+      });
+      Vec3 actual = pig.position().subtract(before);
+      check(controller.targetId(player.getUUID()) == pig.getId(), "A rejected throw or a shortened step released the mob");
+      near(actual, new Vec3(.1, 0, 0), 1e-6, "The vetoed throw must still advance the hold at cobweb speed");
+      controller.requestRelease(player, false);
+      controller.tick(world.level.getServer());
+      near(pig.getDeltaMovement(), actual, 1e-6, "Dropping a slowed mob used its planned full-speed step");
+    } finally {
+      controller.clear();
+      world.reset();
     }
   }
 
@@ -165,7 +270,7 @@ final class CarryRegression {
       world.clear(new Vec3(160, 105, 160), 5);
       world.player.snapTo(160.5, 104, 160.5, 0, 0);
       world.player.setDeltaMovement(Vec3.ZERO);
-      world.player.setItemSlot(EquipmentSlot.MAINHAND, new ItemStack(ModItems.PORTALIX.get()));
+      world.player.setItemSlot(EquipmentSlot.MAINHAND, new ItemStack(ModItems.gun(PortalixVariant.STANDARD)));
       Mob animal = noAi ? EntityTypes.CHICKEN.create(world.level, EntitySpawnReason.COMMAND)
           : EntityTypes.PIG.create(world.level, EntitySpawnReason.COMMAND);
       check(animal != null, "Carry animal factory failed");
@@ -221,7 +326,7 @@ final class CarryRegression {
     }
     world.clear(new Vec3(160, 105, 160), 5);
     world.player.snapTo(160.5, 104, 160.5, 0, 0);
-    world.player.setItemSlot(EquipmentSlot.MAINHAND, new ItemStack(ModItems.PORTALIX.get()));
+    world.player.setItemSlot(EquipmentSlot.MAINHAND, new ItemStack(ModItems.gun(PortalixVariant.STANDARD)));
     var vehicle = EntityTypes.PIG.create(world.level, EntitySpawnReason.COMMAND);
     var passenger = EntityTypes.CHICKEN.create(world.level, EntitySpawnReason.COMMAND);
     check(vehicle != null && passenger != null, "Carry passenger fixture factory failed");

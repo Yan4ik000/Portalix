@@ -17,6 +17,12 @@ public interface ChunkMapAccessor {
   @Accessor("level")
   ServerLevel portalix$level();
 
+  @Accessor("serverViewDistance")
+  int portalix$serverViewDistance();
+
+  @Invoker("getPlayerViewDistance")
+  int portalix$playerViewDistance(ServerPlayer player);
+
   @Accessor("entityMap")
   Int2ObjectMap<?> portalix$entityTrackers();
 

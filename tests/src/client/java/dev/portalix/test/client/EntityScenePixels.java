@@ -2,6 +2,7 @@ package dev.portalix.test.client;
 
 import static dev.portalix.test.client.ClientAssertions.check;
 
+import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.nio.file.Path;
@@ -17,6 +18,11 @@ final class EntityScenePixels {
   private static final AABB QUIET_QUARTZ = new AABB(158, 99.99, 508, 159, 100.01, 510);
   private record Foreground(int pixels, int corePixels, FrameCapture.Region bounds, double centerX, double centerY,
                             double luminanceDeviation) {}
+  private record MaterialForeground(int pixels, FrameCapture.Region bounds) {
+    boolean spans(int minimum) {
+      return bounds != null && Math.max(bounds.width(), bounds.height()) >= minimum;
+    }
+  }
   private EntityScenePixels() {}
 
   static Map<String, Object> visible(FrameCapture.Frame image, AABB bounds, EntitySystemFixture.Kind kind,
@@ -39,7 +45,7 @@ final class EntityScenePixels {
           "Native actor/absence images used different cameras: " + kind);
       var control = control(image, quietQuartz);
       var referenceControl = control(empty, quietQuartz);
-      check(!overlap(control, region), "The authored quartz control overlaps the native actor body: " + kind);
+      check(control.intersection(region).isEmpty(), "The authored quartz control overlaps the native actor body: " + kind);
       var difference = image.difference(empty, control, 24);
       check(difference.changedFraction() < .03 && difference.meanChannelDifference() < 5,
           "The static quartz background changed independently of native " + kind + ": " + difference);
@@ -49,37 +55,70 @@ final class EntityScenePixels {
     }
     if (kind == EntitySystemFixture.Kind.CHICKEN || kind == EntitySystemFixture.Kind.SNOWBALL
         || kind == EntitySystemFixture.Kind.ARROW) return neutralBody(image, region, kind, controls, absent);
+    boolean trident = kind == EntitySystemFixture.Kind.TRIDENT;
     IntPredicate material = switch (kind) {
-      case ITEM, TRIDENT -> FrameCapture.Material.CYAN;
+      case ITEM -> FrameCapture.Material.CYAN;
+      case TRIDENT -> EntityScenePixels::tridentMaterial;
       case PIG -> pixel -> {
         int r = pixel >> 16 & 255, g = pixel >> 8 & 255, b = pixel & 255;
         return r >= 60 && r > g * 1.15 && r > b * 1.05;
       };
       default -> throw new IllegalArgumentException("No fixed material signature for " + kind);
     };
+    check(!trident || absent.length > 0, "Native trident requires a matching absence frame");
+    int contrast = trident ? 48 : 24;
+    var foreground = materialForeground(image, region, material, contrast, absent);
+    var extent = foreground.bounds();
+    // A foreshortened trident may rasterize to a single row. Scale with the projected footprint.
+    int minimum = trident ? Math.max(3, (int) Math.ceil(region.area() * .005)) : 20;
+    int span = (int) Math.ceil(Math.max(region.width(), region.height()) * .1);
+    check(foreground.pixels() >= minimum && (trident ? foreground.spans(span)
+            : extent.width() >= 3 && extent.height() >= 3),
+        "Native " + kind + " body has no localized expected-material foreground: " + foreground
+            + ", region=" + region);
+    check(image.statistics(region, pixel -> true).luminanceDeviation() > 5,
+        "Native " + kind + " projected body has no textured foreground");
+    var proof = new LinkedHashMap<String, Object>();
+    proof.put("frame", image.metadata()); proof.put("kind", kind.name()); proof.put("bodyRegion", region);
+    proof.put("materialPixels", foreground.pixels());
+    proof.put("materialBounds", new int[] {extent.x(), extent.y(), extent.x() + extent.width(), extent.y() + extent.height()});
+    proof.put("minimumMaterialPixels", minimum); proof.put("backgroundControls", controls);
+    proof.put("handRegionExcluded", excludeHand);
+    if (trident && absent.length > 1) {
+      var absenceControls = new LinkedHashMap<Long, MaterialForeground>();
+      for (var reference : absent) {
+        var other = Arrays.stream(absent).filter(frame -> frame != reference).toArray(FrameCapture.Frame[]::new);
+        var noise = materialForeground(reference, region, material, contrast, other);
+        check(noise.pixels() < minimum || !noise.spans(span),
+            "Trident signature also appears in an absence frame " + reference.id() + ": " + noise);
+        absenceControls.put(reference.id(), noise);
+      }
+      proof.put("materialAbsenceControls", absenceControls);
+    }
+    return proof;
+  }
+
+  private static boolean tridentMaterial(int pixel) {
+    int green = pixel >> 8 & 255, blue = pixel & 255;
+    return FrameCapture.Material.CYAN.test(pixel) && Math.max(green, blue) <= Math.min(green, blue) * 1.4;
+  }
+
+  private static MaterialForeground materialForeground(FrameCapture.Frame image, FrameCapture.Region region,
+                                                       IntPredicate material, int contrast,
+                                                       FrameCapture.Frame... absent) {
     int count = 0, left = image.width(), top = image.height(), maxX = -1, maxY = -1;
     for (int y = region.y(); y < region.y() + region.height(); y++)
       for (int x = region.x(); x < region.x() + region.width(); x++) {
         int pixel = image.pixel(x, y);
         if (!material.test(pixel)) continue;
         boolean foreground = true;
-        for (var empty : absent) if (difference(pixel, empty.pixel(x, y)) < 24) { foreground = false; break; }
+        for (var empty : absent) if (difference(pixel, empty.pixel(x, y)) < contrast) { foreground = false; break; }
         if (!foreground) continue;
         count++;
         left = Math.min(left, x); top = Math.min(top, y); maxX = Math.max(maxX, x); maxY = Math.max(maxY, y);
       }
-    int minimum = kind == EntitySystemFixture.Kind.TRIDENT ? 6 : 20;
-    check(count >= minimum && maxX - left >= 2 && maxY - top >= 2,
-        "Native " + kind + " body has no localized expected-material foreground: pixels=" + count
-            + ", extent=" + left + "," + top + ".." + maxX + "," + maxY + ", region=" + region);
-    check(image.statistics(region, pixel -> true).luminanceDeviation() > 5,
-        "Native " + kind + " projected body has no textured foreground");
-    var proof = new LinkedHashMap<String, Object>();
-    proof.put("frame", image.metadata()); proof.put("kind", kind.name()); proof.put("bodyRegion", region);
-    proof.put("materialPixels", count); proof.put("materialBounds", new int[] {left, top, maxX + 1, maxY + 1});
-    proof.put("minimumMaterialPixels", minimum); proof.put("backgroundControls", controls);
-    proof.put("handRegionExcluded", excludeHand);
-    return proof;
+    return new MaterialForeground(count, count == 0 ? null
+        : new FrameCapture.Region(left, top, maxX - left + 1, maxY - top + 1));
   }
 
   private static Map<String, Object> neutralBody(FrameCapture.Frame image, FrameCapture.Region region,
@@ -172,16 +211,11 @@ final class EntityScenePixels {
     var reticle = new FrameCapture.Region(frame.width() / 2 - 40, frame.height() / 2 - 40, 80, 80);
     var toasts = new FrameCapture.Region(frame.width() * 3 / 4, 0,
         frame.width() - frame.width() * 3 / 4, frame.height() / 5);
-    check(region.area() > 200 && !overlap(region, hand) && !overlap(region, bottomHud)
-        && !overlap(region, reticle) && !overlap(region, toasts),
+    check(region.area() > 200 && region.intersection(hand).isEmpty() && region.intersection(bottomHud).isEmpty()
+        && region.intersection(reticle).isEmpty() && region.intersection(toasts).isEmpty(),
         "Authored quartz control intersects hand/HUD or has insufficient native pixels: " + region
             + ", camera=" + frame.cameraPosition() + ", yaw=" + frame.cameraYaw() + ", pitch=" + frame.cameraPitch());
     return region;
-  }
-
-  private static boolean overlap(FrameCapture.Region a, FrameCapture.Region b) {
-    return a.x() < b.x() + b.width() && b.x() < a.x() + a.width()
-        && a.y() < b.y() + b.height() && b.y() < a.y() + a.height();
   }
 
   static void save(Path path, Map<String, ?> evidence) {

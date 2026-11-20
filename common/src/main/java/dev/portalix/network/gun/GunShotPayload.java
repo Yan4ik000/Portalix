@@ -2,7 +2,6 @@ package dev.portalix.network.gun;
 
 import dev.portalix.PortalixMod;
 import dev.portalix.item.PortalixVariant;
-import dev.portalix.network.PayloadCodecs;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
@@ -26,11 +25,11 @@ public record GunShotPayload(
       CustomPacketPayload.codec(
           (payload, buffer) -> {
             buffer.writeVarInt(payload.playerId);
-            PayloadCodecs.writeVector(buffer, payload.start);
-            PayloadCodecs.writeVector(buffer, payload.end);
-            PayloadCodecs.writeVector(buffer, payload.normal);
+            Vec3.STREAM_CODEC.encode(buffer, payload.start);
+            Vec3.STREAM_CODEC.encode(buffer, payload.end);
+            Vec3.STREAM_CODEC.encode(buffer, payload.normal);
             buffer.writeBoolean(payload.orange);
-            PayloadCodecs.writeVector(buffer, payload.launchDirection);
+            Vec3.STREAM_CODEC.encode(buffer, payload.launchDirection);
             buffer.writeLong(payload.firedServerTick);
             buffer.writeVarInt(payload.impactAfterTicks);
             buffer.writeLong(payload.sequence);
@@ -39,11 +38,11 @@ public record GunShotPayload(
           buffer ->
               new GunShotPayload(
                   buffer.readVarInt(),
-                  PayloadCodecs.readVector(buffer),
-                  PayloadCodecs.readVector(buffer),
-                  PayloadCodecs.readVector(buffer),
+                  Vec3.STREAM_CODEC.decode(buffer),
+                  Vec3.STREAM_CODEC.decode(buffer),
+                  Vec3.STREAM_CODEC.decode(buffer),
                   buffer.readBoolean(),
-                  PayloadCodecs.readVector(buffer),
+                  Vec3.STREAM_CODEC.decode(buffer),
                   buffer.readLong(),
                   buffer.readVarInt(),
                   buffer.readLong(),

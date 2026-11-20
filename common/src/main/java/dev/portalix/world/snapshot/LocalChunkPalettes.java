@@ -14,12 +14,12 @@ public final class LocalChunkPalettes {
 
   private LocalChunkPalettes() {}
 
-  public static void send(boolean local, Runnable action) {
-    ScopedValue.where(SENDING, local).run(action);
+  public static void send(Runnable action) {
+    ScopedValue.where(SENDING, true).run(action);
   }
 
   public static boolean sending() {
-    return SENDING.isBound() && SENDING.get();
+    return SENDING.isBound();
   }
 
   public static void decode(ByteBuf input, Runnable action) {

@@ -1,5 +1,6 @@
 package dev.portalix.test.client;
 
+import com.google.gson.GsonBuilder;
 import com.mojang.blaze3d.GpuFormat;
 import com.mojang.blaze3d.buffers.GpuBuffer;
 import com.mojang.blaze3d.pipeline.RenderTarget;
@@ -7,25 +8,35 @@ import com.mojang.blaze3d.pipeline.TextureTarget;
 import com.mojang.blaze3d.platform.NativeImage;
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.textures.FilterMode;
-import com.google.gson.GsonBuilder;
 import java.io.IOException;
+import java.nio.ByteBuffer;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayDeque;
-import java.util.Optional;
-import java.util.OptionalDouble;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
+import java.util.OptionalDouble;
 import java.util.concurrent.CompletableFuture;
+import java.util.function.Consumer;
+import javax.imageio.ImageIO;
+import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.RenderPipelines;
+import net.minecraft.util.ARGB;
 import org.joml.Vector4f;
 
 /** A small GPU readback of every presented gameplay frame catches flashes between review samples. */
 final class PresentedFrameGuard {
+  private static final int WIDTH = 64;
+  private static final int HEIGHT = 36;
+  private static final int TERRAIN_SCALE = 4;
+
   private final Path directory;
   private RenderTarget thumbnail;
+  private RenderTarget terrainThumbnail;
   private final ArrayDeque<GpuBuffer> readbacks = new ArrayDeque<>();
+  private final ArrayDeque<GpuBuffer> terrainReadbacks = new ArrayDeque<>();
   private long presented;
   private long checked;
   private int pending;
@@ -39,39 +50,64 @@ final class PresentedFrameGuard {
 
   PresentedFrameGuard(Path directory) { this.directory = directory; }
 
-  void presented(RenderTarget source) {
+  void presented(RenderTarget source, Consumer<FrameCapture.Frame> checkTerrain) {
     RenderSystem.assertOnRenderThread();
     check();
     if (closing) { releaseWhenIdle(); return; }
-    if (thumbnail == null)
-      thumbnail = new TextureTarget("Portalix presented frame audit", 64, 36, false, GpuFormat.RGBA8_UNORM);
+    if (checkTerrain == null && thumbnail == null)
+      thumbnail = new TextureTarget("Portalix frame thumbnail", WIDTH, HEIGHT, false, GpuFormat.RGBA8_UNORM);
+    if (checkTerrain != null && terrainThumbnail == null)
+      terrainThumbnail = new TextureTarget("Portalix terrain thumbnail", WIDTH * TERRAIN_SCALE, HEIGHT * TERRAIN_SCALE,
+          false, GpuFormat.RGBA8_UNORM);
+    var target = checkTerrain == null ? thumbnail : terrainThumbnail;
+    var pool = checkTerrain == null ? readbacks : terrainReadbacks;
+    int width = target.width, height = target.height, scale = width / WIDTH;
+    var client = Minecraft.getInstance();
+    long tick = client.level == null ? -1 : client.level.getGameTime();
+    int playerTick = client.player == null ? -1 : client.player.tickCount;
     long frame = ++presented;
     long capturedNanos = FrameCapture.monotonicNanos();
     var camera = FrameCapture.worldCamera();
     var encoder = RenderSystem.getDevice().createCommandEncoder();
-    encoder.clearColorTexture(thumbnail.getColorTexture(), new Vector4f());
-    try (var pass = encoder.createRenderPass(() -> "Portalix presented RGB audit",
-        thumbnail.getColorTextureView(), Optional.empty(), null, OptionalDouble.empty())) {
+    encoder.clearColorTexture(target.getColorTexture(), new Vector4f());
+    try (var pass = encoder.createRenderPass(() -> "Portalix frame thumbnail",
+        target.getColorTextureView(), Optional.empty(), null, OptionalDouble.empty())) {
       pass.setPipeline(RenderPipelines.TRACY_BLIT);
       RenderSystem.bindDefaultUniforms(pass);
       pass.bindTexture("InSampler", source.getColorTextureView(),
           RenderSystem.getSamplerCache().getClampToEdge(FilterMode.NEAREST));
       pass.draw(3, 1, 0, 0);
     }
-    var readback = readbacks.pollFirst();
+    var readback = pool.pollFirst();
     if (readback == null)
       readback = RenderSystem.getDevice().createBuffer(() -> "Portalix presented frame readback",
-          GpuBuffer.USAGE_MAP_READ | GpuBuffer.USAGE_COPY_DST, 64L * 36 * Integer.BYTES);
+          GpuBuffer.USAGE_MAP_READ | GpuBuffer.USAGE_COPY_DST, (long) width * height * Integer.BYTES);
     var buffer = readback;
     pending++;
-    encoder.copyTextureToBuffer(thumbnail.getColorTexture(), buffer, 0, () -> {
+    encoder.copyTextureToBuffer(target.getColorTexture(), buffer, 0, () -> {
       try (var mapped = buffer.map(true, false)) {
         var data = mapped.data();
+        if (checkTerrain != null && failure == null) {
+          int[] argb = new int[width * height];
+          for (int y = 0; y < height; y++)
+            for (int x = 0; x < width; x++)
+              argb[y * width + x] = ARGB.opaque(ARGB.fromABGR(readPixel(data, width, height, x, y)));
+          var captured = new FrameCapture.Frame(frame, capturedNanos, tick, playerTick, width, height,
+              argb, camera, null, "presented-terrain-thumbnail");
+          try {
+            checkTerrain.accept(captured);
+          } catch (AssertionError | RuntimeException problem) {
+            Files.createDirectories(directory);
+            var artifact = directory.resolve("failed-terrain-frame-" + frame + ".png");
+            ImageIO.write(captured.toBufferedImage(), "png", artifact.toFile());
+            failure = new AssertionError("Terrain check failed in " + artifact, problem);
+          }
+        }
         int nonzero = 0, samples = 0;
         int[] pixels = new int[58 * 21];
         // Exclude the hand, hotbar, progress caption and top-right toasts.
         for (int y = 4; y < 25; y++) for (int x = 3; x < 61; x++) {
-          int pixel = data.getInt((x + (35 - y) * 64) * Integer.BYTES);
+          int pixel = readPixel(data, width, height, x * scale, y * scale);
           if ((pixel & 0xffffff) != 0) nonzero++;
           pixels[samples] = pixel;
           samples++;
@@ -81,9 +117,10 @@ final class PresentedFrameGuard {
         if (failure == null && (nonzero < samples / 100 || collapsed)) {
           Files.createDirectories(directory);
           Path artifact = directory.resolve("black-presented-frame-" + frame + ".png");
-          try (var image = new NativeImage(64, 36, false)) {
-            for (int y = 0; y < 36; y++) for (int x = 0; x < 64; x++)
-              image.setPixelABGR(x, y, data.getInt((x + (35 - y) * 64) * Integer.BYTES) | 0xff000000);
+          try (var image = new NativeImage(WIDTH, HEIGHT, false)) {
+            for (int y = 0; y < HEIGHT; y++)
+              for (int x = 0; x < WIDTH; x++)
+                image.setPixelABGR(x, y, ARGB.opaque(readPixel(data, width, height, x * scale, y * scale)));
             image.writeToFile(artifact);
           }
           var diagnostic = new LinkedHashMap<String, Object>();
@@ -110,17 +147,21 @@ final class PresentedFrameGuard {
         if (failure == null) failure = problem;
       } finally {
         pending--;
-        readbacks.addLast(buffer);
+        pool.addLast(buffer);
         releaseWhenIdle();
       }
     }, 0);
+  }
+
+  private static int readPixel(ByteBuffer data, int width, int height, int x, int y) {
+    return data.getInt((x + (height - 1 - y) * width) * Integer.BYTES);
   }
 
   void check() {
     if (failure != null && !failureReported) {
       var problem = failure;
       failureReported = true;
-      throw new AssertionError("Presented frame audit failed", problem);
+      throw new AssertionError("Presented frame check failed", problem);
     }
   }
 
@@ -167,17 +208,23 @@ final class PresentedFrameGuard {
   void release() { releaseWhenIdle(); }
 
   private void releaseWhenIdle() {
-    if (closing && pending == 0 && thumbnail != null) {
+    if (!closing || pending != 0) return;
+    if (thumbnail != null) {
       thumbnail.destroyBuffers();
       thumbnail = null;
       readbacks.forEach(GpuBuffer::close);
       readbacks.clear();
     }
-    if (closing && pending == 0 && !completion.isDone()) {
-      if (failure != null) completion.completeExceptionally(failure);
-      else if (checked != presented)
-        completion.completeExceptionally(new AssertionError("Not every presented frame was audited: " + checked + "/" + presented));
-      else completion.complete(null);
+    if (terrainThumbnail != null) {
+      terrainThumbnail.destroyBuffers();
+      terrainThumbnail = null;
+      terrainReadbacks.forEach(GpuBuffer::close);
+      terrainReadbacks.clear();
     }
+    if (completion.isDone()) return;
+    if (failure != null) completion.completeExceptionally(failure);
+    else if (checked != presented)
+      completion.completeExceptionally(new AssertionError("Checked " + checked + " of " + presented + " presented frames"));
+    else completion.complete(null);
   }
 }

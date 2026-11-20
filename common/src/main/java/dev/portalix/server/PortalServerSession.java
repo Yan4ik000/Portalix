@@ -2,17 +2,16 @@ package dev.portalix.server;
 
 import dev.portalix.api.PortalColor;
 import dev.portalix.item.PortalixIdentity;
-import dev.portalix.network.carry.CarryInputPayload;
 import dev.portalix.network.gun.GunCommand;
 import dev.portalix.network.gun.GunStatePayload;
+import dev.portalix.network.portal.PortalCameraViewDemandPayload;
+import dev.portalix.network.portal.PortalViewDemandPayload;
 import dev.portalix.network.portal.PortalViewReadyPayload;
 import dev.portalix.portal.PortalLink;
 import dev.portalix.server.carry.CarryController;
 import dev.portalix.server.portal.GunPortalRegistry;
 import dev.portalix.server.portal.PortalChunkTracker;
-import java.util.HashSet;
 import java.util.List;
-import java.util.Set;
 import java.util.UUID;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
@@ -26,7 +25,6 @@ public final class PortalServerSession {
   private final GunStateSync stateSync;
   private final GunCommandHandler gunCommands;
   private final PortalChunkTracker chunkTracker;
-  private final Set<ServerPlayer> observersToRefresh = new HashSet<>();
 
   public PortalServerSession(MinecraftServer server) {
     portalRegistry = new GunPortalRegistry(server);
@@ -43,14 +41,7 @@ public final class PortalServerSession {
     stateSync.flushPending(server);
     stateSync.synchronizeEquipment(server, portalRegistry.tick());
     chunkTracker.tick(server);
-    if (!observersToRefresh.isEmpty())
-      for (var player : server.getPlayerList().getPlayers())
-        if (observersToRefresh.remove(player)) player.level().getChunkSource().move(player);
     carryController.tick(server);
-  }
-
-  public void carryInput(ServerPlayer player, CarryInputPayload input) {
-    carryController.receiveInput(player, input);
   }
 
   public void portalsClosing(ServerLevel level, List<PortalLink> links) {
@@ -58,7 +49,7 @@ public final class PortalServerSession {
   }
 
   public void observerMoved(ServerPlayer player) {
-    observerMoved(player, player.level().getServer().getPlayerList().getViewDistance());
+    chunkTracker.moveStarted(player);
   }
 
   public void observerMoved(ServerPlayer player, int radius) {
@@ -69,8 +60,16 @@ public final class PortalServerSession {
     if (chunkTracker.moveFinished(player)) portalRegistry.observerMoved(player);
   }
 
+  public void chunkRefreshConfirmed(ServerPlayer player) {
+    chunkTracker.chunkRefreshConfirmed(player);
+  }
+
   public void chunkDeliveryChanged(ServerPlayer player, long chunk) {
     portalRegistry.chunkDeliveryChanged(player, chunk);
+  }
+
+  public boolean retainsTerrain(ServerPlayer player, long chunk) {
+    return chunkTracker.retainsTerrain(player, chunk);
   }
 
   public boolean retainedDuringMove(ServerPlayer player, long chunk) {
@@ -78,7 +77,27 @@ public final class PortalServerSession {
   }
 
   public void acknowledgeView(ServerPlayer player, PortalViewReadyPayload payload) {
-    if (chunkTracker.acknowledgeView(player, payload)) observersToRefresh.add(player);
+    chunkTracker.acknowledgeView(player, payload);
+  }
+
+  public void requestViews(ServerPlayer player, PortalViewDemandPayload payload) {
+    chunkTracker.requestViews(player, payload);
+  }
+
+  public void requestCameraViews(ServerPlayer player, PortalCameraViewDemandPayload payload) {
+    chunkTracker.requestCameraViews(player, payload);
+  }
+
+  public void clientTickEnded(ServerPlayer player) {
+    chunkTracker.clientTickEnded(player);
+  }
+
+  public void cameraCrossed(ServerPlayer player, PortalLink link) {
+    chunkTracker.cameraCrossed(player, link);
+  }
+
+  public void resetCamera(ServerPlayer player) {
+    chunkTracker.resetCamera(player);
   }
 
   public void handle(ServerPlayer player, GunCommand command) {
@@ -102,9 +121,8 @@ public final class PortalServerSession {
   }
 
   public void disconnect(ServerPlayer player) {
-    observersToRefresh.remove(player);
     chunkTracker.disconnect(player);
-    carryController.release(player.getUUID(), player, false);
+    carryController.drop(player.getUUID(), player);
     gunCommands.disconnect(player);
     stateSync.disconnect(player);
     shots.disconnect(player.getUUID());
@@ -112,7 +130,6 @@ public final class PortalServerSession {
   }
 
   public void clear() {
-    observersToRefresh.clear();
     chunkTracker.close();
     try {
       carryController.clear();

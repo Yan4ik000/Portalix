@@ -33,7 +33,7 @@ final class PortalClientSession implements AutoCloseable {
   final ClientLevel level;
   final LocalPlayer player;
   final ClientCarryController carryController;
-  final CarryOwnerState carryState;
+  private final CarryOwnerState carryState;
   final GunAnimator localAnimation;
   final GunShotEffects shots;
   final GunSoundPlayer sounds;
@@ -126,7 +126,7 @@ final class PortalClientSession implements AutoCloseable {
     if (transition == GunAnimationClip.HOLSTER) {
       if (mc.player != null) {
         this.sounds.onUnequipped(mc.player.getId());
-        this.carryController.release(mc.player.getId(), this.carryState.localTarget());
+        this.carryController.suspend(mc.player.getId(), this.carryState.localTarget());
       }
       this.input.clear();
     }

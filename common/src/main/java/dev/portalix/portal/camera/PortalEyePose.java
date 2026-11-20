@@ -40,17 +40,19 @@ public final class PortalEyePose {
         .center(previous, center, entity.tickCount, partial);
   }
 
+  public static Vec3 bodyPosition(Entity entity, float partialTick) {
+    return interpolatedFeet(entity, partialTick).add(0, entity.getEyeHeight(), 0)
+        .add(EntityPortalState.of(entity).eyeCorrection(entity.tickCount - 1 + partialTick));
+  }
+
   public static Pose sample(Entity entity) {
     return sample(entity, 1);
   }
 
   public static Pose sample(Entity entity, float partialTick) {
-    Vec3 feet = interpolatedFeet(entity, partialTick);
     Vec3 center = interpolatedCenter(entity, partialTick);
     var state = EntityPortalState.of(entity);
-    Vec3 eye =
-        feet.add(0, entity.getEyeHeight(), 0)
-            .add(state.eyeCorrection(entity.tickCount - 1 + partialTick));
+    Vec3 eye = bodyPosition(entity, partialTick);
     Vec3 forward =
         entity instanceof Player && !entity.isPassenger()
             ? Vec3.directionFromRotation(entity.getXRot(partialTick), entity.getYRot(partialTick))

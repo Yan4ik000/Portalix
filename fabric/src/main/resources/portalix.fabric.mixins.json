@@ -2,6 +2,12 @@
   "required": true,
   "package": "dev.portalix.fabric.mixin",
   "compatibilityLevel": "JAVA_${java_version}",
-  "mixins": ["PlayerPortalDataMixin", "ItemPortalDataMixin"],
+  "mixins": [
+    "PlayerPortalDataMixin",
+    "ItemPortalDataMixin",
+    "PortalPoseDataChangeMixin",
+    "PortalChunkPostLoadMixin",
+    "PortalChunkLoadingLookupMixin"
+  ],
   "injectors": { "defaultRequire": 1 }
 }

@@ -65,6 +65,7 @@ abstract class VerifyModArchive extends DefaultTask {
                     'portalix.mixins.json': '*',
                     'portalix.fabric.mixins.json': '*',
                     'portalix.client.mixins.json': 'client',
+                    'portalix.fabric.client.mixins.json': 'client',
                     'portalix.compat.mixins.json': 'client'
                 ]
                 require(json.mixins instanceof List, 'Missing Fabric mixin registrations')

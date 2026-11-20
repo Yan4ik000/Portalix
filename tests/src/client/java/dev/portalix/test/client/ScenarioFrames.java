@@ -7,6 +7,8 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.BooleanSupplier;
+import java.util.function.Consumer;
+import java.util.function.Supplier;
 import net.minecraft.client.Minecraft;
 
 final class ScenarioFrames {
@@ -28,6 +30,7 @@ final class ScenarioFrames {
   private boolean finishShot;
   private boolean shotFinishStarted;
   private boolean monitoring;
+  private Supplier<Consumer<FrameCapture.Frame>> terrainCheck;
   private boolean pausing;
   private String stage = "";
   private int lastSampleTick = -100;
@@ -49,6 +52,8 @@ final class ScenarioFrames {
     if (value) pausing = false;
     monitoring = value;
   }
+
+  void setTerrainCheck(Supplier<Consumer<FrameCapture.Frame>> check) { terrainCheck = check; }
 
   boolean pause() {
     pausing = true;
@@ -179,7 +184,7 @@ final class ScenarioFrames {
     try {
       drainCapture();
       finishObservedShot();
-      if (monitoring) frameGuard.presented(target);
+      if (monitoring) frameGuard.presented(target, terrainCheck == null ? null : terrainCheck.get());
       else frameGuard.release();
       if (reservedReady() && checkpoint.condition.getAsBoolean())
         captures.addLast(new Capture(FrameCapture.capture(client, checkpoint.name, directory), Kind.CHECKPOINT,

@@ -107,7 +107,7 @@ public final class WorldScenarioFixture implements AutoCloseable {
   private final ServerLevel level;
   private final Area area;
   private final Map<BlockPos, BlockState> blocks = new LinkedHashMap<>();
-  private ItemStack gun = new ItemStack(ModItems.PORTALIX.get());
+  private ItemStack gun = new ItemStack(ModItems.gun(PortalixVariant.STANDARD));
   private final UUID gunId = PortalixIdentity.ensure(gun);
   private Zombie combatTarget;
   private Minecart vehicleCart;

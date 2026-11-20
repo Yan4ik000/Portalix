@@ -57,9 +57,9 @@ public record PortalTransform(PortalEndpoint entrance, PortalEndpoint exit) {
   }
 
   public Quaternionf rotation() {
-    Vec3 x = vector(new Vec3(1, 0, 0));
-    Vec3 y = vector(new Vec3(0, 1, 0));
-    Vec3 z = vector(new Vec3(0, 0, 1));
+    Vec3 x = vector(Vec3.X_AXIS);
+    Vec3 y = vector(Vec3.Y_AXIS);
+    Vec3 z = vector(Vec3.Z_AXIS);
     return new Quaternionf()
         .setFromNormalized(
             new Matrix3f(
@@ -77,9 +77,9 @@ public record PortalTransform(PortalEndpoint entrance, PortalEndpoint exit) {
   public AABB bounds(AABB box) {
     Vec3 center = point(box.getCenter());
     var inverse = inverse();
-    double x = PortalAperture.supportRadius(box, inverse.vector(new Vec3(1, 0, 0)));
-    double y = PortalAperture.supportRadius(box, inverse.vector(new Vec3(0, 1, 0)));
-    double z = PortalAperture.supportRadius(box, inverse.vector(new Vec3(0, 0, 1)));
+    double x = PortalAperture.supportRadius(box, inverse.vector(Vec3.X_AXIS));
+    double y = PortalAperture.supportRadius(box, inverse.vector(Vec3.Y_AXIS));
+    double z = PortalAperture.supportRadius(box, inverse.vector(Vec3.Z_AXIS));
     return new AABB(
         center.x - x, center.y - y, center.z - z, center.x + x, center.y + y, center.z + z);
   }

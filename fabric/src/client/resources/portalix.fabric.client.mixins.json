@@ -1,0 +1,11 @@
+{
+  "required": true,
+  "package": "dev.portalix.fabric.mixin.client",
+  "compatibilityLevel": "JAVA_${java_version}",
+  "client": [
+    "PortalPoseMetadataMixin",
+    "PortalChunkAttachmentsMixin",
+    "PortalAttachmentChangeMixin"
+  ],
+  "injectors": { "defaultRequire": 1 }
+}

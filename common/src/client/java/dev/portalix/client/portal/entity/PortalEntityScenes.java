@@ -1,5 +1,6 @@
 package dev.portalix.client.portal.entity;
 
+import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.mojang.blaze3d.vertex.PoseStack;
 import dev.portalix.client.PortalixClient;
 import dev.portalix.client.compat.iris.IrisShaders;
@@ -19,7 +20,6 @@ import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.function.Consumer;
 import java.util.function.Predicate;
 import net.minecraft.client.DeltaTracker;
 import net.minecraft.client.Minecraft;
@@ -306,15 +306,25 @@ public final class PortalEntityScenes {
   }
 
   public static void submit(
+      EntityRenderDispatcher dispatcher,
       EntityRenderState state,
       CameraRenderState camera,
+      double x,
+      double y,
+      double z,
       PoseStack poses,
       SubmitNodeCollector collector,
-      Consumer<CameraRenderState> submit) {
-    for (var slice : ((PortalEntityRenderStateAccess) state).portalix$slices()) {
+      Operation<Void> original) {
+    var presentation = (PortalEntityRenderStateAccess) state;
+    var slices = presentation.portalix$slices();
+    if (slices == null) {
+      original.call(dispatcher, state, camera, x, y, z, poses, collector);
+      return;
+    }
+    for (var slice : slices) {
       var position = slice.position(new Vec3(state.x, state.y, state.z)).subtract(camera.pos);
       var rotation = slice.rotation();
-      var carriedRotation = ((PortalEntityRenderStateAccess) state).portalix$carryRotation();
+      var carriedRotation = presentation.portalix$carryRotation();
       if (carriedRotation != null) rotation.mul(carriedRotation);
       var display = state instanceof DisplayEntityRenderState value ? value : null;
       float displayX = display == null ? 0 : display.cameraXRot;
@@ -355,7 +365,7 @@ public final class PortalEntityScenes {
         PortalEntityClipping.begin(slice);
         if (slice.light() >= 0) state.lightCoords = slice.light();
         if (slice.shadow() != null) state.shadowPieces.clear();
-        submit.accept(localCamera);
+        original.call(dispatcher, state, localCamera, 0.0, 0.0, 0.0, poses, collector);
       } finally {
         state.lightCoords = originalLight;
         if (originalShadow != null) {

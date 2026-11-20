@@ -64,6 +64,7 @@ class ReleaseContractsTest {
     private static Map<String, String> releaseContents(String loader) {
         List<String> commonConfigs = ['portalix.mixins.json', "portalix.${loader}.mixins.json".toString()]
         List<String> clientConfigs = ['portalix.client.mixins.json', 'portalix.compat.mixins.json']
+        if (loader == 'fabric') clientConfigs.add(1, 'portalix.fabric.client.mixins.json')
         List<String> configs = commonConfigs + clientConfigs
         Map<String, String> entries = ['LICENSE': 'license', 'NOTICE': 'notice',
             'META-INF/MANIFEST.MF': 'Manifest-Version: 1.0\n',

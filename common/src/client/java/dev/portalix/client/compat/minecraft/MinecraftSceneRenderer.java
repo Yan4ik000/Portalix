@@ -11,7 +11,6 @@ import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.textures.GpuTextureView;
 import dev.portalix.api.PortalEndpoint;
 import dev.portalix.client.compat.PortalTerrainBackend;
-import dev.portalix.client.portal.terrain.PortalFrameTerrainBudget;
 import dev.portalix.client.compat.iris.IrisPortalScene;
 import dev.portalix.client.compat.iris.IrisShaders;
 import dev.portalix.client.mixin.scene.GameRendererAccessor;
@@ -20,6 +19,8 @@ import dev.portalix.client.mixin.scene.LightmapRenderStateExtractorAccessor;
 import dev.portalix.client.mixin.scene.MinecraftAccessor;
 import dev.portalix.client.mixin.scene.SkyRendererAccessor;
 import dev.portalix.client.portal.clip.PortalClipping;
+import dev.portalix.client.portal.scene.PortalSceneCamera;
+import dev.portalix.client.portal.terrain.PortalFrameTerrainBudget;
 import java.util.IdentityHashMap;
 import java.util.Map;
 import net.minecraft.client.Camera;
@@ -120,6 +121,10 @@ public final class MinecraftSceneRenderer implements AutoCloseable {
     PortalTerrainBackend.retargetView(renderer);
   }
 
+  public void releaseShaderView() {
+    iris.close();
+  }
+
   public void invalidateHistory() {
     iris.invalidateHistory();
   }
@@ -181,7 +186,7 @@ public final class MinecraftSceneRenderer implements AutoCloseable {
     }
   }
 
-  public void extract(DeltaTracker delta, Camera camera, boolean visible) {
+  public void extract(DeltaTracker delta, PortalSceneCamera camera, boolean visible) {
     try (var dispatcherScope = new SceneDispatcherScope(renderer);
         var irisScope = iris.extract()) {
       PortalTerrainBackend.attach(renderer, terrainOwner);
@@ -204,15 +209,8 @@ public final class MinecraftSceneRenderer implements AutoCloseable {
           lightAccess.portalix$needsUpdate(lightDirty);
         }
       }
-      state.cameraRenderState.fogData =
-          fog.setupFog(
-              camera,
-              Minecraft.getInstance().options.getEffectiveRenderDistance(),
-              delta,
-              Minecraft.getInstance()
-                  .gameRenderer
-                  .bossOverlayWorldDarkening(delta.getGameTimeDeltaPartialTick(false)),
-              level);
+      state.cameraRenderState.fogData = camera.extractFog(fog, delta,
+          Minecraft.getInstance().gameRenderer.bossOverlayWorldDarkening(delta.getGameTimeDeltaPartialTick(false)));
       extractor.extract(delta, camera, delta.getGameTimeDeltaPartialTick(false));
       if (visible)
         particles.values().removeIf(group -> !state.particlesRenderState.particles.contains(group));

@@ -1,6 +1,7 @@
 package dev.portalix.client.compat;
 
 import com.mojang.blaze3d.pipeline.RenderPipeline;
+import com.mojang.blaze3d.vertex.VertexFormat;
 import dev.portalix.client.compat.iris.IrisDrawContext;
 import dev.portalix.client.portal.render.PortalScreenRegion;
 import java.util.List;
@@ -17,6 +18,7 @@ public interface ShaderBackend {
   boolean vanillaEntityShadows();
   boolean overrides(RenderPipeline pipeline);
   boolean overridesGeometry(RenderPipeline pipeline);
+  RenderPipeline terrainPipeline(RenderPipeline pipeline, VertexFormat format);
   void register(RenderPipeline pipeline);
   void invalidatePrimaryHistory();
   Scene scene();

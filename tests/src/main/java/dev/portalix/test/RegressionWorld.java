@@ -6,6 +6,7 @@ import dev.portalix.carry.CarryBindings;
 import dev.portalix.item.PortalixVariant;
 import dev.portalix.portal.PortalLink;
 import dev.portalix.portal.PortalTopology;
+import dev.portalix.server.portal.PortalClosureResolver;
 import dev.portalix.portal.placement.PortalSurface;
 import dev.portalix.portal.query.PlayerPortalVisibility;
 import dev.portalix.portal.traversal.PortalPassagePose;
@@ -15,6 +16,8 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.function.Consumer;
+import net.minecraft.server.network.ServerConfigurationPacketListenerImpl;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.server.level.ServerLevel;
@@ -36,6 +39,7 @@ final class RegressionWorld implements AutoCloseable {
   final ServerLevel level;
   final ServerPlayer player;
   final EmbeddedChannel channel;
+  final Consumer<ServerConfigurationPacketListenerImpl> configureConnection;
   private final Map<BlockPos, BlockState> blocks = new LinkedHashMap<>();
   private final List<Entity> entities = new ArrayList<>();
   private final List<ChunkPos> forcedChunks = new ArrayList<>();
@@ -53,10 +57,12 @@ final class RegressionWorld implements AutoCloseable {
   private final double playerFallDistance;
   private long identity;
 
-  RegressionWorld(ServerLevel level, ServerPlayer player, EmbeddedChannel channel) {
+  RegressionWorld(ServerLevel level, ServerPlayer player, EmbeddedChannel channel,
+      Consumer<ServerConfigurationPacketListenerImpl> configureConnection) {
     this.level = level;
     this.player = player;
     this.channel = channel;
+    this.configureConnection = configureConnection;
     originalLinks = PortalTopology.links(level);
     playerPosition = player.position();
     playerVelocity = player.getDeltaMovement();
@@ -82,7 +88,7 @@ final class RegressionWorld implements AutoCloseable {
       }
       player.setGameMode(GameType.CREATIVE);
       player.snapTo(152.5, 104, 152.5, 0, 0);
-      PortalTopology.updateLinks(level, List.of());
+      PortalClosureResolver.updateLinks(level, List.of());
     } catch (RuntimeException | Error failure) {
       try { close(); }
       catch (RuntimeException | Error cleanup) { failure.addSuppressed(cleanup); }
@@ -132,7 +138,7 @@ final class RegressionWorld implements AutoCloseable {
   }
 
   void publish(PortalLink link) {
-    PortalTopology.updateLinks(level, List.of(link, link.inverse()));
+    PortalClosureResolver.updateLinks(level, List.of(link, link.inverse()));
   }
 
   <T extends Entity> T add(T entity) {
@@ -156,7 +162,7 @@ final class RegressionWorld implements AutoCloseable {
     CarryBindings.unbindOwner(level, player.getId());
     for (Entity entity : entities) entity.discard();
     entities.clear();
-    PortalTopology.updateLinks(level, List.of());
+    PortalClosureResolver.updateLinks(level, List.of());
     for (var entry : blocks.entrySet())
       level.setBlock(entry.getKey(), entry.getValue(), Block.UPDATE_CLIENTS | Block.UPDATE_KNOWN_SHAPE);
     blocks.clear();
@@ -171,7 +177,7 @@ final class RegressionWorld implements AutoCloseable {
   public void close() {
     try {
       reset();
-      PortalTopology.updateLinks(level, originalLinks);
+      PortalClosureResolver.updateLinks(level, originalLinks);
       player.setItemSlot(EquipmentSlot.MAINHAND, mainHand);
       player.setItemSlot(EquipmentSlot.OFFHAND, offHand);
       player.setGameMode(playerMode);

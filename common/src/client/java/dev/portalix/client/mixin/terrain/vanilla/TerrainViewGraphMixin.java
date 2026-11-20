@@ -1,7 +1,8 @@
 package dev.portalix.client.mixin.terrain.vanilla;
 
-import dev.portalix.client.portal.clip.PortalCullPlane;
+import dev.portalix.client.portal.scene.PortalSceneManager;
 import dev.portalix.client.portal.terrain.PortalInitialTerrainVisibility;
+import dev.portalix.client.portal.terrain.PortalOcclusionContext;
 import dev.portalix.client.portal.terrain.PortalTerrainGraphAccess;
 import dev.portalix.client.portal.terrain.PortalRenderSections;
 import dev.portalix.client.mixin.terrain.ViewAreaAccessor;
@@ -9,7 +10,6 @@ import dev.portalix.client.world.RetainedChunkAccess;
 import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
 import it.unimi.dsi.fastutil.longs.LongSet;
 import java.util.List;
-import java.util.Objects;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.BlockingQueue;
@@ -46,8 +46,6 @@ abstract class TerrainViewGraphMixin implements PortalTerrainGraphAccess {
   @Shadow private double prevCamZ;
   @Shadow @Final private AtomicBoolean needsFrustumUpdate;
   @Shadow private volatile BlockingQueue<RenderSection> nextSectionsToPropagateFrom;
-  @Unique private volatile Visibility portalix$visibility;
-  @Unique private volatile PortalCullPlane portalix$clipPlane;
 
   @Unique
   private final PortalInitialTerrainVisibility portalix$initial =
@@ -66,20 +64,7 @@ abstract class TerrainViewGraphMixin implements PortalTerrainGraphAccess {
       List<RenderSection> nearby) {
     var level = Minecraft.getInstance().level;
     var terrain = ((RetainedChunkAccess) level.getChunkSource()).portalix$terrainColumns();
-    portalix$initial.collect(
-        viewArea, terrain, camera, portalix$clipPlane, frustum, visible, nearby);
-  }
-
-  @Override
-  public PortalCullPlane portalix$clipPlane() {
-    return portalix$clipPlane;
-  }
-
-  @Override
-  public void portalix$clipPlane(PortalCullPlane plane) {
-    if (Objects.equals(plane, portalix$clipPlane)) return;
-    portalix$clipPlane = plane;
-    ((SectionOcclusionGraph) (Object) this).invalidate();
+    portalix$initial.collect(viewArea, terrain, camera, frustum, visible, nearby);
   }
 
   @Override
@@ -93,41 +78,41 @@ abstract class TerrainViewGraphMixin implements PortalTerrainGraphAccess {
   }
 
   @Override
-  public void portalix$built(SectionPos camera, PortalCullPlane plane) {
-    portalix$visibility = new Visibility(currentGraph.get(), camera, plane);
+  public PortalOcclusionContext.Snapshot portalix$visibility() {
+    return portalix$snapshot((TerrainGraphStateAccessor) currentGraph.get());
   }
 
-  @Override
-  public Visibility portalix$visibility() {
-    return portalix$visibility;
+  @Unique
+  private static PortalOcclusionContext.Snapshot portalix$snapshot(TerrainGraphStateAccessor state) {
+    return state == null ? null : ((PortalOcclusionContext.SnapshotAccess) state.portalix$storage())
+        .portalix$occlusionSnapshot();
   }
 
   @Override
   public boolean portalix$ready(Vec3 camera) {
-    var visibility = portalix$visibility;
-    return visibility != null
-        && currentGraph.get() == visibility.graph()
-        && Objects.equals(visibility.plane(), portalix$clipPlane)
-        && SectionPos.of(camera).equals(visibility.camera());
+    var snapshot = portalix$visibility();
+    return snapshot != null && snapshot.center().equals(SectionPos.of(PortalSceneManager.terrainOrigin(camera)));
   }
 
   @Override
   public boolean portalix$settled(Vec3 camera) {
-    return portalix$ready(camera)
-        && !needsFullUpdate
-        && (fullUpdateTask == null || fullUpdateTask.isDone())
-        && !needsFrustumUpdate.get()
-        && nextSectionsToPropagateFrom == null
-        && ((TerrainGraphStateAccessor) currentGraph.get()).portalix$propagation().isEmpty();
+    if (viewArea == null || needsFullUpdate || fullUpdateTask != null && !fullUpdateTask.isDone()
+        || needsFrustumUpdate.get() || nextSectionsToPropagateFrom != null) return false;
+    var state = (TerrainGraphStateAccessor) currentGraph.get();
+    var snapshot = portalix$snapshot(state);
+    return snapshot != null && snapshot.radius() == viewArea.getViewDistance()
+        && snapshot.center().equals(SectionPos.of(PortalSceneManager.terrainOrigin(camera)))
+        && state.portalix$propagation().isEmpty();
   }
 
   @Override
   public boolean portalix$occludes(CameraRenderState camera, AABB bounds) {
-    if (!portalix$settled(camera.pos) || viewArea == null
-        || Math.floor(camera.pos.x / 8) != prevCamX
-        || Math.floor(camera.pos.y / 8) != prevCamY
-        || Math.floor(camera.pos.z / 8) != prevCamZ) return false;
-    var center = SectionPos.of(camera.pos);
+    var origin = PortalSceneManager.terrainOrigin(camera.pos);
+    if (!portalix$settled(camera.pos)
+        || Math.floor(origin.x / 8) != prevCamX
+        || Math.floor(origin.y / 8) != prevCamY
+        || Math.floor(origin.z / 8) != prevCamZ) return false;
+    var center = SectionPos.of(origin);
     int radius = viewArea.getViewDistance();
     var sections = (PortalRenderSections<RenderSection>)
         ((ViewAreaAccessor) viewArea).portalix$sections();
@@ -141,11 +126,6 @@ abstract class TerrainViewGraphMixin implements PortalTerrainGraphAccess {
           if (section != null && graph.getNode(section) != null) return false;
         }
     return true;
-  }
-
-  @Inject(method = "waitAndReset", at = @At("RETURN"))
-  private void portalix$reset(CallbackInfo ci) {
-    portalix$visibility = null;
   }
 
   @Inject(method = "schedulePropagationFrom", at = @At("HEAD"), cancellable = true)

@@ -3,11 +3,12 @@ package dev.portalix.carry;
 import java.util.ArrayList;
 import java.util.List;
 import net.minecraft.world.phys.Vec3;
+import org.jspecify.annotations.Nullable;
 
 public final class CarryFollowMotion {
   private static final double RESPONSE = 18.0;
   private Vec3 velocity;
-  private Vec3 previousDesired;
+  private @Nullable Vec3 trackingError;
   private final CarryPathfinder path = new CarryPathfinder();
   private boolean detouring;
 
@@ -15,26 +16,38 @@ public final class CarryFollowMotion {
     this.velocity = initialVelocity;
   }
 
+  public void reset(Vec3 actualVelocity) {
+    reset(actualVelocity, null);
+  }
+
+  public void reset(Vec3 actualVelocity, @Nullable Vec3 error) {
+    velocity = actualVelocity;
+    trackingError = error;
+    path.clear();
+    detouring = false;
+  }
+
+  public @Nullable Vec3 trackedTarget(Vec3 position) {
+    return trackingError == null ? null : position.subtract(trackingError);
+  }
+
   public CarryMotionPath step(
       CarryCollisionWorld collisions, Vec3 current, Vec3 desired, double seconds) {
     if (seconds <= 0.0) return CarryMotionPath.stationary(current);
-    Vec3 steering = path.steeringTarget(collisions, current, desired);
+    Vec3 target = path.steeringTarget(collisions, current, desired);
     boolean nextDetouring = path.hasDetour();
-    if (detouring || nextDetouring) previousDesired = null;
+    if (detouring || nextDetouring) trackingError = null;
     detouring = nextDetouring;
     if (nextDetouring) return followDetour(collisions, current, seconds);
-    desired = steering;
-
-    Vec3 startTarget = previousDesired == null ? desired : previousDesired;
-    Vec3 targetVelocity = desired.subtract(startTarget).scale(1.0 / seconds);
-    previousDesired = desired;
-    Vec3 error = current.subtract(startTarget);
+    Vec3 error = trackingError == null ? current.subtract(target) : trackingError;
+    Vec3 targetVelocity = trackingError == null ? Vec3.ZERO
+        : target.subtract(current.subtract(error)).scale(1.0 / seconds);
     double decay = Math.exp(-RESPONSE * seconds);
-    Vec3 next = desired.add(error.scale(decay));
+    Vec3 next = target.add(error.scale(decay));
     Vec3 nextVelocity = targetVelocity.subtract(error.scale(RESPONSE * decay));
     var swept = collisions.sweep(current, next);
     velocity = swept.constrain(nextVelocity);
-    previousDesired = swept.path().point(previousDesired);
+    trackingError = swept.path().end().subtract(swept.path().point(target));
     return swept.path();
   }
 
@@ -62,7 +75,6 @@ public final class CarryFollowMotion {
     List<CarryMotionPath.Node> traversed = new ArrayList<>();
     traversed.add(new CarryMotionPath.Node(current, null));
     for (Vec3 point : route) {
-
       if (traversed.size() > CarryMotionPath.MAX_POINTS - 4) break;
       Vec3 delta = point.subtract(current);
       double span = delta.length();
@@ -77,7 +89,7 @@ public final class CarryFollowMotion {
       velocity = swept.constrain(delta.scale(nextSpeed / span));
       traversed.addAll(swept.path().nodes().subList(1, swept.path().nodes().size()));
       if (swept.path().nodes().stream().anyMatch(n -> n.crossing() != null)) {
-        previousDesired = null;
+        trackingError = null;
         break;
       }
       if (requested.distanceToSqr(resolved) > 1.0E-14) break;

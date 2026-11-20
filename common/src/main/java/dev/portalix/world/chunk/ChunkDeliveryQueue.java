@@ -37,7 +37,11 @@ public final class ChunkDeliveryQueue {
   }
 
   public boolean watching(long chunk) {
-    return delivered(chunk) && !retiring.contains(chunk);
+    return subscribed(chunk) && !invalidated.contains(chunk);
+  }
+
+  public boolean subscribed(long chunk) {
+    return delivered.contains(chunk) && !retiring.contains(chunk);
   }
 
   public LongSet presentColumns() {
@@ -52,34 +56,45 @@ public final class ChunkDeliveryQueue {
     if (delivered.contains(chunk)) retiring.add(chunk);
   }
 
+  public boolean retiring(long chunk) {
+    return retiring.contains(chunk);
+  }
+
   public boolean hasRetirements() {
     return !retiring.isEmpty();
   }
 
-  public Batch select(long[] ready, int quota, LongUnaryOperator distance) {
+  public Batch select(long[] ready, int quota, int retirementLimit, LongUnaryOperator distance) {
     var forgotten = new LongArrayList();
     var loaded = new LongArrayList();
     int next = 0;
     while (forgotten.size() + loaded.size() < quota) {
       boolean hasLoad = next < ready.length;
+      boolean canRetire = !retiring.isEmpty() && forgotten.size() < retirementLimit;
       if (hasLoad
-          && (retiring.isEmpty() || distance.applyAsLong(ready[next]) <= 2 || !retirementTurn)) {
+          && (!canRetire || distance.applyAsLong(ready[next]) <= 2 || !retirementTurn)) {
         loaded.add(ready[next++]);
         retirementTurn = true;
-      } else if (!retiring.isEmpty()) {
-        long chunk = retiring.removeFirstLong();
-        forgotten.add(chunk);
-        delivered.remove(chunk);
-        invalidated.remove(chunk);
-        retirementTurn = false;
+      } else if (canRetire) {
+        forgotten.add(retireNext());
       } else break;
     }
     return new Batch(forgotten.toLongArray(), loaded.toLongArray());
   }
 
-  public record Batch(long[] forgotten, long[] loaded) {
-    public int size() {
-      return forgotten.length + loaded.length;
-    }
+  public long[] drainRetirements(int limit) {
+    var forgotten = new long[Math.min(retiring.size(), limit)];
+    for (int i = 0; i < forgotten.length; i++) forgotten[i] = retireNext();
+    return forgotten;
   }
+
+  private long retireNext() {
+    long chunk = retiring.removeFirstLong();
+    delivered.remove(chunk);
+    invalidated.remove(chunk);
+    retirementTurn = false;
+    return chunk;
+  }
+
+  public record Batch(long[] forgotten, long[] loaded) {}
 }

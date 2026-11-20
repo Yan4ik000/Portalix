@@ -8,7 +8,6 @@ import dev.portalix.network.gun.GunEventKind;
 import dev.portalix.network.gun.GunEventPayload;
 import dev.portalix.network.gun.GunStatePayload;
 import dev.portalix.portal.traversal.PortalCrossingSync;
-import dev.portalix.server.EntityObservers;
 import java.util.HashSet;
 import java.util.Set;
 import java.util.function.Function;
@@ -74,7 +73,6 @@ public final class GunStateBroadcaster {
       ServerPlayer owner,
       boolean thrown,
       long generation,
-      long sequence,
       long tick) {
     Set<ServerPlayer> recipients = new HashSet<>(EntityObservers.tracking(entity));
     if (owner != null) recipients.add(owner);
@@ -86,7 +84,6 @@ public final class GunStateBroadcaster {
             entity.position(),
             entity.getDeltaMovement(),
             thrown,
-            sequence,
             tick);
     for (ServerPlayer observer : recipients) {
       if (ModNetworking.canPlayerReceive(observer, CarryReleasePayload.TYPE))

@@ -36,6 +36,7 @@ final class GunCommandHandler {
   }
 
   void receiveCommand(ServerPlayer player, GunCommand command) {
+    carryController.checkEquipment(player);
     long tick = player.level().getServer().getTickCount();
     UUID owner = player.getUUID();
     if (command == GunCommand.SYNC_STATE) {

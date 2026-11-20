@@ -1,6 +1,9 @@
 package dev.portalix.client.mixin.compat.iris;
 
+import com.llamalad7.mixinextras.injector.ModifyExpressionValue;
+import dev.portalix.client.compat.iris.IrisScene;
 import net.irisshaders.iris.gl.IrisRenderSystem;
+import net.irisshaders.iris.gl.framebuffer.GlFramebuffer;
 import net.irisshaders.iris.gl.program.Program;
 import net.irisshaders.iris.pathways.colorspace.ColorSpace;
 import net.irisshaders.iris.pathways.colorspace.ColorSpaceFragmentConverter;
@@ -18,6 +21,19 @@ abstract class IrisFragmentColorSpaceResizeMixin {
   @Shadow private ColorSpace colorSpace;
   @Shadow private Program program;
   @Shadow private int swapTexture;
+
+  @ModifyExpressionValue(method = "rebuildProgram", at = @At(value = "INVOKE", target =
+      "Lcom/mojang/blaze3d/opengl/GlStateManager;_genTexture()I"), allow = 1)
+  private int portalix$trackSwapTexture(int texture) {
+    return IrisScene.trackTexture(texture);
+  }
+
+  @ModifyExpressionValue(method = "rebuildProgram", at = @At(value = "NEW", target =
+      "net/irisshaders/iris/gl/framebuffer/GlFramebuffer"), allow = 1)
+  private GlFramebuffer portalix$trackSwapFramebuffer(GlFramebuffer framebuffer) {
+    IrisScene.trackResource(framebuffer::destroy);
+    return framebuffer;
+  }
 
   @Inject(method = "rebuildProgram", at = @At("HEAD"), cancellable = true)
   private void portalix$resizeStorage(

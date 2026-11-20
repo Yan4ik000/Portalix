@@ -1,6 +1,7 @@
 package dev.portalix.portal.traversal;
 
 import dev.portalix.carry.CarryBindings;
+import dev.portalix.mixin.traversal.EntityCollisionAccessor;
 import dev.portalix.network.portal.ProjectileStatePayload;
 import dev.portalix.portal.PortalLink;
 import dev.portalix.portal.PortalTopology;
@@ -19,7 +20,6 @@ import net.minecraft.util.Mth;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.MoverType;
-import net.minecraft.world.entity.Pose;
 import net.minecraft.world.entity.animal.Animal;
 import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.entity.player.Player;
@@ -33,11 +33,26 @@ public final class PortalEntityMovement {
     return vehicleAllowed(entity) && PortalTraversalReadiness.ready(entity, link);
   }
 
-  static boolean vehicleAllowed(Entity entity) {
+  public static boolean vehicleAllowed(Entity entity) {
     var root = entity.getRootVehicle();
     return root.getPassengers().isEmpty()
         || root.getSelfAndPassengers()
             .noneMatch(member -> member instanceof Animal && member.countPlayerPassengers() > 0);
+  }
+
+  public static boolean clientPredicted(Entity entity, MoverType type, Vec3 movement, Vec3 velocity) {
+    // Living travel moves by its velocity. Separate displacements, such as Riptide's
+    // grounded lift, are already issued by the server and must not be replayed.
+    return type == MoverType.PLAYER || type == MoverType.SELF
+        && (!(entity instanceof LivingEntity) || movement.distanceToSqr(velocity) <= 1e-12);
+  }
+
+  public static boolean canReplay(Entity entity, Vec3 alignment, Vec3 movement) {
+    if (PortalPassagePose.compact(entity)) return true;
+    if (movement.lengthSqr() == 0) return false;
+    var start = PortalPassengerGroup.bounds(entity).move(alignment);
+    return PortalEntityCollisions.intersectingPortal(entity, start, movement,
+        entity.getBoundingBox().getCenter().add(alignment)) != null;
   }
 
   public static MoveResult moveAuthoritatively(
@@ -47,10 +62,13 @@ public final class PortalEntityMovement {
     state.replayVelocity = incomingVelocity;
     state.lastMove = null;
     var players = ServerPlayerMotion.captureStatistics(subject);
+    var level = subject.level();
+    var start = subject.position();
     try {
       subject.move(mover, displacement);
-      if (state.lastMove == null) {
+      if (state.lastMove == null && subject.level() == level) {
         PortalPassengerGroup.positionPassengers(subject);
+        ServerPlayerMotion.replayedSegment(subject, subject.position().subtract(start));
         ServerPlayerMotion.updateStatistics(players);
       }
       return state.lastMove;
@@ -65,15 +83,28 @@ public final class PortalEntityMovement {
     if (state.moving
         || entity.noPhysics
         || entity.isPassenger()
-        || (serverControlled(entity) && !state.authoritative)
         || displacement.lengthSqr() == 0 && !PortalPassagePose.compact(entity)
         || (!entity.isLocalInstanceAuthoritative() && entity.level().isClientSide())) return false;
+    boolean predicted = clientPredicted(entity, type, displacement, entity.getDeltaMovement());
+    if (serverControlled(entity) && !state.authoritative && predicted)
+      return entity instanceof ServerPlayer && type == MoverType.SELF
+          && (PortalPassagePose.compact(entity)
+              || PortalEntityCollisions.movementPortal(entity, displacement) != null);
     PortalLink link = PortalEntityCollisions.movementPortal(entity, displacement);
     if (link == null && !PortalPassagePose.compact(entity)) return false;
+    if (serverControlled(entity) && !state.authoritative) {
+      var player = entity instanceof ServerPlayer owner ? owner
+          : (ServerPlayer) entity.getControllingPassenger();
+      PortalCrossingSync.moveController(entity, player, type, displacement);
+      return true;
+    }
+    if (type == MoverType.PISTON) {
+      displacement = ((EntityCollisionAccessor) entity).portalix$limitPistonMovement(displacement);
+      if (displacement.equals(Vec3.ZERO)) return true;
+    }
+    boolean externalClientMove = entity.level().isClientSide() && !predicted
+        && (entity instanceof Player || entity.getControllingPassenger() instanceof Player);
     Vec3 initialFeet = entity.position();
-    boolean initialGrounded = entity.onGround();
-    Pose initialPose = entity.getPose();
-    float initialScale = PortalPassagePose.scale(entity);
     boolean sneaking = entity.isShiftKeyDown();
     Vec3 initialVelocity =
         state.replayVelocity != null ? state.replayVelocity : entity.getDeltaMovement();
@@ -158,7 +189,7 @@ public final class PortalEntityMovement {
         remainingFraction *= 1 - at.fraction();
         Vec3 crossingVelocity =
             state.replayVelocity != null ? state.replayVelocity : entity.getDeltaMovement();
-        var event =
+        var event = externalClientMove ? null :
             crossAtPlane(
                 entity,
                 link,
@@ -203,18 +234,12 @@ public final class PortalEntityMovement {
       }
       return true;
     } finally {
-      state.collisionLink = null;
-      state.collisionScene = null;
-      state.collisionQuery = null;
-      state.moving = false;
+      state.finishMovement();
       state.lastMove =
           new MoveResult(
               type,
               initialFeet,
               initialVelocity,
-              initialGrounded,
-              initialPose,
-              initialScale,
               sneaking,
               displacement,
               List.copyOf(crossings),
@@ -226,6 +251,7 @@ public final class PortalEntityMovement {
   private static void moveSegment(Entity entity, MoverType type, Vec3 movement) {
     var players = ServerPlayerMotion.captureStatistics(entity);
     Vec3 before = entity.position();
+    var level = entity.level();
     var state = EntityPortalState.of(entity);
     state.segmentMoving = true;
     try {
@@ -233,8 +259,9 @@ public final class PortalEntityMovement {
     } finally {
       state.segmentMoving = false;
     }
+    if (entity.level() != level) return;
+    Vec3 actual = entity.position().subtract(before);
     if (state.replayVelocity != null) {
-      Vec3 actual = entity.position().subtract(before);
       state.replayVelocity =
           new Vec3(
               Math.abs(actual.x - movement.x) > 1e-7 ? 0 : state.replayVelocity.x,
@@ -248,25 +275,42 @@ public final class PortalEntityMovement {
             || entity.horizontalCollision && Mth.equal(velocity.x, 0) && Mth.equal(velocity.z, 0)))
       living.stopFallFlying();
     PortalPassengerGroup.positionPassengers(entity);
+    if (state.authoritative) ServerPlayerMotion.replayedSegment(entity, actual);
     ServerPlayerMotion.updateStatistics(players);
   }
 
   public static void moveWithinSpace(Entity entity, MoverType type, Vec3 movement) {
+    moveWithinSpace(entity, type, movement, false);
+  }
+
+  public static boolean alignReplay(Entity entity, Vec3 movement) {
+    return movement.lengthSqr() == 0 || moveWithinSpace(entity, MoverType.PLAYER, movement, true);
+  }
+
+  private static boolean moveWithinSpace(Entity entity, MoverType type, Vec3 movement, boolean align) {
     var state = EntityPortalState.of(entity);
-    var hull = entity.getBoundingBox();
+    var hulls = PortalPassengerGroup.hulls(entity);
+    var hull = PortalPassengerGroup.bounds(hulls);
+    var sweep = hull.expandTowards(movement);
     state.moving = true;
-    state.collisionLink = PortalEntityCollisions.intersectingPortal(entity, hull, movement);
-    state.collisionScene =
-        state.collisionLink == null
-            ? null
-            : PortalCollisionWorld.query(entity, state.collisionLink, hull.expandTowards(movement));
+    var level = entity.level();
+    Vec3 start = entity.position();
     try {
+      state.collisionLink = PortalEntityCollisions.movementPortal(entity, movement);
+      if (align && state.collisionLink != null
+          && PortalEntityCollisions.firstCrossing(entity, hulls, movement, sweep, state.collisionLink)
+              .crossing().isPresent()) return false;
+      state.collisionScene = state.collisionLink == null ? null
+          : PortalCollisionWorld.query(entity, state.collisionLink, sweep);
+      if (align && ((EntityCollisionAccessor) entity).portalix$collide(movement)
+          .distanceToSqr(movement) > 1e-10) return false;
       moveSegment(entity, type, movement);
+      if (!align || entity.level() != level) return !align;
+      Vec3 actual = entity.position().subtract(start);
+      ServerPlayerMotion.replayedSegment(entity, actual);
+      return actual.distanceToSqr(movement) <= 1e-10;
     } finally {
-      state.collisionLink = null;
-      state.collisionScene = null;
-      state.collisionQuery = null;
-      state.moving = false;
+      state.finishMovement();
     }
   }
 
@@ -333,7 +377,9 @@ public final class PortalEntityMovement {
         PortalLookAngles.transform(link.transform(), entity.getViewYRot(1), entity.getViewXRot(1));
     float yaw = convoy.getFirst().yaw(), pitch = convoy.getFirst().pitch();
     entity.setPos(after);
+    EntityMotion.recordArrival(entity, after);
     entity.setDeltaMovement(serverImpulse);
+    ServerPlayerMotion.crossed(entity, link);
     if (state.replayVelocity != null) state.replayVelocity = velocity;
     entity.setYRot(yaw);
     entity.setXRot(pitch);
@@ -416,6 +462,7 @@ public final class PortalEntityMovement {
         PortalLookAngles.transform(
             link.transform(), passenger.getViewYRot(1), passenger.getViewXRot(1));
     passenger.setPos(arrival.after());
+    EntityMotion.recordArrival(passenger, arrival.after());
     passenger.setDeltaMovement(serverImpulse);
     passenger.setYRot(arrival.yaw());
     passenger.yRotO = arrival.yaw();
@@ -453,7 +500,7 @@ public final class PortalEntityMovement {
 
   public static void publishCrossing(Entity entity, Crossing crossing, Vec3 earlierRenderFeet) {
     boolean predicted = entity.level().isClientSide() && entity instanceof Projectile;
-    if (predicted) EntityPortalState.of(entity).predictions.add(crossing);
+    if (predicted) EntityPortalState.of(entity).predict(crossing);
     applyCrossing(entity, crossing, earlierRenderFeet, true);
     if (predicted) ProjectileStateSync.predicted(entity);
   }
@@ -469,22 +516,23 @@ public final class PortalEntityMovement {
   private static void reconcileCrossing(Entity entity, Crossing crossing, Vec3 earlierRenderFeet,
       boolean publishVisualCrossing) {
     var state = EntityPortalState.of(entity);
+    var predictions = state.predictions();
     var match =
-        state.predictions.stream()
+        predictions.stream()
             .filter(
                 prediction ->
                     prediction.eventId() == crossing.eventId()
                         && prediction.link().equals(crossing.link()))
             .findFirst();
     if (match.isPresent()) {
-      PortalProjectileRotation.acknowledge(entity, state.predictions, state.predictions.indexOf(match.get()), crossing);
-      state.predictions.removeIf(prediction -> prediction.eventId() <= crossing.eventId());
-      if (state.predictions.isEmpty()) state.crossed(crossing);
+      PortalProjectileRotation.acknowledge(entity, predictions, predictions.indexOf(match.get()), crossing);
+      state.acknowledgePredictionsThrough(crossing.eventId());
+      if (!state.hasPredictions()) state.crossed(crossing);
       return;
     }
-    if (!state.predictions.isEmpty()) {
+    if (state.hasPredictions()) {
       undoPredictedCrossings(entity);
-      state.predictions.clear();
+      state.clearPredictions();
       state.resetCamera();
       state.sequence = crossing.eventId();
     }
@@ -492,7 +540,7 @@ public final class PortalEntityMovement {
   }
 
   public static boolean acknowledgePredictions(Entity entity, List<Crossing> crossings) {
-    var predictions = EntityPortalState.of(entity).predictions;
+    var predictions = EntityPortalState.of(entity).predictions();
     if (predictions.isEmpty() || crossings.stream().anyMatch(crossing -> predictions.stream().noneMatch(
         prediction -> prediction.eventId() == crossing.eventId() && prediction.link().equals(crossing.link()))))
       return false;
@@ -501,7 +549,7 @@ public final class PortalEntityMovement {
   }
 
   public static Vec3 predictedMotion(Entity entity, Vec3 motion) {
-    var predictions = EntityPortalState.of(entity).predictions;
+    var predictions = EntityPortalState.of(entity).predictions();
     if (predictions.isEmpty()) return motion;
     for (var crossing : predictions)
       motion = crossing.link().transform().vector(motion);
@@ -514,7 +562,7 @@ public final class PortalEntityMovement {
     Vec3 position = entity.position();
     Vec3 velocity = entity.getDeltaMovement();
     float yaw = entity.getYRot(), pitch = entity.getXRot();
-    for (var crossing : state.predictions.reversed()) {
+    for (var crossing : state.predictions().reversed()) {
       var inverse = crossing.link().transform().inverse();
       position = inverse.point(position);
       velocity = inverse.vector(velocity);
@@ -529,7 +577,7 @@ public final class PortalEntityMovement {
 
   public static void projectileSnapshot(Entity entity, ProjectileStatePayload snapshot) {
     var state = EntityPortalState.of(entity);
-    if (!state.acceptSnapshot(snapshot.tick(), snapshot.event()) || state.predictions.isEmpty())
+    if (!state.acceptSnapshot(snapshot.tick(), snapshot.event()) || !state.hasPredictions())
       return;
     undoPredictedCrossings(entity);
     state.resetPredictions(snapshot.event());
@@ -537,12 +585,13 @@ public final class PortalEntityMovement {
   }
 
   private static void undoPredictedCrossings(Entity entity) {
-    for (var prediction : EntityPortalState.of(entity).predictions.reversed()) {
+    for (var prediction : EntityPortalState.of(entity).predictions().reversed()) {
+      var inverse = prediction.link().inverse();
       PortalProjectileRotation.rotate(entity, prediction, true);
-      CarryBindings.undoCrossing(entity, prediction.link());
-      ProjectilePortalMovement.crossed(entity, prediction.link().inverse());
+      CarryBindings.crossed(entity, inverse);
+      ProjectilePortalMovement.crossed(entity, inverse);
       if (entity instanceof ProjectilePortalMovement.Guided guided)
-        guided.portalix$transformGuidance(prediction.link().transform().inverse());
+        guided.portalix$transformGuidance(inverse.transform());
     }
   }
 
@@ -554,7 +603,7 @@ public final class PortalEntityMovement {
     if (entity instanceof ProjectilePortalMovement.Guided guided)
       guided.portalix$transformGuidance(crossing.link().transform());
     var state = EntityPortalState.of(entity);
-    state.poseStarted = entity.tickCount;
+    state.poseStarted = PortalPassagePose.clock(entity);
     state.crossed(crossing);
     if (publishVisualCrossing) state.cameraCrossed(entity, crossing, earlierRenderFeet);
     CarryBindings.crossed(entity, crossing.link());
@@ -591,9 +640,6 @@ public final class PortalEntityMovement {
       MoverType mover,
       Vec3 beforeFeet,
       Vec3 beforeVelocity,
-      boolean grounded,
-      Pose beforePose,
-      float beforeScale,
       boolean sneaking,
       Vec3 requested,
       List<Crossing> crossings,

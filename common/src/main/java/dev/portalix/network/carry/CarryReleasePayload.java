@@ -1,7 +1,6 @@
 package dev.portalix.network.carry;
 
 import dev.portalix.PortalixMod;
-import dev.portalix.network.PayloadCodecs;
 import java.util.UUID;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.StreamCodec;
@@ -15,7 +14,6 @@ public record CarryReleasePayload(
     Vec3 position,
     Vec3 velocity,
     boolean thrown,
-    long sequence,
     long tick)
     implements CustomPacketPayload {
   public static final Type<CarryReleasePayload> TYPE = new Type<>(PortalixMod.id("carry_release"));
@@ -25,10 +23,9 @@ public record CarryReleasePayload(
             buffer.writeVarInt(release.entityId);
             buffer.writeUUID(release.entityUuid);
             buffer.writeVarLong(release.generation);
-            PayloadCodecs.writeVector(buffer, release.position);
-            PayloadCodecs.writeVector(buffer, release.velocity);
+            Vec3.STREAM_CODEC.encode(buffer, release.position);
+            Vec3.STREAM_CODEC.encode(buffer, release.velocity);
             buffer.writeBoolean(release.thrown);
-            buffer.writeVarLong(release.sequence);
             buffer.writeVarLong(release.tick);
           },
           buffer ->
@@ -36,10 +33,9 @@ public record CarryReleasePayload(
                   buffer.readVarInt(),
                   buffer.readUUID(),
                   buffer.readVarLong(),
-                  PayloadCodecs.readVector(buffer),
-                  PayloadCodecs.readVector(buffer),
+                  Vec3.STREAM_CODEC.decode(buffer),
+                  Vec3.STREAM_CODEC.decode(buffer),
                   buffer.readBoolean(),
-                  buffer.readVarLong(),
                   buffer.readVarLong()));
 
   @Override

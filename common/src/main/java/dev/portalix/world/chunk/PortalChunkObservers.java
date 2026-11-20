@@ -1,6 +1,7 @@
 package dev.portalix.world.chunk;
 
 import dev.portalix.api.PortalEndpoint;
+import dev.portalix.portal.PortalViewLimits;
 import dev.portalix.portal.geometry.PortalAperture;
 import dev.portalix.portal.query.PlayerPortalVisibility;
 import java.util.ArrayList;
@@ -17,8 +18,6 @@ import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.phys.Vec3;
 
 public final class PortalChunkObservers {
-  public static final PortalChunkObservers EMPTY =
-      new PortalChunkObservers(List.of(), List.of(), List.of(), ChunkTrackingView.EMPTY, 0, 0, 0);
   private static final int TIER_SHIFT = 48;
   private static final long DISTANCE_MASK = (1L << TIER_SHIFT) - 1;
   private final List<ChunkPos> positions;
@@ -60,10 +59,10 @@ public final class PortalChunkObservers {
     var demands = new ArrayList<Demand>(visibility.observers().size());
     for (var observer : visibility.observers()) {
       var exit = observer.exit();
-      var center = chunk(exit.center());
+      var center = PortalViewLimits.frontColumn(exit);
       positions.add(center);
       critical.add(center);
-      demands.add(new Demand(chunk(observer.eye()), center, observer.arrival(),
+      demands.add(new Demand(center, observer.arrival(),
           cone(observer.eye(), exit)));
     }
     return new PortalChunkObservers(List.copyOf(positions), List.copyOf(critical), demands, player.getChunkTrackingView(),
@@ -80,7 +79,7 @@ public final class PortalChunkObservers {
         var nearby = regions.get(region(ChunkPos.getX(position), ChunkPos.getZ(position)));
         int tier = 4;
         if (nearby != null) for (var observer : nearby) {
-          tier = Math.min(tier, observer.loadingTier(position));
+          tier = Math.min(tier, observer.tier(position, 1));
           if (tier == 0) break;
         }
         return tier;
@@ -98,8 +97,7 @@ public final class PortalChunkObservers {
       else observer.primaryView.forEach(position -> occupied.add(region(position.x(), position.z())));
       for (var critical : observer.critical) addRegions(occupied, critical, 1);
       for (var demand : observer.demands) {
-        addRegions(occupied, demand.eye, observer.radius + 1);
-        if (demand.arrival) addRegions(occupied, demand.exit, observer.radius + 1);
+        addRegions(occupied, demand.exit, observer.radius + 1);
       }
       for (long region : occupied)
         regions.computeIfAbsent(region, ignored -> new ArrayList<>()).add(observer);
@@ -117,41 +115,26 @@ public final class PortalChunkObservers {
     return ChunkPos.pack(x >> 5, z >> 5);
   }
 
-  public boolean isEmpty() {
-    return positions.isEmpty();
-  }
-
   public long distanceSquared(long chunk) {
     return distanceSquared(chunk, positions);
   }
 
   public long priority(long chunk) {
     long distance = Math.min(distanceSquared(chunk), DISTANCE_MASK);
-    return ((long) tier(chunk) << TIER_SHIFT) | distance;
+    return ((long) tier(chunk, 0) << TIER_SHIFT) | distance;
   }
 
-  public int tier(long chunk) {
+  private int tier(long chunk, int portalOffset) {
     if (core.contains(chunk)) return 0;
     int x = ChunkPos.getX(chunk), z = ChunkPos.getZ(chunk);
     if (primaryView.contains(x, z)) return 1;
-    return portalTier(x, z);
-  }
-
-  private int portalTier(int x, int z) {
-    int tier = 3;
+    int priority = 3;
     for (var demand : demands) {
-      if (demand.cone != null && within(demand.eye, x, z)
-          && intersects(demand.cone, x, z)) return 1;
-      if (demand.arrival && within(demand.exit, x, z)) tier = 2;
+      if ((demand.cone == null && !demand.arrival) || !within(demand.exit, x, z)) continue;
+      if (demand.cone != null && intersects(demand.cone, x, z)) return 1 + portalOffset;
+      if (demand.arrival) priority = 2;
     }
-    return tier;
-  }
-
-  public int loadingTier(long chunk) {
-    if (core.contains(chunk)) return 0;
-    int x = ChunkPos.getX(chunk), z = ChunkPos.getZ(chunk);
-    if (primaryView.contains(x, z)) return 1;
-    return portalTier(x, z) + 1;
+    return priority + portalOffset;
   }
 
   public boolean samePriority(PortalChunkObservers other) {
@@ -163,7 +146,7 @@ public final class PortalChunkObservers {
     for (int i = 0; i < demands.size(); i++) {
       var left = demands.get(i);
       var right = other.demands.get(i);
-      if (!left.eye.equals(right.eye) || !left.exit.equals(right.exit)
+      if (!left.exit.equals(right.exit)
           || left.arrival != right.arrival || !Arrays.equals(left.cone, right.cone)) return false;
     }
     return true;
@@ -207,10 +190,6 @@ public final class PortalChunkObservers {
     return planes;
   }
 
-  private static ChunkPos chunk(Vec3 position) {
-    return new ChunkPos(Mth.floor(position.x) >> 4, Mth.floor(position.z) >> 4);
-  }
-
   private static long distanceSquared(long chunk, List<ChunkPos> positions) {
     long distance = Long.MAX_VALUE;
     int x = ChunkPos.getX(chunk), z = ChunkPos.getZ(chunk);
@@ -221,7 +200,7 @@ public final class PortalChunkObservers {
     return distance;
   }
 
-  private record Demand(ChunkPos eye, ChunkPos exit, boolean arrival, Plane[] cone) {}
+  private record Demand(ChunkPos exit, boolean arrival, Plane[] cone) {}
 
   private record Plane(Vec3 normal, double offset) {}
 }

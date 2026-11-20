@@ -14,19 +14,26 @@ public final class PortalPassengerGroup {
   private PortalPassengerGroup() {}
 
   public static List<AABB> hulls(Entity root) {
-    if (root.getPassengers().isEmpty()) return List.of(collisionHull(root));
+    if (root.getPassengers().isEmpty()) return List.of(collisionHull(root, root.position(), null));
     var hulls = new ArrayList<AABB>();
-    appendHulls(root, hulls);
+    appendHulls(root, root.position(), null, hulls);
     return hulls;
   }
 
-  private static void appendHulls(Entity entity, List<AABB> hulls) {
-    hulls.add(collisionHull(entity));
-    for (var passenger : entity.getPassengers()) appendHulls(passenger, hulls);
+  private static void appendHulls(Entity entity, Vec3 feet, AABB vehicleHull, List<AABB> hulls) {
+    var hull = collisionHull(entity, feet, vehicleHull);
+    hulls.add(hull);
+    for (var passenger : entity.getPassengers()) {
+      // Native vehicle packets can move the vehicle before the next passenger tick.
+      Vec3 seat = entity.getPassengerRidingPosition(passenger).subtract(entity.position());
+      Vec3 passengerFeet = feet.add(seat).subtract(passenger.getVehicleAttachmentPoint(entity));
+      appendHulls(passenger, passengerFeet, hull, hulls);
+    }
   }
 
-  private static AABB collisionHull(Entity entity) {
+  private static AABB collisionHull(Entity entity, Vec3 feet, AABB vehicleHull) {
     var hull = entity.getBoundingBox();
+    if (!feet.equals(entity.position())) hull = hull.move(feet.subtract(entity.position()));
     if (entity instanceof AbstractMinecart cart && cart.isOnRails()
         && cart.getBehavior() instanceof OldMinecartBehavior behavior) {
       var track = behavior.getPos(cart.getX(), cart.getY(), cart.getZ());
@@ -34,16 +41,17 @@ public final class PortalPassengerGroup {
     }
     if (entity.getVehicle() instanceof AbstractMinecart cart && cart.isOnRails()) {
       // Seated passengers extend into the track bed; vanilla moves them with the cart.
-      double bottom = Math.min(hull.maxY, Math.max(hull.minY, collisionHull(cart).minY));
+      var trackHull = vehicleHull != null ? vehicleHull
+          : collisionHull(cart, cart.position().add(feet.subtract(entity.position())), null);
+      double bottom = Math.min(hull.maxY, Math.max(hull.minY, trackHull.minY));
       return new AABB(hull.minX, bottom, hull.minZ, hull.maxX, hull.maxY, hull.maxZ);
     }
     return hull;
   }
 
   public static AABB bounds(Entity root) {
-    var bounds = collisionHull(root);
-    for (var passenger : root.getPassengers()) bounds = bounds.minmax(bounds(passenger));
-    return bounds;
+    if (root.getPassengers().isEmpty()) return collisionHull(root, root.position(), null);
+    return bounds(hulls(root));
   }
 
   public static AABB bounds(List<AABB> hulls) {
@@ -61,14 +69,16 @@ public final class PortalPassengerGroup {
 
   public static List<Arrival> arrival(Entity root, PortalLink link, Vec3 rootFeet) {
     var result = new ArrayList<Arrival>();
-    arrival(root, link, rootFeet, result);
+    arrival(root, link, rootFeet, null, result);
     return List.copyOf(result);
   }
 
-  private static void arrival(Entity entity, PortalLink link, Vec3 feet, List<Arrival> result) {
+  private static void arrival(
+      Entity entity, PortalLink link, Vec3 feet, AABB vehicleHull, List<Arrival> result) {
     var angles =
         PortalEntityAngles.transform(entity, link.transform(), entity.getYRot(), entity.getXRot());
     float yaw = angles.yaw(), pitch = angles.pitch();
+    var hull = collisionHull(entity, feet, vehicleHull);
     result.add(
         new Arrival(
             entity,
@@ -76,7 +86,7 @@ public final class PortalPassengerGroup {
             feet,
             yaw,
             pitch,
-            collisionHull(entity).move(feet.subtract(entity.position())),
+            hull,
             new Vec3(entity.xo, entity.yo, entity.zo)));
     for (Entity passenger : entity.getPassengers()) {
       Vec3 seat = entity.getPassengerRidingPosition(passenger).subtract(entity.position());
@@ -88,7 +98,7 @@ public final class PortalPassengerGroup {
           passenger
               .getVehicleAttachmentPoint(entity)
               .yRot((float) Math.toRadians(passenger.getYRot() - passengerYaw));
-      arrival(passenger, link, feet.add(seat).subtract(attachment), result);
+      arrival(passenger, link, feet.add(seat).subtract(attachment), hull, result);
     }
   }
 

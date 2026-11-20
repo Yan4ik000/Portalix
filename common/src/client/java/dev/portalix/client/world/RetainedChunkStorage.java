@@ -8,7 +8,7 @@ import java.util.concurrent.atomic.AtomicReferenceArray;
 
 public final class RetainedChunkStorage<T> {
   private volatile AtomicReferenceArray<Entry<T>> buckets = new AtomicReferenceArray<>(16);
-  private volatile int size;
+  private int size;
   private List<T> snapshot;
 
   private static final class Entry<T> {
@@ -82,10 +82,6 @@ public final class RetainedChunkStorage<T> {
     size--;
     snapshot = null;
     return removed;
-  }
-
-  public int size() {
-    return size;
   }
 
   public synchronized List<T> values() {

@@ -6,7 +6,6 @@ import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
 import com.mojang.blaze3d.vertex.PoseStack;
 import dev.portalix.client.portal.entity.PortalEntityScenes;
-import dev.portalix.client.portal.entity.PortalEntityRenderStateAccess;
 import net.irisshaders.iris.shadows.ShadowRenderer;
 import net.minecraft.client.Camera;
 import net.minecraft.client.DeltaTracker;
@@ -62,14 +61,6 @@ abstract class IrisShadowEntitiesMixin {
       PoseStack poses,
       SubmitNodeCollector collector,
       Operation<Void> original) {
-    if (((PortalEntityRenderStateAccess) state).portalix$slices() == null)
-      original.call(dispatcher, state, camera, x, y, z, poses, collector);
-    else
-      PortalEntityScenes.submit(
-          state,
-          camera,
-          poses,
-          collector,
-          local -> original.call(dispatcher, state, local, 0.0, 0.0, 0.0, poses, collector));
+    PortalEntityScenes.submit(dispatcher, state, camera, x, y, z, poses, collector, original);
   }
 }

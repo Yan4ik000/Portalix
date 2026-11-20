@@ -8,9 +8,12 @@ import dev.portalix.network.carry.*;
 import dev.portalix.network.gun.*;
 import dev.portalix.network.portal.*;
 import dev.portalix.portal.PortalLinkId;
+import dev.portalix.portal.PortalViewLimits;
 import dev.portalix.portal.traversal.PortalEntityMovement.Crossing;
 import io.netty.buffer.Unpooled;
+import io.netty.handler.codec.DecoderException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.UUID;
@@ -41,6 +44,9 @@ class PayloadCodecsTest {
     var reference = PortalLinkId.fromLink(link);
     var crossing = new Crossing(Long.MAX_VALUE, link, position, velocity, new Vec3(1, 2, 3), -179.75f, 89.5f, .375, Vec3.ZERO, 1.62f, 90.25f, -45.125f, .5f);
     long sequence = 128;
+    packets.add(new Packet<>(PortalViewDemandPayload.CODEC,
+        new PortalViewDemandPayload(List.of(reference), List.of(List.of(reference.inverse()), List.of(reference, reference.inverse())))));
+    packets.add(new Packet<>(PortalViewDemandPayload.CODEC, new PortalViewDemandPayload(List.of(), List.of())));
     packets.add(new Packet<>(PortalViewReadyPayload.CODEC, new PortalViewReadyPayload(sequence, sequence)));
     packets.add(new Packet<>(ProjectileStatePayload.CODEC, new ProjectileStatePayload(128, entity, sequence, sequence, position, velocity, -179.75f, 89.5f)));
     packets.add(new Packet<>(EntityPortalInitPayload.CODEC, new EntityPortalInitPayload(
@@ -50,11 +56,10 @@ class PayloadCodecsTest {
         128, entity, sequence, new PositionMoveRotation(position, velocity, -179.75f, 89.5f), true,
         new EntityPortalInitPayload.FishingTether(List.of(link, link.inverse()), sequence, List.of(link)))));
     for (boolean flag : new boolean[] {false, true}) {
-      packets.add(new Packet<>(CarryGrabPayload.CODEC, new CarryGrabPayload(128, entity, sequence, sequence, 1024, owner, sequence, position, velocity, flag ? List.of(reference, reference.inverse()) : List.of())));
-      packets.add(new Packet<>(CarryInputPayload.CODEC, new CarryInputPayload(128, entity, sequence, sequence, flag ? List.of(new CarryInputPayload.Node(position, null), new CarryInputPayload.Node(velocity, reference)) : List.of(new CarryInputPayload.Node(position, null)))));
-      packets.add(new Packet<>(CarryReleasePayload.CODEC, new CarryReleasePayload(128, entity, sequence, position, velocity, flag, sequence, sequence)));
-      packets.add(new Packet<>(CarryStatePayload.CODEC, new CarryStatePayload(128, entity, sequence, sequence, sequence, position, velocity, flag, !flag)));
-      packets.add(new Packet<>(PlayerPortalMoveAckPayload.CODEC, new PlayerPortalMoveAckPayload(sequence, flag, .5f, List.of(link))));
+      packets.add(new Packet<>(CarryGrabPayload.CODEC, new CarryGrabPayload(128, entity, sequence, 1024, owner, sequence, position, velocity, flag ? List.of(reference, reference.inverse()) : List.of())));
+      packets.add(new Packet<>(CarryReleasePayload.CODEC, new CarryReleasePayload(128, entity, sequence, position, velocity, flag, sequence)));
+      packets.add(new Packet<>(CarryStatePayload.CODEC, new CarryStatePayload(128, entity, sequence, sequence, position, velocity, flag, !flag)));
+      packets.add(new Packet<>(PlayerPortalMoveAckPayload.CODEC, new PlayerPortalMoveAckPayload(sequence, flag, .5f, 120L, List.of(link))));
       packets.add(new Packet<>(GunStatePayload.CODEC, new GunStatePayload(1024, owner, flag ? 128 : -1, entity, 127, flag ? 3 : 0, flag)));
     }
     for (int mask = 0; mask < 4; mask++) {
@@ -69,14 +74,13 @@ class PayloadCodecsTest {
     for (GunCommand command : GunCommand.values()) packets.add(new Packet<>(GunCommandPayload.CODEC, new GunCommandPayload(command)));
     for (GunEventKind event : GunEventKind.values()) packets.add(new Packet<>(GunEventPayload.CODEC, new GunEventPayload(Integer.MAX_VALUE, event)));
     for (Pose pose : Pose.values()) {
-      packets.add(new Packet<>(PlayerPortalMovePayload.CODEC, new PlayerPortalMovePayload(Long.MAX_VALUE, 128, entity, MoverType.SELF, position, velocity, Vec3.ZERO, true, pose, 1, false, position.add(velocity), .5f, -180, 90, 37.5f, -45, pose, .75f)));
+      packets.add(new Packet<>(PlayerPortalMovePayload.CODEC, new PlayerPortalMovePayload(Long.MAX_VALUE, 128, entity, MoverType.SELF, position, velocity, Vec3.ZERO, false, position.add(velocity), .5f, -180, 90, 37.5f, -45, true, pose, .75f)));
     }
     for (MoverType mover : MoverType.values()) {
-      packets.add(new Packet<>(PlayerPortalMovePayload.CODEC, new PlayerPortalMovePayload(Long.MAX_VALUE, 128, entity, mover, position, velocity, Vec3.ZERO, true, Pose.STANDING, 1, false, position.add(velocity), .5f, -180, 90, 37.5f, -45, Pose.STANDING, .75f)));
+      packets.add(new Packet<>(PlayerPortalMovePayload.CODEC, new PlayerPortalMovePayload(Long.MAX_VALUE, 128, entity, mover, position, velocity, Vec3.ZERO, false, position.add(velocity), .5f, -180, 90, 37.5f, -45, false, Pose.STANDING, .5f)));
     }
-    packets.add(new Packet<>(EntityPortalCrossingPayload.CODEC, new EntityPortalCrossingPayload(128, entity, List.of(crossing, crossing), position, velocity, -179.75f, 89.5f, 37.25f, -72.5f, .5f)));
-    packets.add(new Packet<>(CarryInputPayload.CODEC, new CarryInputPayload(128, entity, 1, 2, Collections.nCopies(CarryInputPayload.MAX_POINTS, new CarryInputPayload.Node(position, null)))));
-    packets.add(new Packet<>(CarryGrabPayload.CODEC, new CarryGrabPayload(128, entity, 1, 2, 1024, owner, 3, position, velocity, Collections.nCopies(64, reference))));
+    packets.add(new Packet<>(EntityPortalCrossingPayload.CODEC, new EntityPortalCrossingPayload(128, entity, List.of(crossing, crossing), position, velocity, -179.75f, 89.5f, 37.25f, -72.5f, .5f, 54321L)));
+    packets.add(new Packet<>(CarryGrabPayload.CODEC, new CarryGrabPayload(128, entity, 1, 1024, owner, 3, position, velocity, Collections.nCopies(64, reference))));
     return packets.stream();
   }
 
@@ -98,7 +102,7 @@ class PayloadCodecsTest {
   }
 
   @Test
-  void malformedCommandsAndOversizedRoutesFailAtTheProtocolBoundary() {
+  void rejectsInvalidGunCommandsAndState() {
     int unknownCommand = GunCommand.values().length;
     for (int invalid : new int[] {-1, unknownCommand, Math.max(127, unknownCommand), Integer.MAX_VALUE}) {
       var buffer = new RegistryFriendlyByteBuf(Unpooled.buffer(), RegistryAccess.EMPTY);
@@ -109,22 +113,29 @@ class PayloadCodecsTest {
         buffer.release();
       }
     }
-    for (int size : new int[] {-1, 0, CarryInputPayload.MAX_POINTS + 1, Integer.MAX_VALUE}) {
-      var buffer = new RegistryFriendlyByteBuf(Unpooled.buffer(), RegistryAccess.EMPTY);
-      try {
-        buffer.writeVarInt(1);
-        buffer.writeUUID(new UUID(2, 3));
-        buffer.writeVarLong(4);
-        buffer.writeVarLong(5);
-        buffer.writeVarInt(size);
-        assertThrows(IllegalArgumentException.class, () -> CarryInputPayload.CODEC.decode(buffer));
-      } finally {
-        buffer.release();
-      }
-    }
     assertThrows(IllegalArgumentException.class, () -> new GunStatePayload(-1, new UUID(1, 2), -1, null, 0, 0, false));
     assertThrows(IllegalArgumentException.class, () -> new GunStatePayload(1, new UUID(1, 2), -1, null, 0, 4, false));
-    assertThrows(IllegalArgumentException.class, () -> new CarryInputPayload(1, new UUID(1, 2), 1, 1, List.of()));
+  }
+
+  @Test
+  void rejectsInvalidPortalViewSizes() {
+    var buffer = new RegistryFriendlyByteBuf(Unpooled.buffer(), RegistryAccess.EMPTY);
+    try {
+      for (int[] sizes : List.of(new int[] {PortalViewLimits.CAMERA_DEPTH + 1},
+          new int[] {0, PortalViewLimits.ROUTES + 1}, new int[] {0, 1, PortalViewLimits.DEPTH + 1})) {
+        buffer.clear();
+        for (int size : sizes) buffer.writeVarInt(size);
+        assertThrows(DecoderException.class, () -> PortalViewDemandPayload.CODEC.decode(buffer), Arrays.toString(sizes));
+      }
+      for (int[] sizes : List.of(new int[] {-1, 0}, new int[] {0, -1}, new int[] {0, 1, -1}, new int[] {0, 1, 0})) {
+        buffer.clear();
+        for (int size : sizes) buffer.writeVarInt(size);
+        assertThrows(IllegalArgumentException.class, () -> PortalViewDemandPayload.CODEC.decode(buffer),
+            Arrays.toString(sizes));
+      }
+    } finally {
+      buffer.release();
+    }
   }
 
   @Test

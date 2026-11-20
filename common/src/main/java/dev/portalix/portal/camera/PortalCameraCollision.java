@@ -2,18 +2,22 @@ package dev.portalix.portal.camera;
 
 import dev.portalix.api.PortalEndpoint;
 import dev.portalix.portal.PortalLink;
+import dev.portalix.portal.PortalRoutes;
+import dev.portalix.portal.PortalViewLimits;
 import dev.portalix.portal.geometry.PortalAperture;
 import dev.portalix.portal.geometry.PortalEllipse;
 import dev.portalix.portal.traversal.PortalCollisionWorld;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
+import java.util.function.Predicate;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
+import org.jspecify.annotations.Nullable;
 
 public final class PortalCameraCollision {
   public static final double RADIUS = .1;
-  private static final double CLEARANCE = 1e-4;
+  static final double CLEARANCE = 1e-4;
 
   private PortalCameraCollision() {}
 
@@ -23,11 +27,22 @@ public final class PortalCameraCollision {
       double requested,
       List<PortalLink> links,
       Query query) {
+    return solve(origin, direction, requested, links, query, List.of());
+  }
+
+  static Result solve(Vec3 origin, Vec3 direction, double requested, List<PortalLink> links,
+      Query query, List<PortalLink> initialFrame) {
+    return solve(origin, direction, requested, links, query, initialFrame, link -> true);
+  }
+
+  static Result solve(Vec3 origin, Vec3 direction, double requested, List<PortalLink> links,
+      Query query, List<PortalLink> initialFrame, Predicate<PortalLink> ready) {
     var path = new ArrayList<PortalLink>();
+    List<PortalLink> frame = initialFrame;
     var zeroProgress = new HashSet<PortalLink>();
     Vec3 position = origin;
     double directionLength = direction.length();
-    if (directionLength == 0 || requested <= 0) return new Result(origin, List.of(), 0);
+    if (directionLength == 0 || requested <= 0) return new Result(origin, List.of(), 0, null);
     Vec3 heading = direction.scale(1 / directionLength);
     double remaining = requested, distance = 0;
     while (remaining > 0) {
@@ -46,16 +61,26 @@ public final class PortalCameraCollision {
       var body = new AABB(position, position).inflate(RADIUS);
       Vec3 segment = movement.scale(limit);
       var bounds = body.expandTowards(segment);
+      if (crossing != null && !ready.test(crossing)) {
+        var portal = crossing.entrance().endpoint();
+        double contact = (PortalAperture.signedDistance(portal, position) - projectedRadius(portal.normal()))
+            / -movement.dot(portal.normal());
+        double solid = query.scene(body, segment, null).sweepFraction(body, segment) * limit;
+        double travel = Math.max(0, remaining * Math.min(contact, solid) - CLEARANCE);
+        boolean blocked = PortalViewLimits.canCross(frame, crossing)
+            && openingFraction(crossing, position, segment) >= 1
+            && query.scene(body, segment, crossing).sweepFraction(body, segment) >= 1;
+        return new Result(position.add(heading.scale(travel)), List.copyOf(path), distance + travel,
+            blocked ? crossing : null);
+      }
       PortalLink opening = crossing;
       if (opening == null) {
         double nearest = Double.POSITIVE_INFINITY;
         for (var link : links) {
+          if (!ready.test(link)) continue;
           var portal = link.entrance().endpoint();
           double depth = PortalAperture.signedDistance(portal, position);
-          if ((PortalAperture.touches(portal, bounds)
-                  || depth <= 0 && depth >= -PortalAperture.CAVITY_DEPTH
-                      && PortalAperture.containsPassage(portal, position))
-              && Math.abs(depth) < nearest) {
+          if (Math.abs(depth) < nearest && touchesOpening(portal, position, bounds, depth)) {
             nearest = Math.abs(depth);
             opening = link;
           }
@@ -65,9 +90,9 @@ public final class PortalCameraCollision {
       if (opening != null)
         fraction = Math.min(fraction, openingFraction(opening, position, segment));
       double length = segment.length();
-      if (fraction < 1) {
+      if (fraction < 1 || crossing != null && !PortalViewLimits.canCross(frame, crossing)) {
         double travel = Math.max(0, length * fraction - CLEARANCE);
-        return new Result(position.add(heading.scale(travel)), List.copyOf(path), distance + travel);
+        return new Result(position.add(heading.scale(travel)), List.copyOf(path), distance + travel, null);
       }
       position = position.add(segment);
       distance += length;
@@ -79,9 +104,22 @@ public final class PortalCameraCollision {
       var exit = crossing.exit().endpoint();
       position = position.subtract(exit.normal().scale(PortalAperture.signedDistance(exit, position)));
       heading = crossing.transform().vector(heading);
+      if (frame == initialFrame) frame = new ArrayList<>(initialFrame);
+      PortalRoutes.append(frame, crossing);
       path.add(crossing);
     }
-    return new Result(position, List.copyOf(path), distance);
+    return new Result(position, List.copyOf(path), distance, null);
+  }
+
+  public static boolean touchesOpening(PortalEndpoint portal, Vec3 origin, AABB sweptVolume) {
+    return touchesOpening(portal, origin, sweptVolume, PortalAperture.signedDistance(portal, origin));
+  }
+
+  private static boolean touchesOpening(
+      PortalEndpoint portal, Vec3 origin, AABB sweptVolume, double depth) {
+    return PortalAperture.touches(portal, sweptVolume)
+        || depth <= 0 && depth >= -PortalAperture.CAVITY_DEPTH
+            && PortalAperture.containsPassage(portal, origin);
   }
 
   private static double openingFraction(PortalLink link, Vec3 position, Vec3 movement) {
@@ -89,12 +127,7 @@ public final class PortalCameraCollision {
     var portal = link.entrance().endpoint();
     double depth = PortalAperture.signedDistance(portal, position);
     double travel = movement.dot(portal.normal());
-    double radius =
-        RADIUS
-            * (Math.abs(portal.normal().x)
-                + Math.abs(portal.normal().y)
-                + Math.abs(portal.normal().z));
-    var slab = interval(depth, travel, radius);
+    var slab = interval(depth, travel, projectedRadius(portal.normal()));
     if (slab == null || slab.leave() <= 0 || slab.enter() >= 1) return 1;
     double enter = Math.max(0, slab.enter()), leave = Math.min(1, slab.leave());
     var entrance = apertureInterval(portal, position, movement);
@@ -133,8 +166,7 @@ public final class PortalCameraCollision {
             index == 0
                 ? PortalAperture.passageHalfWidth(portal)
                 : PortalAperture.passageHalfHeight(portal);
-        double radius = RADIUS * (Math.abs(axis.x) + Math.abs(axis.y) + Math.abs(axis.z));
-        var range = interval(relative.dot(axis), movement.dot(axis), half - radius);
+        var range = interval(relative.dot(axis), movement.dot(axis), half - projectedRadius(axis));
         if (range == null) return null;
         enter = Math.max(enter, range.enter());
         leave = Math.min(leave, range.leave());
@@ -153,10 +185,14 @@ public final class PortalCameraCollision {
     return new PortalEllipse.Interval(Math.min(first, last), Math.max(first, last));
   }
 
+  static double projectedRadius(Vec3 axis) {
+    return RADIUS * (Math.abs(axis.x) + Math.abs(axis.y) + Math.abs(axis.z));
+  }
+
   @FunctionalInterface
   public interface Query {
     PortalCollisionWorld scene(AABB body, Vec3 movement, PortalLink opening);
   }
 
-  public record Result(Vec3 position, List<PortalLink> links, double distance) {}
+  public record Result(Vec3 position, List<PortalLink> links, double distance, @Nullable PortalLink blocked) {}
 }

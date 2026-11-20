@@ -110,8 +110,7 @@ public final class GunShotEffects {
       int nearby = 0;
 
       for (Impact impact : impacts) {
-        if (impact.collisionVisible
-            && mc.player.distanceToSqr(impact.data.position()) <= SPARK_COLLISION_RANGE_SQUARED) {
+        if (impact.collisionVisible) {
           nearby++;
         }
       }
@@ -135,14 +134,19 @@ public final class GunShotEffects {
         }
       }
       for (Impact impact : impacts) {
-        boolean traceCollisions = impact.collisionVisible
-            && mc.player.distanceToSqr(impact.data.position()) <= SPARK_COLLISION_RANGE_SQUARED;
         impact.sparks.advance(
             (time - impact.tick) / 20.0,
             trace,
-            traceCollisions ? collisionParticles : 0,
+            impact.collisionVisible ? collisionParticles : 0,
             impact.stride);
       }
+    }
+  }
+
+  public void endFrame() {
+    for (var impact : impacts) {
+      impact.collisionVisible = impact.collisionCandidate;
+      impact.collisionCandidate = false;
     }
   }
 
@@ -213,8 +217,11 @@ public final class GunShotEffects {
         double age = (time - impact.tick) / 20.0;
         if (age >= 0 && age < IMPACT_LIFETIME_TICKS / 20.0) {
           AABB bounds = impact.sparks.bounds(age, impact.stride);
-          impact.collisionVisible = bounds != null && ParticleVisibility.visible(bounds, view);
-          if (impact.collisionVisible) impact.sparks.submit(age, view, collector, impact.stride);
+          if (bounds != null && ParticleVisibility.visible(bounds, view)) {
+            impact.collisionCandidate |= camera.distanceToSqr(impact.data.position())
+                <= SPARK_COLLISION_RANGE_SQUARED;
+            impact.sparks.submit(age, view, collector, impact.stride);
+          }
         }
       }
     }
@@ -225,7 +232,8 @@ public final class GunShotEffects {
     final double tick;
     final int stride;
     final ImpactSparkRenderer sparks;
-    boolean collisionVisible = true;
+    boolean collisionVisible;
+    boolean collisionCandidate;
 
     Impact(PortalImpactPayload data, double tick, int stride) {
       this.data = data;

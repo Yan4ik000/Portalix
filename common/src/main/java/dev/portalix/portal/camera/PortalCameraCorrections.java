@@ -6,8 +6,10 @@ import java.util.List;
 import net.minecraft.world.phys.Vec3;
 
 public final class PortalCameraCorrections {
-  private final List<Discontinuity> changes = new ArrayList<>();
-  private final List<PositionSample> positions = new ArrayList<>();
+  private static final List<Discontinuity> NO_CHANGES = List.of();
+  private static final List<PositionSample> NO_POSITIONS = List.of();
+  private List<Discontinuity> changes = NO_CHANGES;
+  private List<PositionSample> positions = NO_POSITIONS;
   private Vec3 previousCenter;
   private Vec3 previousRenderFeet;
   private int renderTick = Integer.MIN_VALUE;
@@ -15,6 +17,7 @@ public final class PortalCameraCorrections {
   private double baseTime;
 
   private void crossed(double time, PortalLink link, Vec3 eyeShift) {
+    if (changes == NO_CHANGES) changes = new ArrayList<>();
     int index = changes.size();
     while (index > 0 && changes.get(index - 1).time() > time) index--;
     changes.add(index, new Discontinuity(time, link, eyeShift));
@@ -57,6 +60,7 @@ public final class PortalCameraCorrections {
               link.transform().point(sample.renderFeet()),
               after.add(link.transform().vector(sample.center().subtract(before)))));
     }
+    if (positions == NO_POSITIONS) positions = new ArrayList<>();
     positions.add(new PositionSample(time, after, after, center));
     crossed(time, link, eyeShift);
   }
@@ -126,8 +130,8 @@ public final class PortalCameraCorrections {
     }
     baseCorrection = decay(baseCorrection, oldestSampleTime - baseTime);
     baseTime = oldestSampleTime;
-    changes.removeIf(change -> change.time() <= oldestSampleTime);
-    positions.removeIf(sample -> sample.time() <= oldestSampleTime);
+    if (!changes.isEmpty()) changes.removeIf(change -> change.time() <= oldestSampleTime);
+    if (!positions.isEmpty()) positions.removeIf(sample -> sample.time() <= oldestSampleTime);
     if (positions.isEmpty()) previousCenter = null;
     if (renderTick <= oldestSampleTime) {
       previousRenderFeet = null;
@@ -136,8 +140,8 @@ public final class PortalCameraCorrections {
   }
 
   public void clear() {
-    changes.clear();
-    positions.clear();
+    if (!changes.isEmpty()) changes.clear();
+    if (!positions.isEmpty()) positions.clear();
     previousCenter = null;
     previousRenderFeet = null;
     renderTick = Integer.MIN_VALUE;

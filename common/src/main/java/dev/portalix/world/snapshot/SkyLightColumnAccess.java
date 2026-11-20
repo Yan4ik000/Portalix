@@ -8,6 +8,4 @@ public interface SkyLightColumnAccess {
   int portalix$removeTop(long column);
 
   void portalix$defaultTop(int bottom);
-
-  void portalix$copyColumnsFrom(SkyLightColumnAccess source);
 }

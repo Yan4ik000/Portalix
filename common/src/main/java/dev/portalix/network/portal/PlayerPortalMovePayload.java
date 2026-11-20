@@ -1,7 +1,6 @@
 package dev.portalix.network.portal;
 
 import dev.portalix.PortalixMod;
-import dev.portalix.network.PayloadCodecs;
 import java.util.UUID;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.StreamCodec;
@@ -18,9 +17,6 @@ public record PlayerPortalMovePayload(
     Vec3 before,
     Vec3 movement,
     Vec3 velocity,
-    boolean grounded,
-    Pose beforePose,
-    float beforeScale,
     boolean sneaking,
     Vec3 predicted,
     float poseScale,
@@ -28,6 +24,7 @@ public record PlayerPortalMovePayload(
     float beforePitch,
     float playerYaw,
     float playerPitch,
+    boolean finishesTick,
     Pose finalPose,
     float finalScale)
     implements CustomPacketPayload {
@@ -40,19 +37,17 @@ public record PlayerPortalMovePayload(
             buffer.writeVarInt(payload.entityId);
             buffer.writeUUID(payload.entityUuid);
             buffer.writeEnum(payload.mover);
-            PayloadCodecs.writeVector(buffer, payload.before);
-            PayloadCodecs.writeVector(buffer, payload.movement);
-            PayloadCodecs.writeVector(buffer, payload.velocity);
-            buffer.writeBoolean(payload.grounded);
-            buffer.writeEnum(payload.beforePose);
-            buffer.writeFloat(payload.beforeScale);
+            Vec3.STREAM_CODEC.encode(buffer, payload.before);
+            Vec3.STREAM_CODEC.encode(buffer, payload.movement);
+            Vec3.STREAM_CODEC.encode(buffer, payload.velocity);
             buffer.writeBoolean(payload.sneaking);
-            PayloadCodecs.writeVector(buffer, payload.predicted);
+            Vec3.STREAM_CODEC.encode(buffer, payload.predicted);
             buffer.writeFloat(payload.poseScale);
             buffer.writeFloat(payload.beforeYaw);
             buffer.writeFloat(payload.beforePitch);
             buffer.writeFloat(payload.playerYaw);
             buffer.writeFloat(payload.playerPitch);
+            buffer.writeBoolean(payload.finishesTick);
             buffer.writeEnum(payload.finalPose);
             buffer.writeFloat(payload.finalScale);
           },
@@ -62,19 +57,17 @@ public record PlayerPortalMovePayload(
                   buffer.readVarInt(),
                   buffer.readUUID(),
                   buffer.readEnum(MoverType.class),
-                  PayloadCodecs.readVector(buffer),
-                  PayloadCodecs.readVector(buffer),
-                  PayloadCodecs.readVector(buffer),
+                  Vec3.STREAM_CODEC.decode(buffer),
+                  Vec3.STREAM_CODEC.decode(buffer),
+                  Vec3.STREAM_CODEC.decode(buffer),
                   buffer.readBoolean(),
-                  buffer.readEnum(Pose.class),
+                  Vec3.STREAM_CODEC.decode(buffer),
+                  buffer.readFloat(),
+                  buffer.readFloat(),
+                  buffer.readFloat(),
+                  buffer.readFloat(),
                   buffer.readFloat(),
                   buffer.readBoolean(),
-                  PayloadCodecs.readVector(buffer),
-                  buffer.readFloat(),
-                  buffer.readFloat(),
-                  buffer.readFloat(),
-                  buffer.readFloat(),
-                  buffer.readFloat(),
                   buffer.readEnum(Pose.class),
                   buffer.readFloat()));
 
@@ -87,9 +80,6 @@ public record PlayerPortalMovePayload(
         before,
         movement,
         velocity,
-        grounded,
-        beforePose,
-        beforeScale,
         sneaking,
         predicted,
         poseScale,
@@ -97,6 +87,7 @@ public record PlayerPortalMovePayload(
         beforePitch,
         playerYaw,
         playerPitch,
+        true,
         pose,
         scale);
   }

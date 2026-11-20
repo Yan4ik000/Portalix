@@ -42,11 +42,10 @@ final class PortalSceneAssertions {
   static ProjectedMarker projectedMarker(FrameCapture.Frame frame, AABB imageBounds,
                                          FrameCapture.Material material, PortalEndpoint entrance) {
     var region = intersection(frame.project(imageBounds).orElseThrow(), aperture(frame, entrance, .05));
-    var mask = coreMask(frame, region, entrance);
-    var metadata = frame.metadata();
-    var inverse = new Matrix4f().set((float[]) metadata.get("worldProjectionColumnMajor"))
-        .mul(new Matrix4f().set((float[]) metadata.get("viewRotationColumnMajor"))).invert();
+    var inverse = frame.inverseCameraTransform();
+    check(inverse.isFinite(), "Cannot project the actual frame into its authored portal clear core");
     var eye = frame.cameraPosition();
+    var mask = new ApertureMask(entrance, eye);
     double range = eye.distanceTo(imageBounds.getCenter())
         + imageBounds.getXsize() + imageBounds.getYsize() + imageBounds.getZsize();
     var ray = new Vector4f();
@@ -54,10 +53,8 @@ final class PortalSceneAssertions {
     double expectedX = 0, expectedY = 0, matchedX = 0, matchedY = 0;
     for (int y = region.y(); y < region.y() + region.height(); y++) {
       for (int x = region.x(); x < region.x() + region.width(); x++) {
-        if (!mask[(y - region.y()) * region.width() + x - region.x()]) continue;
-        inverse.transform(ray.set((float) (2 * (x + .5) / frame.width() - 1),
-            (float) (1 - 2 * (y + .5) / frame.height()), 1, 1));
-        ray.div(ray.w);
+        pixelRay(frame, inverse, x, y, ray);
+        if (!mask.contains(ray)) continue;
         var direction = new Vec3(ray.x, ray.y, ray.z).normalize();
         if (imageBounds.clip(eye, eye.add(direction.scale(range))).isEmpty()) continue;
         expected++; expectedX += x + .5; expectedY += y + .5;
@@ -94,32 +91,12 @@ final class PortalSceneAssertions {
 
   static FrameCapture.Difference difference(FrameCapture.Frame current, FrameCapture.Frame before,
                                             FrameCapture.Region region, int threshold, PortalEndpoint... apertures) {
-    check(current.width() == before.width() && current.height() == before.height(),
-        "Paired portal observations have different framebuffer sizes");
-    boolean[] mask = coreMask(current, region, apertures);
-    long total = 0;
-    int samples = 0, changed = 0;
-    for (int y = region.y(); y < region.y() + region.height(); y++) {
-      for (int x = region.x(); x < region.x() + region.width(); x++) {
-        if (!mask[(y - region.y()) * region.width() + x - region.x()]) continue;
-        int a = current.pixel(x, y), b = before.pixel(x, y);
-        int red = Math.abs((a >> 16 & 255) - (b >> 16 & 255));
-        int green = Math.abs((a >> 8 & 255) - (b >> 8 & 255));
-        int blue = Math.abs((a & 255) - (b & 255));
-        total += red + green + blue;
-        if (Math.max(red, Math.max(green, blue)) > threshold) changed++;
-        samples++;
-      }
-    }
-    check(samples > 0, "The paired image region misses the portal clear core: " + region);
-    return new FrameCapture.Difference((double) total / (samples * 3L), (double) changed / samples, changed);
+    return current.difference(before, region, threshold, coreMask(current, region, apertures));
   }
 
   static boolean[] coreMask(FrameCapture.Frame frame, FrameCapture.Region region,
                             PortalEndpoint... apertures) {
-    var metadata = frame.metadata();
-    var inverse = new Matrix4f().set((float[]) metadata.get("worldProjectionColumnMajor"))
-        .mul(new Matrix4f().set((float[]) metadata.get("viewRotationColumnMajor"))).invert();
+    var inverse = frame.inverseCameraTransform();
     check(inverse.isFinite(), "Cannot project the actual frame into its authored portal clear core");
     var masks = new ApertureMask[apertures.length];
     for (int i = 0; i < masks.length; i++) masks[i] = new ApertureMask(apertures[i], frame.cameraPosition());
@@ -127,15 +104,19 @@ final class PortalSceneAssertions {
     var ray = new Vector4f();
     for (int y = region.y(); y < region.y() + region.height(); y++) {
       for (int x = region.x(); x < region.x() + region.width(); x++) {
-        inverse.transform(ray.set((float) (2 * (x + .5) / frame.width() - 1),
-            (float) (1 - 2 * (y + .5) / frame.height()), 1, 1));
-        ray.div(ray.w);
+        pixelRay(frame, inverse, x, y, ray);
         boolean inside = true;
         for (var aperture : masks) if (!aperture.contains(ray)) { inside = false; break; }
         mask[(y - region.y()) * region.width() + x - region.x()] = inside;
       }
     }
     return mask;
+  }
+
+  private static void pixelRay(FrameCapture.Frame frame, Matrix4f inverse, int x, int y, Vector4f ray) {
+    inverse.transform(ray.set((float) (2 * (x + .5) / frame.width() - 1),
+        (float) (1 - 2 * (y + .5) / frame.height()), 1, 1));
+    ray.div(ray.w);
   }
 
   static Pixels sprite(FrameCapture.Frame frame, FrameCapture.Region region, IntPredicate material, int minimumPixels,
@@ -181,20 +162,18 @@ final class PortalSceneAssertions {
   }
 
   static FrameCapture.Region intersection(FrameCapture.Region first, FrameCapture.Region second) {
-    int x = Math.max(first.x(), second.x()), y = Math.max(first.y(), second.y());
-    int right = Math.min(first.x() + first.width(), second.x() + second.width());
-    int bottom = Math.min(first.y() + first.height(), second.y() + second.height());
-    check(right > x && bottom > y, "The remote marker does not intersect the authored aperture");
-    return new FrameCapture.Region(x, y, right - x, bottom - y);
+    return first.intersection(second)
+        .orElseThrow(() -> new AssertionError("The remote marker does not intersect the authored aperture"));
   }
 
   static void projection(FrameCapture.Frame frame) {
+    var metadata = frame.metadata();
     for (String matrix : List.of("worldProjectionColumnMajor", "viewRotationColumnMajor")) {
-      var elements = (float[]) frame.metadata().get(matrix);
+      var elements = (float[]) metadata.get(matrix);
       check(elements != null && elements.length == 16, "The actual world projection is missing");
       for (float element : elements) check(Float.isFinite(element), "The actual camera matrix is nonfinite");
     }
-    var projection = (float[]) frame.metadata().get("worldProjectionColumnMajor");
+    var projection = (float[]) metadata.get("worldProjectionColumnMajor");
     check(projection[0] > 0 && projection[5] > 0 && projection[14] > 0,
         "The actual perspective/near plane is degenerate");
     frame.assertNotBlack(new FrameCapture.Region(frame.width() / 10, frame.height() / 10,

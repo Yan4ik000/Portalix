@@ -2,7 +2,7 @@ package dev.portalix.client.mixin.compat.sodium;
 
 import dev.portalix.client.compat.iris.IrisShaders;
 import dev.portalix.client.compat.sodium.SodiumPortalFrustum;
-import dev.portalix.client.portal.clip.PortalCullPlane;
+import dev.portalix.client.compat.sodium.SodiumTerrainWindow;
 import dev.portalix.client.portal.clip.PortalFrustumState;
 import dev.portalix.client.portal.clip.PortalFrustumPlanes;
 import dev.portalix.client.portal.scene.PortalSceneManager;
@@ -34,16 +34,20 @@ abstract class SodiumFrustumMixin {
     if (IrisShaders.shadowPass()) return;
     var state = (PortalFrustumState) this;
     var plane = state.portalix$exitPlane();
-    var connectivity = plane;
-    if (state.portalix$isAperture() && PortalSceneManager.isPortalView())
-      connectivity = PortalCullPlane.of(PortalSceneManager.path().getLast().exit().endpoint());
-    if (plane == null && connectivity == null) return;
+    var window = state.portalix$terrainWindow();
+    if (plane == null && window == null) return;
+    var eye = new Vec3(camX, camY, camZ);
+    var origin = PortalSceneManager.terrainOrigin(eye);
+    boolean rebased = !origin.equals(eye);
+    var culling = rebased ? new Matrix4f(matrix).translate(
+        (float) (origin.x - camX), (float) (origin.y - camY), (float) (origin.z - camZ)) : matrix;
     cir.setReturnValue(
         new Viewport(
             new SodiumPortalFrustum(
-                new SimpleFrustum(PortalFrustumPlanes.set(new FrustumIntersection(), matrix)),
-                plane == null ? null : plane.relativeTo(new Vec3(camX, camY, camZ)),
-                connectivity),
-            new Vector3d(camX, camY, camZ)));
+                new SimpleFrustum(PortalFrustumPlanes.set(new FrustumIntersection(), culling)),
+                plane == null ? null : plane.relativeTo(origin),
+                window == null ? null : new SodiumTerrainWindow(origin, window),
+                rebased ? new Viewport(null, new Vector3d(camX, camY, camZ)) : null),
+            new Vector3d(origin.x, origin.y, origin.z)));
   }
 }

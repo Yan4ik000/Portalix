@@ -2,6 +2,7 @@ package dev.portalix.client.portal.camera;
 
 import dev.portalix.portal.PortalLink;
 import dev.portalix.portal.traversal.PortalCollisionWorld;
+import dev.portalix.portal.traversal.WorldCollisionShapes;
 import java.util.ArrayList;
 import java.util.List;
 import net.minecraft.world.entity.Entity;
@@ -13,17 +14,23 @@ import net.minecraft.world.phys.Vec3;
 final class PortalCameraWorld {
   private PortalCameraWorld() {}
 
-  static PortalCollisionWorld query(Entity entity, AABB body, Vec3 movement, PortalLink opening) {
-    var local = shapes(entity, body, movement);
-    return opening == null
-        ? PortalCollisionWorld.solid(local)
-        : PortalCollisionWorld.material(
-            opening,
-            local,
-            shapes(entity, opening.transform().bounds(body), opening.transform().vector(movement)));
+  static PortalCollisionWorld query(Entity entity, AABB body, Vec3 movement, PortalLink opening, boolean ready) {
+    var local = visualBoxes(entity, body, movement);
+    var border = entity.level().getWorldBorder();
+    var localBorder = WorldCollisionShapes.borderBoxes(border, body.expandTowards(movement));
+    if (opening == null) {
+      local.addAll(localBorder);
+      return PortalCollisionWorld.solid(local);
+    }
+    if (!ready) return PortalCollisionWorld.material(opening, local, List.of(), localBorder);
+    var remoteBody = opening.transform().bounds(body);
+    var remoteMovement = opening.transform().vector(movement);
+    var remote = visualBoxes(entity, remoteBody, remoteMovement);
+    remote.addAll(WorldCollisionShapes.borderBoxes(border, remoteBody.expandTowards(remoteMovement)));
+    return PortalCollisionWorld.material(opening, local, remote, localBorder);
   }
 
-  private static List<AABB> shapes(Entity entity, AABB body, Vec3 movement) {
+  private static List<AABB> visualBoxes(Entity entity, AABB body, Vec3 movement) {
     var level = entity.level();
     var context =
         new ClipContext(Vec3.ZERO, Vec3.ZERO, ClipContext.Block.VISUAL, ClipContext.Fluid.NONE, entity);
@@ -46,10 +53,6 @@ final class PortalCameraWorld {
               });
           return true;
         });
-    var border = level.getWorldBorder();
-    if (border.isInsideCloseToBorder(entity, bounds))
-      border.getCollisionShape().forAllBoxes(
-          (x0, y0, z0, x1, y1, z1) -> boxes.add(new AABB(x0, y0, z0, x1, y1, z1)));
     return boxes;
   }
 }

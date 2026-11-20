@@ -1,7 +1,6 @@
 package dev.portalix.network;
 
 import dev.portalix.network.carry.CarryGrabPayload;
-import dev.portalix.network.carry.CarryInputPayload;
 import dev.portalix.network.carry.CarryReleasePayload;
 import dev.portalix.network.carry.CarryStatePayload;
 import dev.portalix.network.gun.GunCommandPayload;
@@ -13,8 +12,11 @@ import dev.portalix.network.portal.EntityPortalCrossingPayload;
 import dev.portalix.network.portal.EntityPortalInitPayload;
 import dev.portalix.network.portal.PlayerPortalMoveAckPayload;
 import dev.portalix.network.portal.PlayerPortalMovePayload;
+import dev.portalix.network.portal.PortalCameraViewDemandPayload;
 import dev.portalix.network.portal.PortalStatePayload;
+import dev.portalix.network.portal.PortalViewDemandPayload;
 import dev.portalix.network.portal.PortalViewReadyPayload;
+import dev.portalix.network.portal.PortalViewStatusPayload;
 import dev.portalix.network.portal.ProjectilePortalMovePayload;
 import dev.portalix.network.portal.ProjectileStatePayload;
 import dev.portalix.platform.PortalPlatform;
@@ -24,11 +26,12 @@ import dev.portalix.server.portal.PlayerPortalMovement;
 import java.util.function.BiConsumer;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.StreamCodec;
-import net.minecraft.network.protocol.common.ClientboundCustomPayloadPacket;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
 import net.minecraft.server.level.ServerPlayer;
 
 public final class ModNetworking {
+  public static final int PROTOCOL_VERSION = 1;
+
   private ModNetworking() {}
 
   public interface Registration {
@@ -38,6 +41,14 @@ public final class ModNetworking {
     <T extends CustomPacketPayload> void serverbound(
         CustomPacketPayload.Type<T> type,
         StreamCodec<? super RegistryFriendlyByteBuf, T> codec,
+        BiConsumer<ServerPlayer, T> receiver);
+
+    <T extends CustomPacketPayload> void optionalBidirectional(
+        CustomPacketPayload.Type<T> type, StreamCodec<? super RegistryFriendlyByteBuf, T> codec,
+        BiConsumer<ServerPlayer, T> receiver);
+
+    <T extends CustomPacketPayload> void optionalServerbound(
+        CustomPacketPayload.Type<T> type, StreamCodec<? super RegistryFriendlyByteBuf, T> codec,
         BiConsumer<ServerPlayer, T> receiver);
   }
 
@@ -63,9 +74,18 @@ public final class ModNetworking {
     registration.serverbound(
         PortalViewReadyPayload.TYPE, PortalViewReadyPayload.CODEC,
         PortalServerEvents::acknowledgeView);
+    registration.optionalBidirectional(
+        PortalViewStatusPayload.TYPE, PortalViewStatusPayload.CODEC,
+        (player, status) -> {
+          if (status.ready())
+            PortalServerEvents.acknowledgeView(player, new PortalViewReadyPayload(status.entrance(), status.generation()));
+        });
     registration.serverbound(
-        CarryInputPayload.TYPE, CarryInputPayload.CODEC,
-        PortalServerEvents::receiveCarryInput);
+        PortalViewDemandPayload.TYPE, PortalViewDemandPayload.CODEC,
+        PortalServerEvents::requestViews);
+    registration.optionalServerbound(
+        PortalCameraViewDemandPayload.TYPE, PortalCameraViewDemandPayload.CODEC,
+        PortalServerEvents::requestCameraViews);
     registration.serverbound(
         GunCommandPayload.TYPE, GunCommandPayload.CODEC,
         (player, payload) -> PortalServerEvents.receiveGunCommand(player, payload.command()));
@@ -76,6 +96,6 @@ public final class ModNetworking {
   }
 
   public static void sendToPlayer(ServerPlayer player, CustomPacketPayload payload) {
-    player.connection.send(new ClientboundCustomPayloadPacket(payload));
+    PortalPlatform.INSTANCE.sendToPlayer(player, payload);
   }
 }

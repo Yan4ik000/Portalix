@@ -1,5 +1,6 @@
 package dev.portalix.fabric;
 
+import dev.portalix.mixin.traversal.EntityAccessor;
 import dev.portalix.platform.PortalPlatform;
 import java.util.Collection;
 import net.fabricmc.fabric.api.event.player.PlayerBlockBreakEvents;
@@ -9,13 +10,19 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
-import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.tags.FluidTags;
 import net.minecraft.world.entity.Entity;
+import net.minecraft.world.level.block.state.BlockState;
 
 public final class FabricPortalPlatform implements PortalPlatform {
   @Override
   public boolean canPlayerReceive(ServerPlayer player, CustomPacketPayload.Type<?> type) {
     return ServerPlayNetworking.canSend(player, type);
+  }
+
+  @Override
+  public void sendToPlayer(ServerPlayer player, CustomPacketPayload payload) {
+    ServerPlayNetworking.send(player, payload);
   }
 
   @Override
@@ -36,5 +43,11 @@ public final class FabricPortalPlatform implements PortalPlatform {
   }
 
   @Override
-  public void syncPortalData(Entity entity) {}
+  public boolean refreshPlayerFluids(ServerPlayer player) {
+    var access = (EntityAccessor) player;
+    access.portalix$wasEyeInWater(player.isEyeInFluid(FluidTags.WATER));
+    var fluids = access.portalix$fluidInteraction();
+    fluids.update(player, true);
+    return fluids.isInFluid(FluidTags.WATER);
+  }
 }

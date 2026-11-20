@@ -4,6 +4,7 @@ import dev.portalix.carry.CarryBindings;
 import dev.portalix.client.ClientNetworking;
 import dev.portalix.client.PortalixClient;
 import dev.portalix.client.portal.camera.PortalCameraController;
+import dev.portalix.client.portal.scene.PortalViewHorizon;
 import dev.portalix.network.portal.EntityPortalCrossingPayload;
 import dev.portalix.network.portal.EntityPortalInitPayload;
 import dev.portalix.network.portal.PlayerPortalMoveAckPayload;
@@ -11,6 +12,7 @@ import dev.portalix.network.portal.PlayerPortalMovePayload;
 import dev.portalix.compat.minecraft.EntityMotion;
 import dev.portalix.portal.PortalLinkId;
 import dev.portalix.portal.PortalLink;
+import dev.portalix.portal.camera.PortalLookAngles;
 import dev.portalix.portal.traversal.ProjectilePortalMovement;
 import dev.portalix.portal.traversal.EntityPortalState;
 import dev.portalix.portal.traversal.PortalEntityInitialization;
@@ -19,10 +21,8 @@ import dev.portalix.portal.traversal.PortalEntityMovement;
 import dev.portalix.portal.traversal.PortalPassagePose;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Set;
 import net.minecraft.client.Minecraft;
 import net.minecraft.world.entity.Entity;
-import net.minecraft.world.entity.Relative;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.entity.vehicle.minecart.AbstractMinecart;
 import net.minecraft.world.entity.projectile.FishingHook;
@@ -30,6 +30,7 @@ import net.minecraft.world.entity.projectile.FishingHook;
 public final class ClientPortalMovement {
   private static long sequence;
   private static long acknowledged;
+  private static long positionCorrectionResumeAt = -1;
   private static final List<PortalEntityMovement.Crossing> pendingCrossings = new ArrayList<>();
   private static final List<PlayerPortalMovePayload> pendingMoves = new ArrayList<>();
   private static final PlayerPortalMoves ownerMoves = new PlayerPortalMoves();
@@ -70,7 +71,8 @@ public final class ClientPortalMovement {
         },
         (entity, result) -> {
           var player = Minecraft.getInstance().player;
-          if (player == null
+          if (player == null || !PortalEntityMovement.clientPredicted(
+              entity, result.mover(), result.requested(), result.beforeVelocity())
               || entity != player
                   && (entity != player.getRootVehicle()
                       || entity.getControllingPassenger() != player)) return;
@@ -91,9 +93,6 @@ public final class ClientPortalMovement {
                   result.beforeFeet(),
                   result.requested(),
                   result.beforeVelocity(),
-                  result.grounded(),
-                  result.beforePose(),
-                  result.beforeScale(),
                   result.sneaking(),
                   result.afterFeet(),
                   PortalPassagePose.scale(player),
@@ -101,6 +100,7 @@ public final class ClientPortalMovement {
                   beforePitch,
                   playerYaw,
                   playerPitch,
+                  false,
                   player.getPose(),
                   PortalPassagePose.scale(player));
           ownerMoves.predicted(input.sequence(), ownerRoute);
@@ -116,8 +116,20 @@ public final class ClientPortalMovement {
           if (packet.sequence() <= acknowledged) return;
           acknowledged = packet.sequence();
           if (context.player == null) return;
-          applyOwnerMoves(context.player, ownerMoves.acknowledged(packet.sequence(), packet.accepted(), packet.crossings()));
-          if (!packet.accepted()) PortalPassagePose.set(context.player, packet.poseScale());
+          boolean awaiting = ownerMoves.hasPendingCrossings();
+          var route = ownerMoves.acknowledged(packet.sequence(), packet.accepted(), packet.crossings());
+          applyOwnerMoves(context.player, route);
+          PortalCameraController.correctSceneRoute(route);
+          if (packet.accepted()) {
+            if (!ownerMoves.hasPendingCrossings() && (awaiting || !packet.crossings().isEmpty())) {
+              long deadline = packet.resumeLoadingAt();
+              if (awaiting && deadline > 0) deadline = Math.max(deadline, context.level.getGameTime());
+              PortalViewHorizon.acceptLoadingDeadline(deadline);
+            }
+          } else {
+            positionCorrectionResumeAt = packet.resumeLoadingAt();
+            PortalPassagePose.set(context.player, packet.poseScale());
+          }
         });
     registration.register(
         EntityPortalCrossingPayload.TYPE,
@@ -127,16 +139,22 @@ public final class ClientPortalMovement {
   private static void receive(EntityPortalCrossingPayload packet) {
     var client = Minecraft.getInstance();
     var entity = client.level == null ? null : client.level.getEntity(packet.entityId());
-    if (entity == null
-        || !entity.getUUID().equals(packet.entityUuid())
-        || entity == client.player
-            && (!entity.isPassenger()
-                || entity.getRootVehicle().getControllingPassenger() == entity)) return;
+    if (entity == null || !entity.getUUID().equals(packet.entityUuid())) return;
+    boolean owner = entity == client.player
+        && (!entity.isPassenger() || entity.getRootVehicle().getControllingPassenger() == entity);
+    if (owner) positionCorrectionResumeAt = packet.resumeLoadingAt();
     var crossings = EntityPortalState.of(entity).acceptAuthoritative(packet.crossings());
     if (crossings.isEmpty()) return;
+    List<PortalLink> undo = List.of();
+    if (owner) {
+      undo = ownerMoves.corrected();
+      applyOwnerMoves(client.player, undo);
+      pendingMoves.clear();
+      pendingCrossings.clear();
+    }
     var interpolation = entity.getInterpolation();
     var remote = RemotePortalInterpolation.of(entity);
-    if (remote != null
+    if (remote != null && !owner
         && (!entity.isLocalInstanceAuthoritative()
             || entity == client.player && entity.isPassenger())
         && !PortalixClient.carryController().predicted(entity)) {
@@ -147,9 +165,16 @@ public final class ClientPortalMovement {
     if (interpolation != null) interpolation.cancel();
     boolean acknowledged = PortalEntityMovement.acknowledgePredictions(entity, crossings);
     boolean predicted = acknowledged && EntityPortalState.of(entity).hasPredictions();
+    if (owner && !acknowledged) {
+      PortalCameraController.correctSceneRoute(undo);
+      PortalCameraController.correctSceneRoute(crossings.stream().map(PortalEntityMovement.Crossing::link).toList());
+    }
     for (var crossing : crossings) {
       if (!predicted) EntityMotion.receiveCrossing(entity, crossing);
-      if (!acknowledged) PortalEntityMovement.reconcileCrossing(entity, crossing, crossing.previousFeet());
+      if (!acknowledged) {
+        if (owner) PortalEntityMovement.completeAcceptedCrossing(entity, crossing);
+        else PortalEntityMovement.reconcileCrossing(entity, crossing, crossing.previousFeet());
+      }
       PortalixClient.carryController().crossed(entity, crossing.link());
     }
     if (predicted) return;
@@ -170,15 +195,62 @@ public final class ClientPortalMovement {
     }
   }
 
-  public static void corrected(Entity entity, Set<Relative> relatives) {
-    if (entity != Minecraft.getInstance().player
-        || relatives.contains(Relative.X) && relatives.contains(Relative.Y) && relatives.contains(Relative.Z)) return;
-    applyOwnerMoves((Player) entity, ownerMoves.corrected());
+  public static void corrected(Entity entity) {
+    if (entity != Minecraft.getInstance().player) return;
+    var changes = ownerMoves.corrected();
+    applyOwnerMoves((Player) entity, changes);
+    if (positionCorrectionResumeAt >= 0) PortalCameraController.correctSceneRoute(changes);
     pendingCrossings.clear();
     pendingMoves.clear();
   }
 
+  public static boolean awaitingCrossing() {
+    return ownerMoves.hasPendingCrossings();
+  }
+
+  public static void restoreTeleportFrame(Entity entity) {
+    if (entity != Minecraft.getInstance().player || !awaitingCrossing() || hasPositionCorrection()) return;
+    // A native teleport sent before the server receives our move still uses the entrance frame.
+    var position = entity.position();
+    var previous = entity.oldPosition();
+    var movement = entity.getDeltaMovement();
+    float yaw = entity.getYRot(), pitch = entity.getXRot();
+    float oldYaw = entity.yRotO, oldPitch = entity.xRotO;
+    for (var link : ownerMoves.ownerRoute(acknowledged, List.of())) {
+      var transform = link.transform();
+      position = transform.point(position);
+      previous = transform.point(previous);
+      movement = transform.vector(movement);
+      var angles = PortalLookAngles.transform(transform, yaw, pitch);
+      var oldAngles = PortalLookAngles.transform(transform, oldYaw, oldPitch);
+      yaw = angles.yaw();
+      pitch = angles.pitch();
+      oldYaw = oldAngles.yaw();
+      oldPitch = oldAngles.pitch();
+    }
+    entity.setPos(position);
+    entity.setDeltaMovement(movement);
+    entity.setYRot(yaw);
+    entity.setXRot(pitch);
+    entity.setOldPosAndRot(previous, oldYaw, oldPitch);
+  }
+
+  public static boolean hasPositionCorrection() {
+    return positionCorrectionResumeAt >= 0;
+  }
+
+  public static void positionCorrected() {
+    if (positionCorrectionResumeAt < 0) {
+      PortalCameraController.reset();
+    } else {
+      PortalCameraController.resetPose();
+      PortalViewHorizon.acceptLoadingDeadline(positionCorrectionResumeAt);
+      positionCorrectionResumeAt = -1;
+    }
+  }
+
   public static void clear() {
+    positionCorrectionResumeAt = -1;
     ownerMoves.clear();
     pendingMoves.clear();
     pendingCrossings.clear();

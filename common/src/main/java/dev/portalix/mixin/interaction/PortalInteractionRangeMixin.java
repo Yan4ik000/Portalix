@@ -60,10 +60,7 @@ abstract class PortalInteractionRangeMixin {
       ItemStack weapon, AABB target, double buffer, CallbackInfoReturnable<Boolean> callback) {
     if (callback.getReturnValueZ()) return;
     var player = (Player) (Object) this;
-    var range = player.getAttackRangeWith(weapon);
-    double maximum = range.effectiveMaxRange(player) + range.hitboxMargin() + buffer;
-    double minimum = range.effectiveMinRange(player) - range.hitboxMargin() - buffer;
-    double distance = PortalInteractionPath.distance(player, target, maximum);
-    if (distance >= minimum && distance <= maximum) callback.setReturnValue(true);
+    if (PortalInteractionPath.attack(player, weapon, target, buffer).isPresent())
+      callback.setReturnValue(true);
   }
 }

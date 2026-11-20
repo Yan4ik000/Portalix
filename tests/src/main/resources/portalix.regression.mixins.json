@@ -4,8 +4,14 @@
   "compatibilityLevel": "JAVA_25",
   "mixins": [
     "GameTestHelperAccessor",
+    "PlayerTicketDistancesAccessor",
     "RegressionBlockLootMixin",
-    "RegressionMinecartBehaviorAccessor"
+    "RegressionDistanceManagerMixin",
+    "RegressionMinecartBehaviorAccessor",
+    "PortalServerEventsAccessor",
+    "PortalServerSessionAccessor",
+    "ServerCommonPacketListenerImplAccessor",
+    "ServerGamePacketListenerImplAccessor"
   ],
   "injectors": {"defaultRequire": 1}
 }

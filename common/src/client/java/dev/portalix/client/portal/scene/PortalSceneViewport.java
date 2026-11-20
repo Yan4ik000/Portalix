@@ -5,6 +5,10 @@ import org.joml.Matrix4fc;
 import org.joml.Vector4f;
 
 record PortalSceneViewport(int x, int y, int width, int height, int screenWidth, int screenHeight) {
+  long pixels() {
+    return (long) width * height;
+  }
+
   boolean isFullScreen() {
     return x == 0 && y == 0 && width == screenWidth && height == screenHeight;
   }

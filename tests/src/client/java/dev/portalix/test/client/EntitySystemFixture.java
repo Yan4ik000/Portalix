@@ -13,8 +13,8 @@ import dev.portalix.portal.placement.PortalSurface;
 import dev.portalix.portal.traversal.EntityPortalState;
 import dev.portalix.portal.traversal.PortalItemRotation;
 import dev.portalix.server.portal.GunPortalRegistry;
-import dev.portalix.test.client.mixin.PortalServerSessionAccessor;
-import dev.portalix.test.client.mixin.PortalServerEventsAccessor;
+import dev.portalix.test.mixin.PortalServerSessionAccessor;
+import dev.portalix.test.mixin.PortalServerEventsAccessor;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -44,7 +44,7 @@ final class EntitySystemFixture implements AutoCloseable {
   enum Kind { ITEM, CHICKEN, SNOWBALL, ARROW, TRIDENT, PIG }
   record Ref(int id, UUID uuid, Kind kind) {}
   record Observation(Vec3 position, Vec3 velocity, boolean crossed, int heldBy,
-                     Quaternionf rotation, boolean alive) {}
+                     Quaternionf rotation, boolean alive, Vec3 ownerPosition) {}
 
   static final Vec3 OBSERVER = new Vec3(152.5, 100, 500.5);
   static final Vec3 BLUE = new Vec3(144.5, 101, 516);
@@ -63,7 +63,7 @@ final class EntitySystemFixture implements AutoCloseable {
   private final float pitch;
   private boolean closed;
 
-  EntitySystemFixture(ServerPlayer owner, boolean portals) {
+  EntitySystemFixture(ServerPlayer owner) {
     this.owner = owner;
     level = owner.level();
     hand = owner.getMainHandItem().copy();
@@ -73,38 +73,31 @@ final class EntitySystemFixture implements AutoCloseable {
     pitch = owner.getXRot();
     var session = PortalServerEventsAccessor.portalix$session();
     registry = ((PortalServerSessionAccessor) (Object) session).portalix$registry();
-    var gun = new ItemStack(ModItems.PORTALIX.get());
+    var gun = new ItemStack(ModItems.gun(PortalixVariant.STANDARD));
     gunId = PortalixIdentity.ensure(gun);
     try {
       for (int x = 8; x <= 10; x++) for (int z = 31; z <= 32; z++) level.getChunk(x, z);
       for (BlockPos pos : BlockPos.betweenClosed(new BlockPos(136, 99, 497), new BlockPos(168, 105, 521)))
         block(pos, pos.getY() == 99 ? Blocks.QUARTZ_BLOCK.defaultBlockState() : Blocks.AIR.defaultBlockState());
       var backdrop = Blocks.CONCRETE.pick(DyeColor.GRAY).defaultBlockState();
-      if (portals) {
-        for (int x : new int[] {144, 160})
-          for (BlockPos pos : BlockPos.betweenClosed(new BlockPos(x - 2, 100, 496), new BlockPos(x + 2, 105, 496)))
-            block(pos, backdrop);
-      } else {
-        for (BlockPos pos : BlockPos.betweenClosed(new BlockPos(136, 100, 521), new BlockPos(168, 105, 521)))
+      for (int x : new int[] {144, 160})
+        for (BlockPos pos : BlockPos.betweenClosed(new BlockPos(x - 2, 100, 496), new BlockPos(x + 2, 105, 496)))
           block(pos, backdrop);
-      }
       owner.setItemSlot(EquipmentSlot.MAINHAND, gun);
       owner.setDeltaMovement(Vec3.ZERO);
       check(owner.teleportTo(level, OBSERVER.x, OBSERVER.y, OBSERVER.z, Set.of(), 0, 0, true),
           "Entity scene observer setup failed");
-      if (portals) {
-        for (PortalColor color : PortalColor.values()) {
-          Vec3 center = color == PortalColor.BLUE ? BLUE : ORANGE;
-          var endpoint = new PortalEndpoint(level.dimension(), center, new Vec3(0, 0, -1),
-              new Vec3(0, 1, 0), 1, 2);
-          for (BlockPos pos : PortalSurface.placementFootprint(endpoint).blocks())
-            block(pos, Blocks.STONE.defaultBlockState());
-          check(registry.apply(owner, gunId, color, endpoint, PortalixVariant.STANDARD),
-              "Entity scene registry rejected a valid supported portal");
-        }
+      for (PortalColor color : PortalColor.values()) {
+        Vec3 center = color == PortalColor.BLUE ? BLUE : ORANGE;
+        var endpoint = new PortalEndpoint(level.dimension(), center, new Vec3(0, 0, -1),
+            new Vec3(0, 1, 0), 1, 2);
+        for (BlockPos pos : PortalSurface.placementFootprint(endpoint).blocks())
+          block(pos, Blocks.STONE.defaultBlockState());
+        check(registry.apply(owner, gunId, color, endpoint, PortalixVariant.STANDARD),
+            "Entity scene registry rejected a valid supported portal");
       }
-      portalGeneration = portals ? PortalTopology.links(level).stream().filter(link -> link.gun().equals(gunId))
-          .findFirst().orElseThrow().generation() : 0;
+      portalGeneration = PortalTopology.links(level).stream().filter(link -> link.gun().equals(gunId))
+          .findFirst().orElseThrow().generation();
     } catch (RuntimeException | Error failure) {
       try { close(); } catch (RuntimeException | Error cleanup) { failure.addSuppressed(cleanup); }
       throw failure;
@@ -121,7 +114,7 @@ final class EntitySystemFixture implements AutoCloseable {
     return addEntity(kind, createEntity(kind, center), center);
   }
 
-  Entity createEntity(Kind kind, Vec3 center) {
+  private Entity createEntity(Kind kind, Vec3 center) {
     return switch (kind) {
       case ITEM -> new ItemEntity(level, center.x, center.y, center.z, new ItemStack(Items.DIAMOND_BLOCK, 7));
       case CHICKEN -> EntityTypes.CHICKEN.create(level, EntitySpawnReason.COMMAND);
@@ -132,7 +125,7 @@ final class EntitySystemFixture implements AutoCloseable {
     };
   }
 
-  Ref addEntity(Kind kind, Entity entity, Vec3 center) {
+  private Ref addEntity(Kind kind, Entity entity, Vec3 center) {
     check(entity != null, "Entity scene native factory failed: " + kind);
     entity.setPos(center.subtract(0, entity.getBbHeight() / 2, 0));
     entity.setDeltaMovement(Vec3.ZERO);
@@ -163,7 +156,7 @@ final class EntitySystemFixture implements AutoCloseable {
     var actor = entity(ref);
     return new Observation(actor.position(), actor.getDeltaMovement(), EntityPortalState.of(actor).lastCrossing() != null,
         CarryBindings.holderId(actor), actor instanceof ItemEntity item ? PortalItemRotation.rotation(item) : null,
-        actor.isAlive());
+        actor.isAlive(), owner.position());
   }
 
   void remove(Ref ref) {

@@ -16,6 +16,7 @@ import net.minecraft.world.entity.Entity;
 import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
+import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.ModifyVariable;
@@ -24,7 +25,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 @Mixin(ServerEntity.class)
 public abstract class PortalEntitySyncMixin {
   @Shadow @Final private Entity entity;
-  @Shadow @Final private ServerEntity.Synchronizer synchronizer;
+  @Unique private PortalTrackingSender portalix$trackingSender;
 
   @Inject(method = "sendPairingData(Lnet/minecraft/server/level/ServerPlayer;Ljava/util/function/Consumer;)V",
       at = @At("TAIL"), require = 1, allow = 1)
@@ -33,15 +34,15 @@ public abstract class PortalEntitySyncMixin {
     PortalEntityInitialization.send(entity, observer, packets);
   }
 
-  @ModifyVariable(method = "<init>", at = @At("HEAD"), argsOnly = true, require = 1, allow = 1)
-  private static ServerEntity.Synchronizer portalix$sender(
+  @ModifyVariable(method = "<init>", at = @At("LOAD"), argsOnly = true, require = 1, allow = 1)
+  private ServerEntity.Synchronizer portalix$sender(
       ServerEntity.Synchronizer original, @Local(argsOnly = true) Entity entity) {
-    return new PortalTrackingSender(entity, original);
+    return portalix$trackingSender = new PortalTrackingSender(entity, original);
   }
 
   @WrapMethod(method = "sendChanges")
   private void portalix$tracking(Operation<Void> original) {
-    var sender = (PortalTrackingSender) synchronizer;
+    var sender = portalix$trackingSender;
     sender.begin();
     try {
       original.call();

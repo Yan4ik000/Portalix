@@ -34,6 +34,14 @@ final class CarryPathfinder {
   private boolean followingRoute;
   private Vec3 activeGoal;
 
+  void clear() {
+    route.clear();
+    region = null;
+    planner = null;
+    followingRoute = false;
+    activeGoal = null;
+  }
+
   boolean hasDetour() {
     return followingRoute;
   }
@@ -156,7 +164,6 @@ final class CarryPathfinder {
       double max = axis == 0 ? box.maxX : axis == 1 ? box.maxY : box.maxZ;
       double delta = to - from;
       if (Math.abs(delta) < 1.0E-12) {
-
         if (from <= min || from >= max) return false;
       } else {
         double first = (min - from) / delta;
@@ -389,28 +396,12 @@ final class CarryPathfinder {
   }
 
   private static boolean mergeable(AABB a, AABB b) {
-    boolean x =
-        Math.abs(a.minY - b.minY) < 1.0E-6
-            && Math.abs(a.maxY - b.maxY) < 1.0E-6
-            && Math.abs(a.minZ - b.minZ) < 1.0E-6
-            && Math.abs(a.maxZ - b.maxZ) < 1.0E-6
-            && a.minX <= b.maxX
-            && b.minX <= a.maxX;
-    boolean y =
-        Math.abs(a.minX - b.minX) < 1.0E-6
-            && Math.abs(a.maxX - b.maxX) < 1.0E-6
-            && Math.abs(a.minZ - b.minZ) < 1.0E-6
-            && Math.abs(a.maxZ - b.maxZ) < 1.0E-6
-            && a.minY <= b.maxY
-            && b.minY <= a.maxY;
-    boolean z =
-        Math.abs(a.minX - b.minX) < 1.0E-6
-            && Math.abs(a.maxX - b.maxX) < 1.0E-6
-            && Math.abs(a.minY - b.minY) < 1.0E-6
-            && Math.abs(a.maxY - b.maxY) < 1.0E-6
-            && a.minZ <= b.maxZ
-            && b.minZ <= a.maxZ;
-    return x || y || z;
+    boolean sameX = Math.abs(a.minX - b.minX) < 1.0E-6 && Math.abs(a.maxX - b.maxX) < 1.0E-6;
+    boolean sameY = Math.abs(a.minY - b.minY) < 1.0E-6 && Math.abs(a.maxY - b.maxY) < 1.0E-6;
+    boolean sameZ = Math.abs(a.minZ - b.minZ) < 1.0E-6 && Math.abs(a.maxZ - b.maxZ) < 1.0E-6;
+    return sameY && sameZ && a.minX <= b.maxX && b.minX <= a.maxX
+        || sameX && sameZ && a.minY <= b.maxY && b.minY <= a.maxY
+        || sameX && sameY && a.minZ <= b.maxZ && b.minZ <= a.maxZ;
   }
 
   private record SearchEntry(int index, double estimate) {}

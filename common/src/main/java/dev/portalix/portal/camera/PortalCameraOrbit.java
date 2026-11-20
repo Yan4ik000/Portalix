@@ -1,19 +1,23 @@
 package dev.portalix.portal.camera;
 
+import static dev.portalix.portal.camera.PortalCameraCollision.CLEARANCE;
+import static dev.portalix.portal.camera.PortalCameraCollision.projectedRadius;
+
 import dev.portalix.api.PortalEndpoint;
 import dev.portalix.portal.PortalLink;
 import dev.portalix.portal.PortalRoutes;
+import dev.portalix.portal.PortalViewLimits;
 import dev.portalix.portal.geometry.PortalAperture;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
+import java.util.function.Predicate;
 import net.minecraft.world.phys.Vec3;
 import org.joml.Matrix3f;
 import org.joml.Quaternionf;
 import org.joml.Vector3f;
 
 public final class PortalCameraOrbit {
-  private static final double CLEARANCE = 1e-4;
   private static final double RECOVERY_RATE = 12;
   private final PortalCameraReorientation orientation = new PortalCameraReorientation(true);
   private final List<PortalLink> frame = new ArrayList<>();
@@ -54,6 +58,10 @@ public final class PortalCameraOrbit {
     return initialized && orientation.active();
   }
 
+  public boolean transitioning() {
+    return reorienting() || !frame.isEmpty() || !transit.isEmpty();
+  }
+
   public void bodyCrossed(PortalLink link) {
     if (!active()) return;
     var rebased = new ArrayList<PortalLink>();
@@ -61,6 +69,10 @@ public final class PortalCameraOrbit {
     for (var previous : frame) PortalRoutes.append(rebased, previous);
     frame.clear();
     frame.addAll(rebased);
+    if (frame.size() > PortalViewLimits.CAMERA_DEPTH) {
+      initialize(bodyOrientation(), null, List.of());
+      return;
+    }
     if (previousInput != null) previousInput = link.transform().point(previousInput);
   }
 
@@ -93,9 +105,11 @@ public final class PortalCameraOrbit {
       PortalCameraCorrections history,
       double time,
       double distance,
-      List<PortalLink> links,
+      List<PortalLink> candidates,
+      Predicate<PortalLink> ready,
       PortalCameraCollision.Query query,
       float seconds) {
+    var links = candidates.stream().filter(ready).toList();
     Vec3 focus = target.eye().add(history.eyeCorrection(time)).add(bob);
     if (!links.containsAll(frame)
         || transit.stream()
@@ -107,7 +121,7 @@ public final class PortalCameraOrbit {
     previousInput = input;
     var desired =
         PortalThirdPersonCamera.resolve(
-            target, bodyRenderOrientation, bob, history, time, distance, links, query);
+            target, bodyRenderOrientation, bob, history, time, distance, candidates, ready, query);
     if (position == null) {
       for (var link : changes(frame, desired.path()))
         orientation.teleport(new Matrix3f().set(link.transform().rotation()));
@@ -121,7 +135,7 @@ public final class PortalCameraOrbit {
     Vec3 goal = inFrame(inBody(desired.position(), desired.path()), frame);
     Vec3 directMovement = goal.subtract(position);
     var direct =
-        PortalCameraCollision.solve(position, directMovement, directMovement.length(), links, query);
+        PortalCameraCollision.solve(position, directMovement, directMovement.length(), links, query, frame);
     var rendered = new Quaternionf(bodyRenderOrientation);
     for (var link : frame) rendered.premul(link.transform().rotation());
     if (direct.links().equals(required)
@@ -136,7 +150,7 @@ public final class PortalCameraOrbit {
           query,
           rendered);
       return new PortalThirdPersonCamera.Pose(
-          position, rendered, List.copyOf(frame), desired.pivot(), desired.pivotPath());
+          position, rendered, List.copyOf(frame), desired.pivot(), desired.pivotPath(), desired.waitingPath());
     }
 
     if (!transit.isEmpty()) {
@@ -189,7 +203,7 @@ public final class PortalCameraOrbit {
       nextLeg = 0;
     }
     return new PortalThirdPersonCamera.Pose(
-        position, rendered, List.copyOf(frame), desired.pivot(), desired.pivotPath());
+        position, rendered, List.copyOf(frame), desired.pivot(), desired.pivotPath(), desired.waitingPath());
   }
 
   private PortalCameraCollision.Result move(
@@ -198,7 +212,7 @@ public final class PortalCameraOrbit {
       List<PortalLink> links,
       PortalCameraCollision.Query query,
       Quaternionf rendered) {
-    var actual = PortalCameraCollision.solve(position, direction, distance, links, query);
+    var actual = PortalCameraCollision.solve(position, direction, distance, links, query, frame);
     position = actual.position();
     for (var link : actual.links()) {
       PortalRoutes.append(frame, link);
@@ -232,7 +246,7 @@ public final class PortalCameraOrbit {
               .transform()
               .inverse()
               .point(fit(crossing.exit().endpoint(), crossing.transform().point(opening)));
-      Vec3 approach = opening.add(portal.normal().scale(radius(portal.normal()) + CLEARANCE));
+      Vec3 approach = opening.add(portal.normal().scale(projectedRadius(portal.normal()) + CLEARANCE));
       Vec3 through = opening.subtract(portal.normal().scale(CLEARANCE));
       route.add(new Leg(approach, null));
       route.add(new Leg(through, crossing));
@@ -241,7 +255,7 @@ public final class PortalCameraOrbit {
           crossing
               .transform()
               .point(opening)
-              .add(exit.normal().scale(radius(exit.normal()) + CLEARANCE));
+              .add(exit.normal().scale(projectedRadius(exit.normal()) + CLEARANCE));
       route.add(new Leg(from, null));
     }
     route.addAll(localRoute(from, destination, links, query));
@@ -278,7 +292,7 @@ public final class PortalCameraOrbit {
     for (var link : links) {
       var portal = link.entrance().endpoint();
       double depth = PortalAperture.signedDistance(portal, point);
-      double clearance = radius(portal.normal()) + CLEARANCE;
+      double clearance = projectedRadius(portal.normal()) + CLEARANCE;
       if (depth >= 0 && depth < clearance && PortalAperture.containsPassage(portal, point))
         result.add(point.add(portal.normal().scale(clearance - depth)));
     }
@@ -313,8 +327,8 @@ public final class PortalCameraOrbit {
         y *= limit / metric;
       }
     } else {
-      double width = Math.max(0, halfWidth - radius(portal.right()) - CLEARANCE);
-      double height = Math.max(0, halfHeight - radius(portal.up()) - CLEARANCE);
+      double width = Math.max(0, halfWidth - projectedRadius(portal.right()) - CLEARANCE);
+      double height = Math.max(0, halfHeight - projectedRadius(portal.up()) - CLEARANCE);
       x = Math.clamp(x, -width, width);
       y = Math.clamp(y, -height, height);
     }
@@ -333,10 +347,6 @@ public final class PortalCameraOrbit {
       position = actual.position();
     }
     return true;
-  }
-
-  private static double radius(Vec3 axis) {
-    return PortalCameraCollision.RADIUS * (Math.abs(axis.x) + Math.abs(axis.y) + Math.abs(axis.z));
   }
 
   private static List<PortalLink> changes(List<PortalLink> before, List<PortalLink> after) {

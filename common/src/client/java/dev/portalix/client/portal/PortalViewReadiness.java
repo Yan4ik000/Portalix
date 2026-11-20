@@ -1,14 +1,16 @@
 package dev.portalix.client.portal;
 
 import dev.portalix.client.ClientNetworking;
+import dev.portalix.client.PortalixClient;
 import dev.portalix.network.portal.PortalViewReadyPayload;
+import dev.portalix.network.portal.PortalViewStatusPayload;
 import dev.portalix.portal.PortalLink;
 import dev.portalix.portal.PortalTopology;
+import dev.portalix.portal.PortalViewLimits;
 import dev.portalix.portal.traversal.PortalTraversalReadiness;
 import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
 import java.util.List;
 import net.minecraft.client.Minecraft;
-import net.minecraft.core.SectionPos;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.chunk.status.ChunkStatus;
 
@@ -23,11 +25,18 @@ public final class PortalViewReadiness {
     PortalTraversalReadiness.setClientReadiness((entity, link) -> ready(link));
   }
 
+  public static void registerNetworking(ClientNetworking.Registration registration) {
+    registration.register(PortalViewStatusPayload.TYPE, (packet, client) -> {
+      PortalixClient.ensureSession(client);
+      var known = notified.get(packet.entrance());
+      if (known != null && known.generation == packet.generation()) known.confirmed = packet.ready();
+    });
+  }
+
   public static boolean ready(PortalLink link) {
     var client = Minecraft.getInstance();
     if (client.level == null || !exitLoaded(client, link)) return false;
-    notifyServer(link);
-    return true;
+    return notifyServer(link).confirmed;
   }
 
   public static void tick(Minecraft client) {
@@ -58,27 +67,25 @@ public final class PortalViewReadiness {
 
   public static void chunkForgotten(ChunkPos position) {
     notified.values().removeIf(ready ->
-        Math.abs(ready.x - position.x()) <= 1 && Math.abs(ready.z - position.z()) <= 1);
+        ready.center.getChessboardDistance(position) <= PortalViewLimits.CORE_RADIUS);
   }
 
-  private static void notifyServer(PortalLink link) {
+  private static Ready notifyServer(PortalLink link) {
     long entrance = link.entrance().identity(), generation = link.generation();
     var known = notified.get(entrance);
-    if (known != null && known.generation == generation) return;
-    var center = link.exit().endpoint().center();
-    notified.put(entrance, new Ready(generation,
-        SectionPos.posToSectionCoord(center.x), SectionPos.posToSectionCoord(center.z)));
-    ClientNetworking.sendToServer(new PortalViewReadyPayload(entrance, generation));
+    if (known != null && known.generation == generation) return known;
+    boolean serverConfirms = ClientNetworking.canServerReceive(PortalViewStatusPayload.TYPE);
+    known = new Ready(generation, PortalViewLimits.frontColumn(link.exit().endpoint()), !serverConfirms);
+    notified.put(entrance, known);
+    ClientNetworking.sendToServer(serverConfirms
+        ? new PortalViewStatusPayload(entrance, generation, true) : new PortalViewReadyPayload(entrance, generation));
+    return known;
   }
 
   private static boolean exitLoaded(Minecraft client, PortalLink link) {
-    var center = link.exit().endpoint().center();
-    int cx = (int) Math.floor(center.x) >> 4, cz = (int) Math.floor(center.z) >> 4;
-    for (int x = cx - 1; x <= cx + 1; x++)
-      for (int z = cz - 1; z <= cz + 1; z++)
-        if (client.level.getChunkSource().getChunk(x, z, ChunkStatus.FULL, false) == null)
-          return false;
-    return true;
+    var chunks = client.level.getChunkSource();
+    return PortalViewLimits.hasExitCore(link.exit().endpoint(), key ->
+        chunks.getChunk(ChunkPos.getX(key), ChunkPos.getZ(key), ChunkStatus.FULL, false) != null);
   }
 
   public static void clear() {
@@ -87,5 +94,15 @@ public final class PortalViewReadiness {
     chunksChanged = false;
   }
 
-  private record Ready(long generation, int x, int z) {}
+  private static final class Ready {
+    final long generation;
+    final ChunkPos center;
+    boolean confirmed;
+
+    Ready(long generation, ChunkPos center, boolean confirmed) {
+      this.generation = generation;
+      this.center = center;
+      this.confirmed = confirmed;
+    }
+  }
 }

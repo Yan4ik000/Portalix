@@ -22,6 +22,8 @@ import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
 
 public final class PortalRaycast {
+  static final int INTERACTION_CROSSINGS = 2;
+
   private PortalRaycast() {}
 
   public static Result cast(
@@ -39,7 +41,15 @@ public final class PortalRaycast {
   public static Result cast(Entity source, Vec3 from, Vec3 displacement, Query query) {
     return cast(
         from, displacement, candidates(source.level()),
-        link -> PortalEntityMovement.canTraverse(source, link), query, null, false);
+        link -> PortalEntityMovement.canTraverse(source, link), query, null, false, Integer.MAX_VALUE);
+  }
+
+  public static Result castInteraction(Entity source, Vec3 from, Vec3 displacement) {
+    return cast(from, displacement, candidates(source.level()),
+        link -> PortalEntityMovement.canTraverse(source, link),
+        (start, end) -> source.level().clipIncludingBorder(
+            new ClipContext(start, end, ClipContext.Block.OUTLINE, ClipContext.Fluid.NONE, source)),
+        null, false, INTERACTION_CROSSINGS);
   }
 
   public static Result castProjectile(
@@ -62,7 +72,7 @@ public final class PortalRaycast {
       Entity source, Vec3 from, Vec3 movement, HitResult nativeHit, Query query) {
     return cast(
         from, movement, candidates(source.level()),
-        link -> PortalEntityMovement.canTraverse(source, link), query, nativeHit, true);
+        link -> PortalEntityMovement.canTraverse(source, link), query, nativeHit, true, Integer.MAX_VALUE);
   }
 
   private static HitResult clip(
@@ -88,12 +98,12 @@ public final class PortalRaycast {
       List<PortalLink> links,
       Predicate<PortalLink> ready,
       Query query) {
-    return cast(from, displacement, (start, end) -> links, ready, query, null, false);
+    return cast(from, displacement, (start, end) -> links, ready, query, null, false, Integer.MAX_VALUE);
   }
 
   private static Result cast(
       Vec3 from, Vec3 displacement, Candidates candidates, Predicate<PortalLink> ready,
-      Query query, HitResult firstHit, boolean requireCrossing) {
+      Query query, HitResult firstHit, boolean requireCrossing, int maxCrossings) {
     ArrayList<Segment> path = null;
     ArrayList<PortalLink> crossed = null;
     HashSet<PortalLink> zeroProgress = null;
@@ -108,10 +118,12 @@ public final class PortalRaycast {
       PortalLink nearest = null;
       PortalAperture.Crossing crossing = null;
       double portalDistance = Double.POSITIVE_INFINITY;
-      for (PortalLink link : candidates.find(start, end)) {
+      var entrances = crossed != null && crossed.size() >= maxCrossings
+          ? List.<PortalLink>of() : candidates.find(start, end);
+      for (PortalLink link : entrances) {
         if (PortalAperture.signedDistance(link.entrance().endpoint(), start)
             < -PortalAperture.PLANE_EPSILON) continue;
-        var candidate = PortalAperture.crossing(link.entrance().endpoint(), start, remaining);
+        var candidate = PortalAperture.crossing(link, start, remaining);
         if (candidate.isEmpty()) continue;
         double candidateDistance = length * candidate.get().fraction();
         if (candidateDistance >= portalDistance) continue;
@@ -189,10 +201,5 @@ public final class PortalRaycast {
   public record Segment(Vec3 from, Vec3 to) {}
 
   public record Result(
-      HitResult hit, List<Segment> segments, List<PortalLink> links, double distance) {
-    public Vec3 vector(Vec3 vector) {
-      for (PortalLink link : links) vector = link.transform().vector(vector);
-      return vector;
-    }
-  }
+      HitResult hit, List<Segment> segments, List<PortalLink> links, double distance) {}
 }

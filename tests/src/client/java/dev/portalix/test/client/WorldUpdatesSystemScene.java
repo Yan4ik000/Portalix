@@ -3,7 +3,12 @@ package dev.portalix.test.client;
 import static dev.portalix.test.client.ClientAssertions.check;
 
 import com.google.gson.GsonBuilder;
+import dev.portalix.mixin.world.tracking.ChunkMapAccessor;
 import dev.portalix.portal.PortalTopology;
+import dev.portalix.portal.query.PlayerPortalVisibility;
+import dev.portalix.test.ChunkAttachmentTestHooks;
+import dev.portalix.test.ChunkAttachmentTestHooks.Key;
+import dev.portalix.world.chunk.ChunkDeliveryAccess;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.file.Files;
@@ -11,6 +16,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Consumer;
@@ -20,16 +26,19 @@ import net.minecraft.world.entity.EntitySpawnReason;
 import net.minecraft.world.entity.EntityTypes;
 import net.minecraft.world.entity.animal.sheep.Sheep;
 import net.minecraft.world.item.DyeColor;
+import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.LightLayer;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.properties.BlockStateProperties;
+import net.minecraft.world.level.chunk.LevelChunk;
 import net.minecraft.world.phys.AABB;
 
 final class WorldUpdatesSystemScene extends PortalPreparedScene {
   private enum Step {
-    PREPARE, RED, REPLACE, GREEN, REMOVE, REMOVED, ROOM_SETUP, ROOM, DARK, LIGHT, LIT,
+    PREPARE, ATTACHMENTS_INITIAL, ATTACHMENTS_PAUSED, ATTACHMENTS_RESUMED,
+    RED, REPLACE, GREEN, REMOVE, REMOVED, ROOM_SETUP, ROOM, DARK, LIGHT, LIT,
     ACTOR_SETUP, ACTOR_ROOM, ACTOR_BASELINE, SPAWN, ENTITY_GREEN, RECOLOR, ENTITY_MAGENTA,
     DESPAWN, ENTITY_GONE, CLOSE, CLOSED, DONE
   }
@@ -44,6 +53,7 @@ final class WorldUpdatesSystemScene extends PortalPreparedScene {
   private final Map<BlockPos, BlockState> expectedTerrain = new LinkedHashMap<>();
   private final List<Map<String, Object>> terrainProof = new ArrayList<>();
   private BlockPos marker;
+  private LevelChunk attachmentChunk;
   private BlockPos lamp;
   private BlockPos power;
   private BlockPos receiver;
@@ -73,6 +83,53 @@ final class WorldUpdatesSystemScene extends PortalPreparedScene {
       case PREPARE -> {
         if (!prepare(736, 512)) return false;
         marker = BlockPos.containing(arrangement.markers().getFirst().bounds().getCenter());
+        var pos = ChunkPos.unpack(ChunkPos.pack(marker));
+        attachmentChunk = client.level.getChunkSource().getChunk(pos.x(), pos.z(), false);
+        check(attachmentChunk != null, "The remote attachment test column is missing");
+        var attachments = ChunkAttachmentTestHooks.get();
+        attachments.set(attachmentChunk, Key.CLIENT, 7);
+        mutation = originalServer.submit(() -> {
+          var chunk = originalServer.overworld().getChunk(pos.x(), pos.z());
+          attachments.set(chunk, Key.STALE, 1);
+          attachments.set(chunk, Key.CURRENT, 2);
+        });
+        next(Step.ATTACHMENTS_INITIAL);
+      }
+      case ATTACHMENTS_INITIAL -> {
+        if (!mutated() || !hasAttachment(Key.STALE, 1) || !hasAttachment(Key.CURRENT, 2)) return false;
+        var pos = attachmentChunk.getPos();
+        mutation = originalServer.submit(() -> {
+          var player = originalServer.getPlayerList().getPlayer(playerId);
+          check(PlayerPortalVisibility.of(player).contains(pos.pack()), "The attachment fixture had no portal subscription");
+          var delivery = (ChunkDeliveryAccess) player.connection.chunkSender;
+          check(delivery.portalix$delivered(player.level(), pos.pack()), "The attachment fixture was never delivered");
+          delivery.portalix$invalidate(player, pos.pack());
+          var chunk = player.level().getChunk(pos.x(), pos.z());
+          var attachments = ChunkAttachmentTestHooks.get();
+          attachments.set(chunk, Key.STALE, null);
+          attachments.set(chunk, Key.CURRENT, 3);
+        });
+        next(Step.ATTACHMENTS_PAUSED);
+      }
+      case ATTACHMENTS_PAUSED -> {
+        if (!mutated()) return false;
+        check(hasAttachment(Key.STALE, 1) && hasAttachment(Key.CURRENT, 2),
+            "The inactive subscription received an attachment delta before the full refresh");
+        var pos = attachmentChunk.getPos();
+        mutation = originalServer.submit(() -> {
+          var player = originalServer.getPlayerList().getPlayer(playerId);
+          ChunkMapAccessor.portalix$markChunkPendingToSend(player, player.level().getChunk(pos.x(), pos.z()));
+        });
+        next(Step.ATTACHMENTS_RESUMED);
+      }
+      case ATTACHMENTS_RESUMED -> {
+        if (!mutated() || !hasAttachment(Key.CURRENT, 3)) return false;
+        var pos = attachmentChunk.getPos();
+        check(client.level.getChunkSource().getChunk(pos.x(), pos.z(), false) == attachmentChunk,
+            "The attachment fixture did not reuse the retained client chunk");
+        check(hasAttachment(Key.STALE, null), "The full refresh retained a server-deleted attachment");
+        check(hasAttachment(Key.CLIENT, 7), "The full refresh erased a client-owned attachment");
+        passed.add("world_updates/full remote chunk refresh reconciles server attachments and preserves client data");
         next(Step.RED);
       }
       case RED -> {
@@ -270,6 +327,10 @@ final class WorldUpdatesSystemScene extends PortalPreparedScene {
     return false;
   }
 
+  private boolean hasAttachment(Key key, Integer value) {
+    return Objects.equals(ChunkAttachmentTestHooks.get().get(attachmentChunk, key), value);
+  }
+
   private void buildLightRoom() {
     var center = BlockPos.containing(arrangement.exit().center());
     var black = Blocks.CONCRETE.pick(DyeColor.BLACK).defaultBlockState();
@@ -321,17 +382,13 @@ final class WorldUpdatesSystemScene extends PortalPreparedScene {
   }
 
   private boolean terrainReady() {
-    return portalReady() && expectedTerrain.entrySet().stream()
+    return expectedTerrain.entrySet().stream()
         .allMatch(entry -> client.level.getBlockState(entry.getKey()).equals(entry.getValue()))
-        && PortalTopology.links(client.level).stream().anyMatch(link -> link.gun().equals(fixture.gunId())
-            && link.generation() == arrangement.generation() && link.entrance().endpoint().equals(arrangement.entrance())
-            && uploads.complete(link));
+        && openEntrances().anyMatch(link -> PortalViewTerrainReadiness.complete(link) && uploads.complete(link));
   }
 
   private boolean portalReady() {
-    return PortalTopology.links(client.level).stream().anyMatch(link -> link.gun().equals(fixture.gunId())
-        && link.generation() == arrangement.generation() && link.entrance().endpoint().equals(arrangement.entrance())
-        && PortalOpeningReadiness.fullyOpen(link) && PortalViewTerrainReadiness.complete(link));
+    return openEntrances().anyMatch(PortalViewTerrainReadiness::complete);
   }
 
   private boolean capture(String name, Consumer<FrameCapture.Frame> assertion) {

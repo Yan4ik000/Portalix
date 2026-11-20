@@ -3,7 +3,6 @@ package dev.portalix.test.client;
 import static dev.portalix.test.client.ClientAssertions.check;
 
 import dev.portalix.client.compat.iris.IrisShaders;
-import dev.portalix.portal.PortalTopology;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import net.minecraft.client.Minecraft;
@@ -92,10 +91,7 @@ final class ResourcesSystemScene extends PortalPreparedScene {
   private boolean terrainReady() {
     var marker = BlockPos.containing(arrangement.markers().getFirst().bounds().getCenter());
     return client.level.getBlockState(marker).equals(Blocks.CONCRETE.pick(DyeColor.MAGENTA).defaultBlockState())
-        && PortalTopology.links(client.level).stream().anyMatch(link -> link.gun().equals(fixture.gunId())
-            && link.generation() == arrangement.generation()
-            && link.entrance().endpoint().equals(arrangement.entrance())
-            && PortalOpeningReadiness.fullyOpen(link) && uploads.complete(link));
+        && openEntrances().anyMatch(link -> uploads.complete(link));
   }
 
   @Override public CompletableFuture<Void> cleanup() {

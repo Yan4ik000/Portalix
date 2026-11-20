@@ -14,7 +14,6 @@ import it.unimi.dsi.fastutil.longs.LongSet;
 import java.util.Objects;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientChunkCache;
-import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.renderer.LevelRenderer;
 import net.minecraft.client.renderer.ViewArea;
 import net.minecraft.client.renderer.state.level.CameraRenderState;
@@ -87,14 +86,14 @@ public final class PortalTerrainBackend {
     return SODIUM == null;
   }
 
-  public static boolean completeDemand(LevelRenderer renderer, CameraRenderState camera) {
-    return SODIUM != null ? SODIUM.completeDemand(renderer, camera)
-        : PortalTerrainDemand.vanillaComplete(renderer, camera);
+  public static boolean meshesReady(LevelRenderer renderer, CameraRenderState camera) {
+    return SODIUM != null ? SODIUM.meshesReady(renderer, camera)
+        : PortalTerrainDemand.vanillaMeshesReady(renderer, camera);
   }
 
   public static boolean primaryOccludes(CameraRenderState camera, PortalEndpoint portal) {
     if (!camera.smartCull || PortalSceneManager.hasChunkChanges(
-        camera.pos, Minecraft.getInstance().options.getEffectiveRenderDistance())) return false;
+        PortalSceneManager.terrainOrigin(camera.pos), PortalSceneManager.terrainRadius())) return false;
     var right = portal.right().scale(portal.width() / 2);
     var up = portal.up().scale(portal.height() / 2);
     var center = portal.center();
@@ -129,10 +128,10 @@ public final class PortalTerrainBackend {
         ? ((PortalTerrainGraphAccess) renderer.sectionOcclusionGraph()).portalix$visibility()
         : null;
     var area = renderer.viewArea();
-    int distance = Minecraft.getInstance().options.getEffectiveRenderDistance();
+    int distance = PortalSceneManager.terrainRadius();
     if (primaryDemand != null
         && primaryDemand.matches(area, visibility, distance, camera, window)) return true;
-    if (!completeDemand(renderer, camera)) {
+    if (!meshesReady(renderer, camera) || !PortalTerrainDemand.resident(camera)) {
       primaryDemand = null;
       return false;
     }
@@ -157,18 +156,16 @@ public final class PortalTerrainBackend {
     }
   }
 
-  public static void chunkLoaded(ClientLevel level, int x, int z) {
-    if (SODIUM != null) SODIUM.loaded(level, x, z);
-  }
-
-  public static void chunkUnloaded(ClientLevel level, int x, int z) {
-    if (SODIUM != null) SODIUM.unloaded(level, x, z);
-  }
 
   public static void captureChanges(ClientChunkCache chunks, ChunkLoadingRenderState events) {
     events.removedLoadedChunks.clear();
     events.removedLoadedChunks.addAll(chunks.removedLoadedChunks());
-    VanillaSceneTerrain.captureChanges(chunks, events);
+    events.addedLoadedChunks.clear();
+    events.addedLoadedChunks.addAll(chunks.addedLoadedChunks());
+    events.addedEmptySections.clear();
+    events.addedEmptySections.addAll(chunks.addedEmptySections());
+    events.removedEmptySections.clear();
+    events.removedEmptySections.addAll(chunks.removedEmptySections());
     if (!events.addedLoadedChunks.isEmpty() || !events.removedLoadedChunks.isEmpty()
         || !events.addedEmptySections.isEmpty() || !events.removedEmptySections.isEmpty())
       invalidatePrimaryDemand();

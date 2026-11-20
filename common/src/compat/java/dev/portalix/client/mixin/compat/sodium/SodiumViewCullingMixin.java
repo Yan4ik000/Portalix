@@ -1,11 +1,13 @@
 package dev.portalix.client.mixin.compat.sodium;
 
+import com.llamalad7.mixinextras.injector.ModifyReturnValue;
 import com.llamalad7.mixinextras.injector.wrapmethod.WrapMethod;
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
 import com.llamalad7.mixinextras.sugar.Local;
 import dev.portalix.client.compat.iris.IrisShaders;
 import dev.portalix.client.compat.sodium.SodiumCullRequest;
+import dev.portalix.client.compat.sodium.SodiumPortalFrustum;
 import dev.portalix.client.compat.sodium.SodiumViewCollector;
 import dev.portalix.client.compat.sodium.SodiumViewCulling;
 import dev.portalix.client.compat.sodium.SodiumViewCullingState;
@@ -66,8 +68,11 @@ abstract class SodiumViewCullingMixin implements SodiumViewCulling {
   @Shadow private int frame;
   @Shadow private Vector3dc cameraPosition;
   @Unique private final ScopedValue<Boolean> portalix$localDirty = ScopedValue.newInstance();
+  @Unique private final ScopedValue<Float> portalix$cullDistance = ScopedValue.newInstance();
   @Unique private boolean portalix$publishedPrimaryGraph;
   @Unique private boolean portalix$publishedPrimaryLists;
+  @Unique private float portalix$primaryDistance;
+  @Unique private boolean portalix$limitedPrimary;
 
   @Unique private final SodiumViewCullingState portalix$views = new SodiumViewCullingState();
 
@@ -96,12 +101,13 @@ abstract class SodiumViewCullingMixin implements SodiumViewCulling {
     float distance = getSearchDistance(fog);
     var visibility = culling ? portalix$views.view(view, viewport, distance) : null;
     var tree = visibility == null ? null : visibility.tree();
-    if (culling && (visibility == null || !visibility.fresh(SodiumCullRequest.plane(viewport))))
+    if (culling && (visibility == null || !visibility.fresh()))
       scheduleAsyncWork(viewport, fog, true);
     var raster = PortalSceneManager.arrivalView()
         ? ((ViewportProvider) PortalSceneManager.renderFrustum()).sodium$createViewport() : viewport;
+    var eyeSection = SodiumPortalFrustum.drawViewport(raster).getChunkCoord();
     long cameraRevision = PortalSceneManager.visibilityRevision();
-    var cached = portalix$views.cachedLists(view, cameraRevision, distance, tree);
+    var cached = portalix$views.cachedLists(view, cameraRevision, eyeSection, distance, tree);
     if (cached != null) {
       renderLists = cached.lists();
       taskLists = cached.tasks();
@@ -122,7 +128,7 @@ abstract class SodiumViewCullingMixin implements SodiumViewCulling {
       taskLists = visibility.tasks();
       renderTree = tree;
     }
-    portalix$views.rememberLists(view, cameraRevision, distance, tree, renderTree, renderLists,
+    portalix$views.rememberLists(view, cameraRevision, eyeSection, distance, tree, renderTree, renderLists,
         taskLists, SodiumCullRequest.Footprint.of(viewport, getRenderDistance()));
   }
 
@@ -130,11 +136,12 @@ abstract class SodiumViewCullingMixin implements SodiumViewCulling {
   private void portalix$sharedCullQueue(
       Viewport viewport, FogParameters fog, boolean culling, Operation<Void> original) {
     var view = PortalSceneManager.isPortalView() ? Minecraft.getInstance().levelRenderer : null;
-    var next = portalix$views.schedule(view, new SodiumCullRequest(viewport, fog, culling, frame), pendingTask);
+    var next = portalix$views.schedule(view, new SodiumCullRequest(viewport, fog, culling, frame, getRenderDistance()), pendingTask);
     if (next == null) return;
     var request = next.request();
     boolean primaryDirty = needsGraphUpdate;
-    original.call(request.viewport(), request.fog(), request.culling());
+    ScopedValue.where(portalix$cullDistance, request.distance())
+        .run(() -> original.call(request.viewport(), request.fog(), request.culling()));
     if (next.view() != null) needsGraphUpdate = primaryDirty;
   }
 
@@ -176,6 +183,7 @@ abstract class SodiumViewCullingMixin implements SodiumViewCulling {
       return taskLists;
     }, result -> {
       cullResults.put(CullType.REGULAR, result.tree());
+      cullResults.put(CullType.WIDE, result.wide());
       taskLists = result.tasks();
       needsRenderListUpdate = true;
     }, this::portalix$finishCull, level);
@@ -197,14 +205,13 @@ abstract class SodiumViewCullingMixin implements SodiumViewCulling {
 
   @Override
   public void portalix$exchangeCulling(LevelRenderer view) {
-    var source = cullResults.get(CullType.WIDE);
-    if (source == null) source = cullResults.get(CullType.REGULAR);
     var destination = portalix$views.exchange(view, Minecraft.getInstance().levelRenderer,
-        source, taskLists, cameraPosition);
+        cullResults.get(CullType.REGULAR), cullResults.get(CullType.WIDE), taskLists, cameraPosition);
     cullResults.clear();
     if (destination != null) {
       // The new main frustum traverses the transferred world visibility tree.
       cullResults.put(CullType.REGULAR, destination.tree());
+      if (destination.wide() != null) cullResults.put(CullType.WIDE, destination.wide());
       renderTree = destination.tree();
       taskLists = destination.tasks();
     }
@@ -213,7 +220,7 @@ abstract class SodiumViewCullingMixin implements SodiumViewCulling {
   }
 
   @Override
-  public boolean portalix$completeView(
+  public boolean portalix$viewMeshesReady(
       LevelRenderer renderer, CameraRenderState camera, boolean primary) {
     return portalix$views.completeView(renderer, camera, primary, cullResults.get(CullType.REGULAR),
         getRenderDistance(), renderSections, regions);
@@ -230,7 +237,8 @@ abstract class SodiumViewCullingMixin implements SodiumViewCulling {
     var snapshot = tree == null ? null : ((SodiumCullRequest.SnapshotAccess) tree).portalix$cullSnapshot();
     if (snapshot == null || snapshot != portalix$views.primarySnapshot()
         || !snapshot.visibilityFresh() || !snapshot.workFresh()) return false;
-    var viewport = new Viewport(null, new Vector3d(camera.pos.x, camera.pos.y, camera.pos.z));
+    var origin = PortalSceneManager.terrainOrigin(camera.pos);
+    var viewport = new Viewport(null, new Vector3d(origin.x, origin.y, origin.z));
     if (!tree.isValidFor(viewport, getRenderDistance())
         || bounds.minY < level.getMinY() || bounds.maxY > level.getMaxY()) return false;
     return !tree.isBoxVisible(bounds.minX, bounds.minY, bounds.minZ,
@@ -342,6 +350,13 @@ abstract class SodiumViewCullingMixin implements SodiumViewCulling {
     throw new AssertionError();
   }
 
+  @ModifyReturnValue(method = "getRenderDistance", at = @At("RETURN"))
+  private float portalix$terrainDistance(float original) {
+    if (portalix$cullDistance.isBound()) return portalix$cullDistance.get();
+    if (IrisShaders.shadowPass() || !PortalSceneManager.limitedTerrain()) return original;
+    return Math.min(original, PortalSceneManager.terrainRadius() * 16f);
+  }
+
   @Shadow
   private float getRenderDistance() {
     throw new AssertionError();
@@ -351,6 +366,16 @@ abstract class SodiumViewCullingMixin implements SodiumViewCulling {
   private void portalix$retainDestinations(
       Viewport viewport, FogParameters fog, boolean cull, CallbackInfo ci) {
     portalix$useOcclusion = cull;
+    if (!IrisShaders.shadowPass()) {
+      float distance = getRenderDistance();
+      boolean limited = PortalSceneManager.limitedTerrain();
+      if (distance != portalix$primaryDistance || limited != portalix$limitedPrimary) {
+        needsGraphUpdate = true;
+        needsRenderListUpdate = true;
+        portalix$primaryDistance = distance;
+        portalix$limitedPrimary = limited;
+      }
+    }
     portalix$views.retainDestinations(level, viewport, getRenderDistance(),
         cullResults.get(CullType.WIDE), IrisShaders.shadowPass());
   }
@@ -375,6 +400,12 @@ abstract class SodiumViewCullingMixin implements SodiumViewCulling {
     if (cir.getReturnValue() == null && portalix$useOcclusion) {
       var tree = portalix$views.reusableTree(viewport, getSearchDistance(fog));
       if (tree != null) cir.setReturnValue(tree);
+      else {
+        // An enlarging view can draw its previous coverage while a larger async search runs.
+        var previous = cullResults.get(CullType.REGULAR);
+        if (previous != null && previous.buildDistance < getSearchDistance(fog) && previous.isValidFor(viewport, 0))
+          cir.setReturnValue(previous);
+      }
     }
   }
 
@@ -393,6 +424,13 @@ abstract class SodiumViewCullingMixin implements SodiumViewCulling {
       @Local(argsOnly = true) FogParameters fog) {
     boolean synchronous = original.call(control, camera);
     return synchronous && (!portalix$useOcclusion || findBestTree(viewport, fog) == null);
+  }
+
+  @WrapOperation(method = "readRenderListFromTree", at = @At(value = "INVOKE", target =
+      "Lnet/caffeinemc/mods/sodium/client/render/chunk/RenderSectionManager;consumeCullTaskResults(Z)V"))
+  private void portalix$consumeAvailableTerrain(RenderSectionManager manager, boolean wait, Operation<Void> original) {
+    // During a handoff the bounded out-of-graph traversal already contains the resident meshes.
+    original.call(manager, wait && !portalix$limitedPrimary);
   }
 
   @Inject(method = "updateSectionInfo", at = @At("RETURN"))

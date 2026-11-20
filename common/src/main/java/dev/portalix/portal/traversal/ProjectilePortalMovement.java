@@ -72,17 +72,13 @@ public final class ProjectilePortalMovement {
     return distance * distance;
   }
 
-  public static Vec3 tetherOwner(FishingHook hook, Entity owner) {
-    Vec3 position = owner.position();
-    for (var link : state(hook).tether) position = link.transform().point(position);
-    return position;
-  }
-
   public static double tetherCoordinate(
       FishingHook hook, Entity owner, Direction.Axis axis, double vanilla) {
-    if (state(hook).tether.isEmpty()) return vanilla;
-    Vec3 position = tetherOwner(hook, owner);
-    return axis.choose(position.x, position.y, position.z);
+    var route = state(hook).tether;
+    if (route.isEmpty()) return vanilla;
+    Vec3 position = owner.position();
+    for (var link : route) position = link.transform().point(position);
+    return position.get(axis);
   }
 
   public static HitResult movementRay(

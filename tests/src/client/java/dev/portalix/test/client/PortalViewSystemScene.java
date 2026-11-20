@@ -1,12 +1,19 @@
 package dev.portalix.test.client;
 
+import net.minecraft.world.level.chunk.LevelChunk;
+import dev.portalix.portal.traversal.EntityPortalState;
+import dev.portalix.portal.PortalViewLimits;
+import dev.portalix.portal.PortalViewTransition;
 import static dev.portalix.test.client.ClientAssertions.check;
 
 import com.google.gson.GsonBuilder;
+import dev.portalix.client.ModResourceReload;
 import dev.portalix.client.portal.scene.PortalSceneManager;
 import dev.portalix.portal.PortalTopology;
 import dev.portalix.portal.PortalLink;
 import dev.portalix.portal.geometry.PortalAperture;
+import dev.portalix.portal.query.PlayerPortalVisibility;
+import dev.portalix.world.chunk.ChunkDeliveryAccess;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.file.Files;
@@ -28,24 +35,30 @@ import net.minecraft.world.entity.Entity;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.item.DyeColor;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.ChunkPos;
+import net.minecraft.server.level.ChunkTrackingView;
+import net.minecraft.world.level.chunk.status.ChunkStatus;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 
 final class PortalViewSystemScene implements ClientSystemScene {
-  private enum Kind { ORIENTATION, OCCLUSION, GLASS, WATER, ENTITY, PARALLAX_PARTICLES, RECURSION }
+  private enum Kind { RESIDENT_RANGE, ORIENTATION, OCCLUSION, GLASS, WATER, ENTITY, PARALLAX_PARTICLES, RECURSION, DISTANT, VIEW_BUDGET }
   private enum Phase { SETUP, READY, ACTION, NEXT, DONE }
   private record Case(String id, Kind kind, Direction entry, Direction exit, float roll) {}
   private record ChromaChange(double meanChange, int increasedPixels, int samples) {
     double increasedFraction() { return (double) increasedPixels / samples; }
   }
   private static final List<Case> CASES = List.of(
+      effect("resident-terrain-range", Kind.RESIDENT_RANGE),
       orientation("south-wall", Direction.SOUTH, Direction.SOUTH, 0),
       orientation("floor-rolled-forty-five", Direction.SOUTH, Direction.UP, 45),
       orientation("ceiling-rolled-forty-five", Direction.SOUTH, Direction.DOWN, 45),
       effect("opaque-remote-occlusion", Kind.OCCLUSION), effect("transparent-remote-glass", Kind.GLASS),
       effect("transparent-remote-water", Kind.WATER), effect("entity-front-straddle-and-behind-plane", Kind.ENTITY),
       effect("parallax-and-native-particles", Kind.PARALLAX_PARTICLES),
-      effect("second-level-recursive-scene", Kind.RECURSION));
+      effect("second-level-recursive-scene", Kind.RECURSION),
+      effect("exit-beyond-preview-distance", Kind.DISTANT),
+      effect("visible-distant-view-under-hidden-competition", Kind.VIEW_BUDGET));
 
   private final Minecraft client;
   private final ScenarioFrames frames;
@@ -54,12 +67,15 @@ final class PortalViewSystemScene implements ClientSystemScene {
   private final int previousFov;
   private final boolean previousHidden;
   private final List<String> passed = new ArrayList<>();
+  private final List<SkippedCase> skipped = new ArrayList<>();
   private final List<Map<String, Object>> proof = new ArrayList<>();
   private PortalSystemFixture fixture;
   private PortalSystemFixture.Arrangement scene;
   private PortalSystemFixture.Nested nested;
   private PortalSystemFixture.ClipSentinel sentinel;
   private PortalViewParallaxCase parallax;
+  private PortalSystemFixture.RangeCourse rangeCourse;
+  private PortalViewRangeCase rangeCase;
   private PortalLink sourceLink;
   private CompletableFuture<PortalSystemFixture.Arrangement> setup;
   private CompletableFuture<AABB> blocker;
@@ -68,6 +84,11 @@ final class PortalViewSystemScene implements ClientSystemScene {
   private CompletableFuture<Vec3> actorMove;
   private CompletableFuture<PortalSystemFixture.Nested> nestedSetup;
   private CompletableFuture<Void> diagnostics;
+  private CompletableFuture<Boolean> previewObservation;
+  private record ArrivalSample(long tick, int distance, boolean delayed, boolean loadedFar, boolean deliveredFar) {}
+  private CompletableFuture<ArrivalSample> arrivalObservation;
+  private long firstDelayedTick = -1;
+  private boolean nativeViewRestored;
   private CompletableFuture<FrameCapture.Frame> capture;
   private CompletableFuture<FrameCapture.Frame> settlingSample;
   private FrameCapture.Frame settlingAnchor;
@@ -82,6 +103,11 @@ final class PortalViewSystemScene implements ClientSystemScene {
   private int age;
   private int action;
   private int stableTicks;
+  private long previousCrossingId;
+  private LevelChunk retainedColumn;
+  private int departureFrames;
+  private int destinationFrames;
+  private long firstServerCrossing = -1;
   private int actorId = -1;
   private Vec3 actorExpected;
   private AABB actorBounds;
@@ -95,6 +121,8 @@ final class PortalViewSystemScene implements ClientSystemScene {
   private Map<String, Object> capturedState;
 
   PortalViewSystemScene(Minecraft client, ScenarioFrames frames) {
+    check(ModResourceReload.bundledPortalShaders(),
+        "The stock portal-view fixture did not load the bundled portal shaders");
     this.client = client; this.frames = frames;
     input = new ScenarioInput(client);
     previousPerspective = client.options.getCameraType(); previousFov = client.options.fov().get();
@@ -102,6 +130,7 @@ final class PortalViewSystemScene implements ClientSystemScene {
   }
 
   @Override public List<String> passed() { return List.copyOf(passed); }
+  @Override public List<SkippedCase> skipped() { return List.copyOf(skipped); }
 
   @Override public boolean tick() {
     try {
@@ -119,6 +148,14 @@ final class PortalViewSystemScene implements ClientSystemScene {
     switch (phase) {
       case SETUP -> {
         if (!frames.pause()) return false;
+        int viewRadius = client.options.getEffectiveRenderDistance();
+        if (viewRadius < 12 && (spec().kind == Kind.RESIDENT_RANGE || spec().kind == Kind.DISTANT)) {
+          skipped.add(new SkippedCase("portal_views/" + spec().id,
+              "Effective render distance is " + viewRadius + " chunks. This case requires at least 12."));
+          index++;
+          age = 0;
+          return false;
+        }
         input.stop();
         if (!client.gui.hud.isHidden()) { input.click(client.options.keyToggleGui); return false; }
         if (setup == null) {
@@ -127,7 +164,14 @@ final class PortalViewSystemScene implements ClientSystemScene {
           var server = client.getSingleplayerServer();
           setup = server.submit(() -> {
             if (fixture == null) fixture = new PortalSystemFixture(server.getPlayerList().getPlayer(owner), 512, 64);
-            var arrangement = fixture.prepare(spec().entry, spec().exit, spec().roll, 2.8, false);
+            if (spec().kind == Kind.RESIDENT_RANGE) {
+              rangeCourse = fixture.prepareRangeCourse();
+              return rangeCourse.view();
+            }
+            var arrangement = spec().kind == Kind.VIEW_BUDGET ? fixture.prepareCompetingViews(viewRadius)
+                : spec().kind == Kind.DISTANT ? fixture.prepare(Direction.SOUTH, Direction.SOUTH, 0,
+                    Math.min(viewRadius - 1, PortalViewLimits.preview(viewRadius) + 2) * 16, viewRadius * 64)
+                : fixture.prepare(spec().entry, spec().exit, spec().roll, 2.8);
             if (spec().kind == Kind.ORIENTATION) sentinel = fixture.clipSentinel();
             if (spec().kind == Kind.WATER) fixture.prepareMaterialContainer();
             if (spec().kind == Kind.PARALLAX_PARTICLES) fixture.releaseFlight();
@@ -136,7 +180,10 @@ final class PortalViewSystemScene implements ClientSystemScene {
         }
         if (!setup.isDone()) return false;
         scene = setup.join(); setup = null;
-        next(Phase.READY);
+        if (spec().kind == Kind.RESIDENT_RANGE) {
+          rangeCase = new PortalViewRangeCase(client, frames, fixture, rangeCourse);
+          next(Phase.ACTION);
+        } else next(Phase.READY);
       }
       case READY -> {
         sourceLink = PortalTopology.links(client.level).stream().filter(link -> link.gun().equals(fixture.gunId())
@@ -149,12 +196,16 @@ final class PortalViewSystemScene implements ClientSystemScene {
             && sourceLink != null && PortalSceneManager.hasRenderedView(sourceLink)
             && PortalOpeningReadiness.fullyOpen(sourceLink) && PortalViewTerrainReadiness.complete(sourceLink);
         if (sentinel != null) ready &= sentinel.ready(client.level);
+        if (spec().kind == Kind.VIEW_BUDGET) ready &= viewRangeLoaded();
         stableTicks = ready ? stableTicks + 1 : 0;
         if (stableTicks < 8) return false;
         frames.monitor(true); next(Phase.ACTION);
       }
       case ACTION -> {
         switch (spec().kind) {
+          case RESIDENT_RANGE -> {
+            if (rangeCase.tick()) { proof.add(rangeCase.verifyAndReport()); next(Phase.NEXT); }
+          }
           case ORIENTATION -> {
             if (image("oriented-and-clipped", () -> true, frame -> {
               PortalSceneAssertions.landmarks(frame, scene);
@@ -168,6 +219,14 @@ final class PortalViewSystemScene implements ClientSystemScene {
             if (parallax.tick()) { proof.addAll(parallax.proof()); next(Phase.NEXT); }
           }
           case RECURSION -> recursion();
+          case DISTANT -> {
+            var eye = scene.exitPoint(client.player.getEyePosition());
+            var virtual = ChunkPos.containing(BlockPos.containing(eye));
+            check(client.level.getChunkSource().getChunk(virtual.x(), virtual.z(), ChunkStatus.FULL, false) == null,
+                "A distant virtual eye requested terrain behind the exit");
+            next(Phase.NEXT);
+          }
+          case VIEW_BUDGET -> viewBudget();
         }
       }
       case NEXT -> {
@@ -182,6 +241,7 @@ final class PortalViewSystemScene implements ClientSystemScene {
         sentinel = null;
         materialRed = null; materialWhite = null; materialRestored = null; opaqueRed = null;
         sourceLink = null; capturedState = null;
+        previewObservation = null;
         materialBefore.clear(); expectedMaterial.clear();
         next(Phase.SETUP);
       }
@@ -463,6 +523,140 @@ final class PortalViewSystemScene implements ClientSystemScene {
     })) next(Phase.NEXT);
   }
 
+  private boolean viewRangeLoaded() {
+    var position = scene.viewRangeProbe(client.options.getEffectiveRenderDistance());
+    var chunk = client.level.getChunkSource().getChunk(position.getX() >> 4, position.getZ() >> 4, ChunkStatus.FULL, false);
+    return chunk != null && chunk.getBlockState(position).is(Blocks.GOLD_BLOCK);
+  }
+
+  private void viewBudget() {
+    int radius = client.options.getEffectiveRenderDistance();
+    if (action == 0) {
+      var eye = client.gameRenderer.mainCamera().position();
+      check(eye.distanceTo(scene.entrance().center()) > 4, "The visible view must be outside arrival prefetch range");
+      var hidden = PortalTopology.links(client.level).stream()
+          .filter(link -> !link.gun().equals(fixture.gunId()) && eye.distanceTo(link.entrance().endpoint().center()) < 4).toList();
+      check(hidden.size() == 4, "Four nearby hidden views must compete for the loading budget");
+      var destination = ChunkPos.containing(BlockPos.containing(scene.exit().center()));
+      var primary = client.player.chunkPosition();
+      check(Math.max(Math.abs(destination.x() - primary.x()), Math.abs(destination.z() - primary.z())) > radius * 2,
+          "The observed destination overlaps the native primary view");
+      for (var link : hidden) {
+        check(link.entrance().endpoint().center().subtract(eye).dot(scene.entrance().normal()) > 0,
+            "A competing entrance must remain behind the actual camera");
+        var other = ChunkPos.containing(BlockPos.containing(link.exit().endpoint().center()));
+        check(Math.max(Math.abs(destination.x() - other.x()), Math.abs(destination.z() - other.z())) > radius * 2,
+            "A competing view must not load the observed destination");
+      }
+      if (previewObservation == null) {
+        var server = client.getSingleplayerServer();
+        var owner = client.player.getUUID();
+        var probe = scene.viewRangeProbe(radius);
+        previewObservation = server.submit(() -> {
+          var player = server.getPlayerList().getPlayer(owner);
+          firstServerCrossing = EntityPortalState.of(player).crossingSequence();
+          var outer = BlockPos.containing(scene.exit().center().add(scene.exit().normal().scale(
+              (PortalViewLimits.preview(radius) + 3) * 16.0)));
+          return !PlayerPortalVisibility.of(player).contains(outer.getX() >> 4, outer.getZ() >> 4)
+              && PlayerPortalVisibility.of(player).contains(probe.getX() >> 4, probe.getZ() >> 4)
+              && !player.getChunkTrackingView().contains(probe.getX() >> 4, probe.getZ() >> 4);
+        });
+      }
+      if (!previewObservation.isDone()) return;
+      check(previewObservation.join(), "The server must observe the far target chunk exclusively through the visible portal");
+    }
+    var departure = ChunkPos.containing(BlockPos.containing(scene.entrance().center()));
+    int probeX = departure.x() + Math.min(radius - 1, 11);
+    if (action == 0) {
+      if (!image("preview-loaded", this::viewRangeLoaded, frame -> PortalSceneAssertions.landmarks(frame, scene))) return;
+      retainedColumn = client.level.getChunkSource().getChunk(probeX, departure.z(), ChunkStatus.FULL, false);
+      check(retainedColumn != null, "The departure landmark must be loaded before the first crossing");
+      var last = EntityPortalState.of(client.player).lastCrossing();
+      previousCrossingId = last == null ? -1 : last.eventId();
+      frames.setTerrainCheck(() -> this::checkTraversalFrame);
+      input.forward(true);
+      action = 1;
+    }
+    if (action == 1) {
+      check(client.level.getChunkSource().getChunk(probeX, departure.z(), ChunkStatus.FULL, false) == retainedColumn,
+          "Traversal unloaded the departure landmark");
+      var last = EntityPortalState.of(client.player).lastCrossing();
+      if (last == null || last.eventId() == previousCrossingId) return;
+      check(last.link().equals(sourceLink), "Traversal crossed the wrong portal");
+      input.stop();
+      action = 2;
+      age = 0;
+    }
+    var destination = ChunkPos.containing(BlockPos.containing(scene.exit().center()));
+    if (!nativeViewRestored && !verifyArrival(destination, radius)) return;
+    if (client.level.getChunkSource().getChunk(destination.x() + Math.max(1, radius - 1),
+        destination.z(), ChunkStatus.FULL, false) == null) return;
+    if (probeX - departure.x() > PortalViewLimits.preview(radius) + 1
+        && client.level.getChunkSource().getChunk(probeX, departure.z(), ChunkStatus.FULL, false) != null) return;
+    frames.setTerrainCheck(null);
+    check(departureFrames > 0 && destinationFrames > 0, "No terrain samples on both sides of the portal crossing");
+    proof.add(Map.of("case", spec().id, "sourceFramesWithLandmarks", departureFrames,
+        "destinationFramesWithLandmarks", destinationFrames));
+    next(Phase.NEXT);
+  }
+
+  private void checkTraversalFrame(FrameCapture.Frame frame) {
+    var eye = frame.cameraPosition();
+    boolean destination = eye.distanceToSqr(scene.exit().center()) < eye.distanceToSqr(scene.entrance().center());
+    if (destination && eye.subtract(scene.exit().center()).dot(scene.exit().normal()) > 2) return;
+    int visible = 0;
+    for (var marker : scene.markers()) {
+      var bounds = destination ? marker.bounds() : scene.imageBounds(marker.bounds());
+      var area = frame.project(bounds);
+      if (area.isEmpty()) continue;
+      if (frame.statistics(area.get(), marker.material()).matched() >= 3) visible++;
+    }
+    check(visible >= 2, "Near exit terrain disappeared in presented frame " + frame.id()
+        + ", physical camera " + eye + ", destination=" + destination + ", visible markers=" + visible);
+    if (destination) destinationFrames++;
+    else departureFrames++;
+  }
+
+  private boolean verifyArrival(ChunkPos destination, int radius) {
+    if (arrivalObservation == null) {
+      var server = client.getSingleplayerServer();
+      var owner = client.player.getUUID();
+      arrivalObservation = server.submit(() -> {
+        var player = server.getPlayerList().getPlayer(owner);
+        if (!(player.getChunkTrackingView() instanceof ChunkTrackingView.Positioned view)
+            || Math.abs(view.center().x() - destination.x()) > 2
+            || Math.abs(view.center().z() - destination.z()) > 2) return null;
+        if (EntityPortalState.of(player).crossingSequence() <= firstServerCrossing) return null;
+        long tick = player.level().getGameTime();
+        long far = ChunkPos.pack(destination.x() + radius - 1, destination.z());
+        var sender = (ChunkDeliveryAccess) player.connection.chunkSender;
+        return new ArrivalSample(tick, view.viewDistance(), PlayerPortalVisibility.of(player).delayingLoading(tick),
+            player.level().getChunkSource().getChunkNow(ChunkPos.getX(far), ChunkPos.getZ(far)) != null,
+            sender.portalix$delivered(player.level(), far));
+      });
+    }
+    if (!arrivalObservation.isDone()) return false;
+    var sample = arrivalObservation.join();
+    arrivalObservation = null;
+    if (sample == null) return false;
+    if (sample.delayed) {
+      if (firstDelayedTick < 0) firstDelayedTick = sample.tick;
+      check(sample.distance == PortalViewLimits.preview(radius), "Native tracking expanded during the hold");
+      if (radius >= 16) {
+        check(!sample.loadedFar, "The server loaded a cold outer column during the hold");
+        check(!sample.deliveredFar, "A cold outer column arrived during the hold");
+      }
+      return false;
+    }
+    if (sample.distance != radius) return false;
+    check(firstDelayedTick >= 0 && sample.tick - firstDelayedTick >= PortalViewTransition.LOAD_DELAY_TICKS - 5,
+        "The crossing did not start the loading delay");
+    proof.add(Map.of("case", spec().id, "observedHoldTicks", sample.tick - firstDelayedTick,
+        "nativeDistanceAfterHold", sample.distance));
+    nativeViewRestored = true;
+    return true;
+  }
+
   private boolean image(String suffix, BooleanSupplier condition, Consumer<FrameCapture.Frame> assertion) {
     if (capture == null && (spec().kind == Kind.GLASS || spec().kind == Kind.WATER)
         && !settledMaterial(condition)) return false;
@@ -524,8 +718,7 @@ final class PortalViewSystemScene implements ClientSystemScene {
       return false;
     }
     sameCamera(sample, settlingAnchor);
-    // Mesh completion does not settle shader history, exposure or translucent reflections.
-    // Settle the chromatic measurement, while allowing water texture and brightness animation.
+    // Shader history, exposure and translucent reflections may still change after the meshes finish.
     for (int marker = 0; marker < 2; marker++) {
       var change = chromaChange(sample, settlingAnchor, markerInterior(sample, marker), 0);
       if (Math.abs(change.meanChange()) > 1) {
@@ -560,6 +753,10 @@ final class PortalViewSystemScene implements ClientSystemScene {
       }).toList());
     }
     if (sourceLink != null) state.put("portalTerrain", PortalViewTerrainReadiness.diagnostics(sourceLink, scene.markers()));
+    if (scene != null && spec().kind == Kind.VIEW_BUDGET) {
+      var probe = scene.viewRangeProbe(client.options.getEffectiveRenderDistance());
+      state.put("viewRangeProbe", Map.of("position", probe.toString(), "loaded", viewRangeLoaded()));
+    }
     if (sentinel != null) {
       state.put("sentinelBlocks", sentinel.blocks().stream().map(position ->
           Map.of("position", position.toString(), "state", client.level.getBlockState(position).toString())).toList());
@@ -581,6 +778,7 @@ final class PortalViewSystemScene implements ClientSystemScene {
     state.put("failure", failure.toString()); state.put("case", spec().id);
     if (!transmissions.isEmpty()) state.put("transmissions", transmissions);
     state.put("phase", phase.name()); state.put("action", action);
+    if (rangeCase != null) state.put("range", rangeCase.state());
     if (capturedState != null) state.put("beforeBlit", capturedState);
     state.put("currentClient", clientState());
     diagnostics = client.getSingleplayerServer().submit(() -> {
@@ -619,7 +817,10 @@ final class PortalViewSystemScene implements ClientSystemScene {
     var core = PortalSceneAssertions.aperture(frame, scene.entrance(), .2);
     check(PortalSceneAssertions.intersection(projected, core).equals(core),
         "The real clipping sentinel does not cover the observed portal core without clipping");
-    var pixels = PortalSceneAssertions.pixels(frame, core, FrameCapture.Material.MAGENTA, scene.entrance());
+    // The antialiased red/blue marker edge can also match the broad magenta signature.
+    var sentinelColor = FrameCapture.Material.MAGENTA
+        .and(FrameCapture.Material.RED.or(FrameCapture.Material.BLUE).negate());
+    var pixels = PortalSceneAssertions.pixels(frame, core, sentinelColor, scene.entrance());
     check(pixels.fraction() <= .005, "The exit clip plane leaked native magenta blocks into the world image: " + pixels);
     return Map.of("virtualEye", virtualEye, "eyeDepth", eyeDepth, "sentinelBounds", bounds,
         "minimumDepth", minimumDepth, "maximumDepth", maximumDepth, "projectedRegion", projected,
@@ -630,16 +831,17 @@ final class PortalViewSystemScene implements ClientSystemScene {
   private void writeProof() {
     try {
       Files.writeString(frames.directory().resolve("portal-views-proof.json"), new GsonBuilder().setPrettyPrinting()
-          .create().toJson(Map.of("cases", passed, "frames", proof, "transmissions", transmissions)));
+          .create().toJson(Map.of("cases", passed, "skipped", skipped, "frames", proof, "transmissions", transmissions)));
     } catch (IOException failure) { throw new UncheckedIOException(failure); }
   }
 
   @Override public CompletableFuture<Void> cleanup() {
+    frames.setTerrainCheck(null);
     input.stop(); client.options.fov().set(previousFov); client.options.setCameraType(previousPerspective);
     if (client.gui.hud.isHidden() != previousHidden) client.gui.hud.toggle();
     if (parallax != null) parallax.close();
     if (uploads != null) uploads.close();
-    CompletableFuture<Void> pending = CompletableFuture.allOf(Stream.of(setup, blocker, mutation, spawn, actorMove, nestedSetup, diagnostics, settlingSample)
+    CompletableFuture<Void> pending = CompletableFuture.allOf(Stream.of(setup, blocker, mutation, spawn, actorMove, nestedSetup, diagnostics, settlingSample, previewObservation, arrivalObservation)
         .filter(Objects::nonNull).toArray(CompletableFuture<?>[]::new));
     return pending.handle((ignored, failure) -> null).thenCompose(ignored -> client.getSingleplayerServer().submit(() -> {
       if (fixture != null) fixture.close();

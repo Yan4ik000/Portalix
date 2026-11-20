@@ -5,17 +5,14 @@ import dev.portalix.api.PortalInstance;
 import dev.portalix.portal.geometry.ConvexPolyhedron;
 import dev.portalix.portal.geometry.PortalAperture;
 import dev.portalix.portal.geometry.PortalCollisionOpening;
-import dev.portalix.server.portal.PortalClosureResolver;
 import it.unimi.dsi.fastutil.ints.IntArrayList;
 import it.unimi.dsi.fastutil.ints.IntArrays;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
-import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
@@ -83,12 +80,6 @@ public final class PortalTopology {
         Comparator.comparing(PortalLink::gun)
             .thenComparingLong(link -> link.entrance().identity()));
     if (current.links().equals(ordered)) return;
-    var retained = new HashSet<>(ordered);
-    var retired = current.links().stream().filter(link -> !retained.contains(link)).toList();
-    var releases =
-        level instanceof ServerLevel server
-            ? PortalClosureResolver.prepare(server, retired)
-            : List.<PortalClosureResolver.Release>of();
     var byEntrance = new HashMap<Entrance, PortalLink>();
     var byId = new HashMap<PortalLinkId, PortalLink>();
     var openings = new HashMap<PortalEndpoint, Opening>();
@@ -105,7 +96,6 @@ public final class PortalTopology {
     state.topology = snapshot.isEmpty() ? Topology.EMPTY : new Topology(
         snapshot, new EntranceIndex(snapshot), Map.copyOf(byEntrance), Map.copyOf(byId),
         Map.copyOf(openings));
-    releases.forEach(PortalClosureResolver.Release::resolve);
   }
 
   public static List<PortalLink> linkPair(UUID gun, PortalInstance blue, PortalInstance orange) {

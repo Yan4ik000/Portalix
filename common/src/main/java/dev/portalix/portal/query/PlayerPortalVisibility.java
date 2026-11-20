@@ -1,13 +1,17 @@
 package dev.portalix.portal.query;
 
 import dev.portalix.api.PortalEndpoint;
+import dev.portalix.network.portal.PortalViewStatusPayload;
 import dev.portalix.portal.PortalLink;
+import dev.portalix.portal.PortalViewLimits;
+import dev.portalix.portal.PortalViewTransition;
 import dev.portalix.world.chunk.PortalChunkObservers;
 import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
 import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
-import net.minecraft.core.SectionPos;
+import java.util.function.Consumer;
+import java.util.function.LongPredicate;
 import net.minecraft.server.level.ChunkTrackingView;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
@@ -26,28 +30,85 @@ public final class PlayerPortalVisibility {
   private ServerLevel priorityLevel;
   private final Long2ObjectOpenHashMap<Ready> ready = new Long2ObjectOpenHashMap<>();
 
+  private long resumeLoadingAt;
+
+  public void portalCrossed(long tick) {
+    resumeLoadingAt = tick + PortalViewTransition.LOAD_DELAY_TICKS;
+  }
+
+  public long resumeLoadingAt() {
+    return resumeLoadingAt;
+  }
+
+  public void resumeLoading() {
+    resumeLoadingAt = 0;
+  }
+
+  public boolean delayingLoading(long tick) {
+    return tick < resumeLoadingAt;
+  }
+
+  public int trackingDistance(long tick, int distance) {
+    return delayingLoading(tick) ? PortalViewLimits.preview(distance) : distance;
+  }
+
   public void ready(PortalLink link) {
-    var exit = link.exit().endpoint().center();
-    ready.put(link.entrance().identity(),
-        new Ready(link.generation(), SectionPos.posToSectionCoord(exit.x), SectionPos.posToSectionCoord(exit.z)));
+    acknowledge(link, true);
+  }
+
+  public void acknowledge(PortalLink link, boolean confirmed) {
+    var exit = PortalViewLimits.frontColumn(link.exit().endpoint());
+    ready.put(link.entrance().identity(), new Ready(link.generation(), exit, confirmed));
   }
 
   public boolean isReady(PortalLink link) {
     var known = ready.get(link.entrance().identity());
-    return known != null && known.generation == link.generation();
+    return known != null && known.generation == link.generation() && known.confirmed;
+  }
+
+  public boolean hasReadyLinks() {
+    for (var known : ready.values()) if (known.confirmed) return true;
+    return false;
   }
 
   public void retainLinks(List<PortalLink> links) {
     if (ready.isEmpty()) return;
     var live = new LongOpenHashSet();
-    for (var link : links) if (isReady(link)) live.add(link.entrance().identity());
+    for (var link : links) {
+      var known = ready.get(link.entrance().identity());
+      if (known != null && known.generation == link.generation()) live.add(link.entrance().identity());
+    }
     ready.keySet().retainAll(live);
   }
 
+  public void suspendColumn(long position, Consumer<PortalViewStatusPayload> update) {
+    var entries = ready.long2ObjectEntrySet().fastIterator();
+    while (entries.hasNext()) {
+      var entry = entries.next();
+      var known = entry.getValue();
+      if (!known.confirmed || !known.contains(position)) continue;
+      known.confirmed = false;
+      update.accept(new PortalViewStatusPayload(entry.getLongKey(), known.generation, false));
+    }
+  }
+
   public void forgetColumn(long position) {
-    if (ready.isEmpty()) return;
-    int x = ChunkPos.getX(position), z = ChunkPos.getZ(position);
-    ready.values().removeIf(known -> Math.abs(known.x - x) <= 1 && Math.abs(known.z - z) <= 1);
+    ready.values().removeIf(known -> known.contains(position));
+  }
+
+  public boolean confirmViews(LongPredicate received, Consumer<PortalViewStatusPayload> update) {
+    boolean changed = false;
+    var entries = ready.long2ObjectEntrySet().fastIterator();
+    while (entries.hasNext()) {
+      var entry = entries.next();
+      var known = entry.getValue();
+      if (!known.confirmed && PortalViewLimits.hasExitCore(known.center, received)) {
+        known.confirmed = true;
+        changed = true;
+        update.accept(new PortalViewStatusPayload(entry.getLongKey(), known.generation, true));
+      }
+    }
+    return changed;
   }
 
   public void clearReady() {
@@ -100,15 +161,12 @@ public final class PlayerPortalVisibility {
     return simulationChunks;
   }
 
-  public void replace(LongOpenHashSet chunks, List<Vec3> eyes) {
-    replace(chunks, eyes, new LongOpenHashSet());
-  }
-
-  public void replace(LongOpenHashSet chunks, List<Vec3> eyes, LongOpenHashSet simulationChunks) {
+  public void resetObservation(LongOpenHashSet chunks) {
+    resumeLoading();
     this.chunks = chunks;
-    this.eyes = List.copyOf(eyes);
+    this.eyes = List.of();
     this.observers = List.of();
-    this.simulationChunks = simulationChunks;
+    this.simulationChunks = new LongOpenHashSet();
     this.viewRadius = 0;
     this.priorities = null;
   }
@@ -147,5 +205,20 @@ public final class PlayerPortalVisibility {
 
   public record Observer(Vec3 eye, PortalEndpoint exit, boolean arrival) {}
 
-  private record Ready(long generation, int x, int z) {}
+  private static final class Ready {
+    final long generation;
+    final ChunkPos center;
+    boolean confirmed;
+
+    Ready(long generation, ChunkPos center, boolean confirmed) {
+      this.generation = generation;
+      this.center = center;
+      this.confirmed = confirmed;
+    }
+
+    boolean contains(long position) {
+      return center.getChessboardDistance(ChunkPos.getX(position), ChunkPos.getZ(position))
+          <= PortalViewLimits.CORE_RADIUS;
+    }
+  }
 }

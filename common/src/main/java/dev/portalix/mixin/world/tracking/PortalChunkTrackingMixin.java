@@ -1,9 +1,13 @@
 package dev.portalix.mixin.world.tracking;
 
+import com.llamalad7.mixinextras.injector.ModifyExpressionValue;
 import com.llamalad7.mixinextras.injector.wrapmethod.WrapMethod;
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
 import com.llamalad7.mixinextras.sugar.Local;
+import com.llamalad7.mixinextras.sugar.Share;
+import com.llamalad7.mixinextras.sugar.ref.LocalBooleanRef;
+import dev.portalix.platform.PortalPlatform;
 import dev.portalix.portal.query.PlayerPortalVisibility;
 import dev.portalix.server.PortalServerEvents;
 import dev.portalix.world.chunk.ChunkDeliveryAccess;
@@ -25,6 +29,12 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 abstract class PortalChunkTrackingMixin {
   @Shadow @Final private ServerLevel level;
 
+  @ModifyExpressionValue(method = "updateChunkTracking", at = @At(value = "INVOKE",
+      target = "Lnet/minecraft/server/level/ChunkMap;getPlayerViewDistance(Lnet/minecraft/server/level/ServerPlayer;)I"))
+  private int portalix$delayFullView(int distance, ServerPlayer player) {
+    return PlayerPortalVisibility.of(player).trackingDistance(level.getGameTime(), distance);
+  }
+
   @WrapMethod(method = "move")
   private void portalix$move(ServerPlayer player, Operation<Void> original) {
     PortalServerEvents.observerMoved(player);
@@ -42,6 +52,7 @@ abstract class PortalChunkTrackingMixin {
       original.call(player, next);
       return;
     }
+    ((ChunkDeliveryAccess) player.connection.chunkSender).portalix$enterLevel(player);
     PortalServerEvents.observerMoved(player, positioned.viewDistance());
     try {
       original.call(player, next);
@@ -66,11 +77,37 @@ abstract class PortalChunkTrackingMixin {
       at = @At("HEAD"),
       cancellable = true)
   private static void portalix$promote(
-      ServerPlayer player, LevelChunk chunk, CallbackInfo callback) {
+      ServerPlayer player, LevelChunk chunk, CallbackInfo callback,
+      @Share("restoreWatch") LocalBooleanRef restored) {
     long key = chunk.getPos().pack();
     var delivery = (ChunkDeliveryAccess) player.connection.chunkSender;
-    if (PortalServerEvents.retainedDuringMove(player, key)
-        || delivery.portalix$watching((ServerLevel) chunk.getLevel(), key)) callback.cancel();
+    var level = (ServerLevel) chunk.getLevel();
+    if (player.level() != level) {
+      callback.cancel();
+      return;
+    }
+    delivery.portalix$enterLevel(player);
+    if (delivery.portalix$watching(level, key)) {
+      callback.cancel();
+    } else if (delivery.portalix$subscribed(level, key)) {
+      // This subscription is still active. Queue the refresh without a second Watch event.
+      player.connection.chunkSender.markChunkPendingToSend(chunk);
+      callback.cancel();
+    } else {
+      restored.set(delivery.portalix$delivered(level, key));
+    }
+  }
+
+  @Inject(
+      method =
+          "markChunkPendingToSend(Lnet/minecraft/server/level/ServerPlayer;Lnet/minecraft/world/level/chunk/LevelChunk;)V",
+      at = @At("TAIL"))
+  private static void portalix$restoreWatch(
+      ServerPlayer player, LevelChunk chunk, CallbackInfo callback,
+      @Share("restoreWatch") LocalBooleanRef restored) {
+    var delivery = (ChunkDeliveryAccess) player.connection.chunkSender;
+    if (restored.get() && delivery.portalix$watching(player.level(), chunk.getPos().pack()))
+      PortalPlatform.INSTANCE.resumeChunkWatch(player, chunk);
   }
 
   @WrapOperation(method = "onChunkReadyToSend", at = @At(value = "INVOKE",
@@ -93,6 +130,10 @@ abstract class PortalChunkTrackingMixin {
 
   @Inject(method = "dropChunk", at = @At("HEAD"), cancellable = true)
   private static void portalix$retain(ServerPlayer player, ChunkPos pos, CallbackInfo callback) {
-    if (PlayerPortalVisibility.of(player).contains(pos.x(), pos.z())) callback.cancel();
+    long key = pos.pack();
+    var delivery = (ChunkDeliveryAccess) player.connection.chunkSender;
+    if (!delivery.portalix$subscribed(player.level(), key)
+        || PlayerPortalVisibility.of(player).contains(key) || PortalServerEvents.retainsTerrain(player, key))
+      callback.cancel();
   }
 }

@@ -9,7 +9,7 @@ public interface SodiumPrimaryView {
 
   void portalix$exchangePrimary(LevelRenderer renderer);
 
-  boolean portalix$completeDemand(LevelRenderer renderer, CameraRenderState camera);
+  boolean portalix$meshesReady(LevelRenderer renderer, CameraRenderState camera);
 
   boolean portalix$primaryOccludes(CameraRenderState camera, AABB bounds);
 

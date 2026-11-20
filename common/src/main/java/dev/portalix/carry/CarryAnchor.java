@@ -7,7 +7,6 @@ import dev.portalix.portal.PortalTopology;
 import dev.portalix.portal.camera.PortalEyePose;
 import dev.portalix.portal.geometry.PortalAperture;
 import dev.portalix.portal.query.PortalRaycast;
-import dev.portalix.portal.traversal.PortalEntityMovement;
 import java.util.ArrayList;
 import java.util.List;
 import net.minecraft.core.BlockPos;
@@ -19,6 +18,7 @@ import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.Vec3;
 
 public final class CarryAnchor {
+  public static final double MAX_HOLDER_DISTANCE = 5.0;
   public static final double DISTANCE = 2.125;
   public static final double SWEEP_MARGIN = 0.01;
 
@@ -46,27 +46,38 @@ public final class CarryAnchor {
   }
 
   public static Vec3 routeHoldPosition(Player player, List<PortalLink> route, AABB hull) {
+    return holdTarget(player).position(route, hull);
+  }
+
+  public static HoldTarget holdTarget(Player player) {
     var eye = PortalEyePose.sample(player);
     Vec3 desired = playerHoldPosition(eye);
-    for (var link : route) desired = link.transform().point(desired);
-    if (PortalTopology.links(player.level()).isEmpty()) return desired;
+    if (PortalTopology.links(player.level()).isEmpty()) return new HoldTarget(desired, List.of());
     var aim =
         PortalRaycast.cast(
             player, eye.position(), eye.forward().scale(DISTANCE),
             (from, to) -> BlockHitResult.miss(to, Direction.NORTH, BlockPos.containing(to)));
-    var travel = new ArrayList<PortalLinkId>();
-    for (var link : route.reversed()) travel.add(PortalLinkId.fromLink(link.inverse()));
-    for (var link : eye.eyePath()) travel.add(PortalLinkId.fromLink(link));
-    for (var link : aim.links()) travel.add(PortalLinkId.fromLink(link));
-    var path = PortalRoutes.simplifyIds(travel);
-    if (path.isEmpty()) return desired;
-    var entrance =
-        PortalTopology.resolve(player.level(), path.getFirst()).entrance().endpoint();
-    Vec3 seam = PortalAperture.shortestPathPoint(entrance, hull.getCenter(), desired);
-    var fitted = PortalAperture.fitHull(entrance, hull, seam);
-    return fitted.isEmpty()
-        ? desired
-        : fitted.orElseThrow().subtract(entrance.normal().scale(SWEEP_MARGIN));
+    var travel = new ArrayList<>(eye.eyePath());
+    travel.addAll(aim.links());
+    return new HoldTarget(desired, PortalRoutes.simplify(travel));
+  }
+
+  public record HoldTarget(Vec3 desired, List<PortalLink> travel) {
+    public Vec3 position(List<PortalLink> route, AABB hull) {
+      Vec3 local = desired;
+      for (var link : route) local = link.transform().point(local);
+      if (route.isEmpty() && travel.isEmpty()) return local;
+      var path = new ArrayList<PortalLink>(route.size() + travel.size());
+      for (var link : route.reversed()) path.add(link.inverse());
+      path.addAll(travel);
+      var simplified = PortalRoutes.simplify(path);
+      if (simplified.isEmpty()) return local;
+      var entrance = simplified.getFirst().entrance().endpoint();
+      Vec3 seam = PortalAperture.shortestPathPoint(entrance, hull.getCenter(), local);
+      return PortalAperture.fitHull(entrance, hull, seam)
+          .map(point -> point.subtract(entrance.normal().scale(SWEEP_MARGIN)))
+          .orElse(local);
+    }
   }
 
   public static Vec3 routeLookDirection(Player player, List<PortalLink> route) {
@@ -88,10 +99,6 @@ public final class CarryAnchor {
     if (eye.eyePath().isEmpty() && references.isEmpty()) return List.of();
     var eyeRoute = new ArrayList<>(references);
     for (var link : eye.eyePath()) eyeRoute.addFirst(PortalLinkId.fromLink(link.inverse()));
-    List<PortalLink> route = resolveRoute(holder, PortalRoutes.simplifyIds(eyeRoute));
-    if (route != null)
-      for (var link : route)
-        if (!PortalEntityMovement.canTraverse(holder, link)) return null;
-    return route;
+    return resolveRoute(holder, PortalRoutes.simplifyIds(eyeRoute));
   }
 }

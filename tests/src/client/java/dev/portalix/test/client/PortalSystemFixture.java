@@ -1,5 +1,6 @@
 package dev.portalix.test.client;
 
+import dev.portalix.portal.PortalViewLimits;
 import dev.portalix.api.PortalColor;
 import dev.portalix.api.PortalEndpoint;
 import dev.portalix.item.ModItems;
@@ -11,8 +12,8 @@ import dev.portalix.portal.traversal.EntityPortalState;
 import dev.portalix.portal.traversal.PortalPassagePose;
 import dev.portalix.portal.traversal.PortalTraversalReadiness;
 import dev.portalix.server.portal.GunPortalRegistry;
-import dev.portalix.test.client.mixin.PortalServerEventsAccessor;
-import dev.portalix.test.client.mixin.PortalServerSessionAccessor;
+import dev.portalix.test.mixin.PortalServerEventsAccessor;
+import dev.portalix.test.mixin.PortalServerSessionAccessor;
 import dev.portalix.test.client.mixin.ServerChunkCacheAccessor;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -77,6 +78,9 @@ final class PortalSystemFixture implements AutoCloseable {
           imagePoint(portal.center().add(portal.up())).subtract(center), 1, 2);
     }
     AABB exitBounds(AABB box) { return mappedBounds(box, entrance, exit); }
+    BlockPos viewRangeProbe(int viewRadius) {
+      return BlockPos.containing(exit.center().add(exit.normal().scale((PortalViewLimits.preview(viewRadius) - 1) * 16.0)));
+    }
     AABB materialBounds() {
       BlockPos center = BlockPos.containing(exit.center().lerp(markers.getFirst().bounds().getCenter(), .55));
       return new AABB(center.offset(0, -1, 0)).minmax(new AABB(center.offset(1, 1, 0)));
@@ -114,7 +118,7 @@ final class PortalSystemFixture implements AutoCloseable {
   private final Map<BlockPos, BlockState> blocks = new LinkedHashMap<>();
   private final Map<BlockPos, BlockState> materialBefore = new LinkedHashMap<>();
   private final List<Entity> entities = new ArrayList<>();
-  private final ItemStack gun = new ItemStack(ModItems.PORTALIX.get());
+  private final ItemStack gun = new ItemStack(ModItems.gun(PortalixVariant.STANDARD));
   private final UUID gunId = PortalixIdentity.ensure(gun);
   private final List<UUID> additionalGuns = new ArrayList<>();
   private final GunPortalRegistry registry;
@@ -144,8 +148,11 @@ final class PortalSystemFixture implements AutoCloseable {
 
   UUID gunId() { return gunId; }
 
-  Arrangement prepare(Direction entryFace, Direction exitFace, float exitRoll, double eyeDistance,
-                      boolean reverseLook) {
+  Arrangement prepare(Direction entryFace, Direction exitFace, float exitRoll, double eyeDistance) {
+    return prepare(entryFace, exitFace, exitRoll, eyeDistance, 16);
+  }
+
+  Arrangement prepare(Direction entryFace, Direction exitFace, float exitRoll, double eyeDistance, int exitOffset) {
     requireServerThread();
     clearArrangement();
     player.setGameMode(GameType.CREATIVE);
@@ -164,12 +171,15 @@ final class PortalSystemFixture implements AutoCloseable {
     double ceiling = Math.max(102, Math.ceil(100 + player.getEyeHeight() + eyeDistance - PortalAperture.PLANE_EPSILON));
     var entry = endpoint(new Vec3(originX + .5, entryFace == Direction.UP ? 100 : entryFace == Direction.DOWN ? ceiling : 101,
         originZ), entryFace, 0);
-    var exit = endpoint(new Vec3(originX + 16.5, exitFace == Direction.UP ? 100 : exitFace == Direction.DOWN ? 104 : 101,
+    var exit = endpoint(new Vec3(originX + exitOffset + .5, exitFace == Direction.UP ? 100 : exitFace == Direction.DOWN ? 104 : 101,
         originZ), exitFace, exitRoll);
     panel(entry); panel(exit);
     // The broad panel clearance must not remove the walking surface below a wall aperture.
     fill(new BlockPos(originX - 6, 99, originZ - 6), new BlockPos(originX + 22, 99, originZ + 6),
         Blocks.QUARTZ_BLOCK.defaultBlockState());
+    if (exitOffset != 16)
+      fill(new BlockPos(originX + exitOffset - 6, 99, originZ - 6),
+          new BlockPos(originX + exitOffset + 6, 99, originZ + 6), Blocks.QUARTZ_BLOCK.defaultBlockState());
     List<Marker> markers = List.of(marker(exit, -.6, -.5, DyeColor.RED, FrameCapture.Material.RED),
         marker(exit, .6, -.5, DyeColor.LIME, FrameCapture.Material.GREEN),
         marker(exit, 0, .5, DyeColor.BLUE, FrameCapture.Material.BLUE));
@@ -181,12 +191,60 @@ final class PortalSystemFixture implements AutoCloseable {
     Vec3 eye = entry.center().add(entry.normal().scale(eyeDistance));
     if (entryFace.getAxis() != Direction.Axis.Y) eye = eye.add(0, player.getEyeHeight() - 1, 0);
     Vec3 feet = eye.add(0, -player.getEyeHeight(), 0);
-    Vec3 aim = eye.add(entry.normal().scale(reverseLook ? 5 : -5));
+    Vec3 aim = eye.add(entry.normal().scale(-5));
     teleport(feet, aim);
     long generation = PortalTopology.links(level).stream().filter(link -> link.gun().equals(gunId))
         .findFirst().orElseThrow().generation();
     current = new Arrangement(entry, exit, feet, aim, markers, generation);
     return current;
+  }
+
+  record RangeCourse(Arrangement view, AABB near, AABB edge, AABB far, Vec3 referenceFeet) {}
+
+  RangeCourse prepareRangeCourse() {
+    var base = prepare(Direction.SOUTH, Direction.SOUTH, 0, 2.0);
+    registry.clear(gunId);
+    var exit = BlockPos.containing(base.exit().center());
+    fill(exit.offset(-4, -3, 3), exit.offset(4, 3, 7), Blocks.AIR.defaultBlockState());
+    var near = rangePanel(exit.offset(1, -3, 18), exit.offset(2, 0, 18), DyeColor.LIME);
+    var edge = rangePanel(exit.offset(-13, -15, 120), exit.offset(-6, -7, 120), DyeColor.MAGENTA);
+    var farMin = exit.offset(-2, -15, 154);
+    var farMax = exit.offset(6, -6, 154);
+    var far = rangePanel(farMin, farMax, DyeColor.MAGENTA);
+    var reference = base.exit().center().add(0, -1, 1.5);
+    teleport(reference, reference.add(0, player.getEyeHeight(), 5));
+    return new RangeCourse(base, near, edge, far, reference);
+  }
+
+  private AABB rangePanel(BlockPos first, BlockPos last, DyeColor color) {
+    fill(first, last, Blocks.CONCRETE.pick(color).defaultBlockState());
+    // Keep the distant magenta references legible under shader-pack fog and directional lighting.
+    if (color == DyeColor.MAGENTA) fill(first.north(), last.north(), Blocks.LIGHT.defaultBlockState());
+    fill(new BlockPos(first.getX(), last.getY() + 1, first.getZ() - 1), last.above().north(), Blocks.SEA_LANTERN.defaultBlockState());
+    return new AABB(first).minmax(new AABB(last));
+  }
+
+  void openRangeCourse() {
+    if (!registry.apply(player, gunId, PortalColor.BLUE, current.entrance(), PortalixVariant.STANDARD)
+        || !registry.apply(player, gunId, PortalColor.ORANGE, current.exit(), PortalixVariant.STANDARD))
+      throw new AssertionError("Could not reopen the prepared range course");
+  }
+
+  Arrangement prepareCompetingViews(int viewRadius) {
+    int spacing = viewRadius * 64;
+    var visible = prepare(Direction.SOUTH, Direction.SOUTH, 0, 6, spacing);
+    block(visible.viewRangeProbe(viewRadius), Blocks.GOLD_BLOCK.defaultBlockState());
+    for (int i = 0; i < 4; i++) {
+      UUID backgroundGun = UUID.randomUUID();
+      additionalGuns.add(backgroundGun);
+      var entry = endpoint(new Vec3(originX + .5 + (i - 1.5) * 1.5, 101, originZ + 8), Direction.NORTH, 0);
+      var exit = endpoint(new Vec3(originX + (i + 2) * spacing + .5, 101, originZ), Direction.SOUTH, 0);
+      panel(entry); panel(exit);
+      if (!registry.apply(player, backgroundGun, PortalColor.BLUE, entry, PortalixVariant.STANDARD)
+          || !registry.apply(player, backgroundGun, PortalColor.ORANGE, exit, PortalixVariant.STANDARD))
+        throw new AssertionError("A competing hidden portal pair failed placement validation");
+    }
+    return visible;
   }
 
   void teleport(Vec3 feet, Vec3 aim) {
@@ -205,6 +263,50 @@ final class PortalSystemFixture implements AutoCloseable {
     requireServerThread();
     player.getAbilities().flying = false;
     player.onUpdateAbilities();
+  }
+
+  void prepareFallingShot(Vec3 start) {
+    requireServerThread();
+    player.getAbilities().flying = true;
+    player.onUpdateAbilities();
+    fill(new BlockPos(originX + 14, 100, originZ), new BlockPos(originX + 18, 103, originZ + 24),
+        Blocks.AIR.defaultBlockState());
+    fill(new BlockPos(originX + 14, 99, originZ), new BlockPos(originX + 18, 99, originZ + 24),
+        Blocks.QUARTZ_BLOCK.defaultBlockState());
+    player.getInventory().setSelectedSlot(0);
+    player.connection.send(new ClientboundSetHeldSlotPacket(0));
+    teleport(start, start.add(0, -8, 0));
+  }
+
+  void startFallingShot() {
+    releaseFlight();
+    player.setDeltaMovement(0, -4, 0);
+  }
+
+  Arrangement prepareFloorExit() {
+    var base = prepare(Direction.UP, Direction.SOUTH, 0, 4);
+    var exit = endpoint(base.exit.center().add(0, 3, 0), Direction.SOUTH, 0);
+    panel(exit);
+    fill(new BlockPos(originX + 13, 99, originZ - 1),
+        new BlockPos(originX + 20, 108, originZ - 1), Blocks.STONE.defaultBlockState());
+    fill(new BlockPos(originX + 13, 100, originZ),
+        new BlockPos(originX + 20, 108, originZ + 96), Blocks.AIR.defaultBlockState());
+    fill(new BlockPos(originX + 13, 99, originZ),
+        new BlockPos(originX + 20, 99, originZ + 96), Blocks.QUARTZ_BLOCK.defaultBlockState());
+    if (!registry.apply(player, gunId, PortalColor.ORANGE, exit, PortalixVariant.STANDARD))
+      throw new AssertionError("The elevated wall exit failed placement validation");
+    Vec3 feet = base.entrance.center().add(0, .1, -.5);
+    Vec3 aim = feet.add(0, -2, 0);
+    teleport(feet, aim);
+    long generation = PortalTopology.links(level).stream().filter(link -> link.gun().equals(gunId))
+        .findFirst().orElseThrow().generation();
+    current = new Arrangement(base.entrance, exit, feet, aim, List.of(), generation);
+    return current;
+  }
+
+  void startFloorFall(double speed) {
+    releaseFlight();
+    player.setDeltaMovement(0, -speed, 0);
   }
 
   AABB cameraObstacle() {
@@ -267,6 +369,27 @@ final class PortalSystemFixture implements AutoCloseable {
     var immutable = position.immutable();
     blocks.putIfAbsent(immutable, level.getBlockState(immutable));
     level.setBlock(immutable, state, Block.UPDATE_CLIENTS | Block.UPDATE_KNOWN_SHAPE);
+  }
+
+  void extendPiston() {
+    requireServerThread();
+    player.setGameMode(GameType.SURVIVAL);
+    var base = new BlockPos(originX, 99, originZ + 1);
+    var power = base.east();
+    block(base.offset(8, 1, -1), Blocks.FIRE.defaultBlockState());
+    block(new BlockPos(originX, 99, originZ - 7), Blocks.AIR.defaultBlockState());
+    var honey = base.relative(Direction.NORTH);
+    block(honey.west(), Blocks.GLAZED_TERRACOTTA.pick(DyeColor.BLUE).defaultBlockState());
+    block(honey.east(), Blocks.GLAZED_TERRACOTTA.pick(DyeColor.BLUE).defaultBlockState());
+    block(honey, Blocks.HONEY_BLOCK.defaultBlockState());
+    block(base, Blocks.PISTON.defaultBlockState()
+        .setValue(net.minecraft.world.level.block.piston.PistonBaseBlock.FACING, Direction.NORTH));
+    block(power, Blocks.REDSTONE_BLOCK.defaultBlockState());
+    level.updateNeighborsAt(power, Blocks.REDSTONE_BLOCK);
+  }
+
+  String pistonState() {
+    return level.getBlockState(new BlockPos(originX, 99, originZ + 1)).toString();
   }
 
   void fill(BlockPos first, BlockPos last, BlockState state) {

@@ -10,7 +10,6 @@ import dev.portalix.client.portal.render.PortalSurfaceRenderer;
 import dev.portalix.client.render.LinearParticleRenderer;
 import java.util.ArrayList;
 import java.util.function.Supplier;
-import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientChunkEvents;
 import net.fabricmc.fabric.api.client.keymapping.v1.KeyMappingHelper;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.fabricmc.fabric.api.client.renderer.v1.model.MeshQuadCollection;
@@ -22,7 +21,6 @@ import net.fabricmc.fabric.api.client.rendering.v1.level.LevelRenderEvents;
 import net.fabricmc.fabric.api.resource.v1.ResourceLoader;
 import net.fabricmc.fabric.api.resource.v1.reloader.ResourceReloaderKeys;
 import net.minecraft.client.KeyMapping;
-import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.renderer.OrderedSubmitNodeCollector;
 import net.minecraft.client.renderer.feature.submit.SubmitNode;
 import net.minecraft.client.resources.model.geometry.QuadCollection;
@@ -30,7 +28,6 @@ import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
 import net.minecraft.resources.Identifier;
 import net.minecraft.server.packs.PackType;
 import net.minecraft.server.packs.resources.PreparableReloadListener;
-import net.minecraft.world.level.chunk.LevelChunk;
 import org.joml.Vector3fc;
 
 public final class FabricClientPlatform implements ClientPlatform {
@@ -77,8 +74,6 @@ public final class FabricClientPlatform implements ClientPlatform {
   public void registerRenderEvents() {
     LevelRenderEvents.COLLECT_SUBMITS.register(
         context -> GunRenderEvents.collect(context.submitNodeCollector(), context.levelState()));
-    LevelRenderEvents.BEFORE_BLOCK_OUTLINE.register(
-        (context, outline) -> !GunRenderEvents.hidesBlockOutline(outline.pos()));
     HudElementRegistry.replaceElement(VanillaHudElements.CROSSHAIR, original ->
         (graphics, delta) -> {
           original.extractRenderState(graphics, delta);
@@ -86,15 +81,6 @@ public final class FabricClientPlatform implements ClientPlatform {
         });
   }
 
-  @Override
-  public void chunkLoaded(ClientLevel level, LevelChunk chunk) {
-    ClientChunkEvents.CHUNK_LOAD.invoker().onChunkLoad(level, chunk);
-  }
-
-  @Override
-  public void chunkUnloaded(ClientLevel level, LevelChunk chunk) {
-    ClientChunkEvents.CHUNK_UNLOAD.invoker().onChunkUnload(level, chunk);
-  }
 
   @Override
   public RenderPipeline pipeline(PipelineVariant variant) {

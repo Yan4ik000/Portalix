@@ -9,7 +9,7 @@ import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
 
 public record PlayerPortalMoveAckPayload(long sequence, boolean accepted, float poseScale,
-    List<PortalLink> crossings)
+    long resumeLoadingAt, List<PortalLink> crossings)
     implements CustomPacketPayload {
   public static final Type<PlayerPortalMoveAckPayload> TYPE =
       new Type<>(PortalixMod.id("portal_move_ack"));
@@ -19,11 +19,12 @@ public record PlayerPortalMoveAckPayload(long sequence, boolean accepted, float 
             buffer.writeVarLong(payload.sequence);
             buffer.writeBoolean(payload.accepted);
             buffer.writeFloat(payload.poseScale);
+            buffer.writeVarLong(payload.resumeLoadingAt);
             buffer.writeCollection(payload.crossings, PayloadCodecs::writePortalLink);
           },
           buffer ->
               new PlayerPortalMoveAckPayload(
-                  buffer.readVarLong(), buffer.readBoolean(), buffer.readFloat(),
+                  buffer.readVarLong(), buffer.readBoolean(), buffer.readFloat(), buffer.readVarLong(),
                   buffer.readList(PayloadCodecs::readPortalLink)));
 
   public PlayerPortalMoveAckPayload {

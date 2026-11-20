@@ -14,6 +14,7 @@ public final class PortalixFabricClient implements ClientModInitializer {
     ModelLoadingPlugin.register(context -> context.modifyItemModelAfterBake().register(
         (model, item) -> PortalixItemModel.MODELS.contains(item.itemId())
             ? new PortalixItemModel(model) : model));
+    FabricClientNetworking.registerProtocolCheck();
     ClientNetworking.register(new FabricClientNetworking());
     PortalixClient.register();
     PortalixClient.initialize();

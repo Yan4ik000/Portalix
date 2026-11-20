@@ -4,6 +4,7 @@ import dev.portalix.network.ModNetworking;
 import dev.portalix.network.portal.ProjectilePortalMovePayload;
 import dev.portalix.network.portal.ProjectileStatePayload;
 import dev.portalix.server.EntityObservers;
+import it.unimi.dsi.fastutil.objects.ReferenceOpenHashSet;
 import java.util.function.Consumer;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.Entity;
@@ -19,19 +20,20 @@ public final class ProjectileStateSync {
     if (!(entity instanceof Projectile)
         || !entity.getUUID().equals(request.entityUuid())
         || !EntityObservers.tracking(entity).contains(player)) return;
-    EntityPortalState.of(entity).snapshotObservers.add(player.getUUID());
+    var state = EntityPortalState.of(entity);
+    if (state.snapshotObservers == null) state.snapshotObservers = new ReferenceOpenHashSet<>(2);
+    state.snapshotObservers.add(player);
   }
 
   public static void entityRemoved(Entity entity) {
-    EntityPortalState.of(entity).snapshotObservers.clear();
+    EntityPortalState.of(entity).snapshotObservers = null;
   }
 
-  public static void disconnected(ServerPlayer disconnected) {
-    var player = disconnected.getUUID();
-    for (var level : disconnected.level().getServer().getAllLevels())
-      for (var entity : level.getAllEntities())
-        if (entity instanceof Projectile)
-          EntityPortalState.of(entity).snapshotObservers.remove(player);
+  public static void trackingStopped(Entity entity, ServerPlayer observer) {
+    var state = EntityPortalState.of(entity);
+    var requests = state.snapshotObservers;
+    if (requests != null && requests.remove(observer) && requests.isEmpty())
+      state.snapshotObservers = null;
   }
 
   public static void setPredictionListener(Consumer<Entity> prediction) {
@@ -45,7 +47,9 @@ public final class ProjectileStateSync {
   public static void afterTracking(Entity entity) {
     if (!(entity instanceof Projectile)) return;
     var state = EntityPortalState.of(entity);
-    if (state.snapshotObservers.isEmpty()) return;
+    var requests = state.snapshotObservers;
+    if (requests == null) return;
+    state.snapshotObservers = null;
     var packet =
         new ProjectileStatePayload(
             entity.getId(),
@@ -57,8 +61,7 @@ public final class ProjectileStateSync {
             entity.getYRot(),
             entity.getXRot());
     for (var observer : EntityObservers.tracking(entity))
-      if (state.snapshotObservers.contains(observer.getUUID()))
+      if (requests.contains(observer))
         ModNetworking.sendToPlayer(observer, packet);
-    state.snapshotObservers.clear();
   }
 }

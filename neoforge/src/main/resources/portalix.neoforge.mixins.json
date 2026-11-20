@@ -2,13 +2,19 @@
   "required": true,
   "package": "dev.portalix.neoforge.mixin",
   "compatibilityLevel": "JAVA_${java_version}",
+  "mixinextras": { "minVersion": "0.5.5" },
   "mixins": [
+    "PortalChunkLoadingLookupMixin",
+    "RetainedChunkAttachmentSyncMixin",
     "PlayerPortalDataMixin",
     "ItemPortalDataMixin",
     "PortalBuiltinLootMixin",
     "PortalSweepHitboxMixin"
   ],
   "client": [
+    "PortalChunkAttachmentsMixin",
+    "PortalChunkLoadEventMixin",
+    "PortalAttachmentSyncMixin",
     "PortalScreenEffectsMixin"
   ],
   "injectors": {

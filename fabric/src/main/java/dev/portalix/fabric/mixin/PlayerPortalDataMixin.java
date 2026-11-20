@@ -1,5 +1,6 @@
 package dev.portalix.fabric.mixin;
 
+import dev.portalix.fabric.PlayerPoseData;
 import dev.portalix.portal.traversal.PortalPassagePose;
 import net.minecraft.network.syncher.EntityDataAccessor;
 import net.minecraft.network.syncher.EntityDataSerializers;
@@ -12,7 +13,7 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 @Mixin(Player.class)
-abstract class PlayerPortalDataMixin implements PortalPassagePose.Access {
+abstract class PlayerPortalDataMixin implements PortalPassagePose.Access, PlayerPoseData {
   @Unique private static final EntityDataAccessor<Float> PORTALIX_POSE_SCALE =
       SynchedEntityData.defineId(Player.class, EntityDataSerializers.FLOAT);
 

@@ -15,6 +15,10 @@ final class PlayerPortalMoves {
     if (!crossings.isEmpty()) pending.add(new Move(sequence, List.copyOf(crossings)));
   }
 
+  boolean hasPendingCrossings() {
+    return !pending.isEmpty();
+  }
+
   List<PortalLink> ownerRoute(long completed, List<PortalLink> active) {
     var route = new ArrayList<PortalLink>();
     for (var move : pending.reversed()) {

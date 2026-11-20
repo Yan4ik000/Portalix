@@ -18,8 +18,9 @@ import org.joml.Matrix4fc;
 import org.joml.Vector4f;
 
 public final class PortalClipping {
+  public static final String UNIFORM_NAME = "PortalClip";
   public static final BindGroupLayout LAYOUT =
-      BindGroupLayout.builder().withUniform("PortalClip", UniformType.UNIFORM_BUFFER).build();
+      BindGroupLayout.builder().withUniform(UNIFORM_NAME, UniformType.UNIFORM_BUFFER).build();
   private static DynamicUniformStorage<Planes> storage;
   private static GpuBufferSlice disabled;
   private static Vec3 disabledCamera;

@@ -10,6 +10,7 @@ import net.minecraft.world.level.chunk.LightChunkGetter;
 import net.minecraft.world.level.lighting.DataLayerStorageMap;
 import net.minecraft.world.level.lighting.LayerLightSectionStorage;
 import net.minecraft.world.level.lighting.SkyLightSectionStorage;
+import net.minecraft.world.level.lighting.SkyLightSectionStorage.SkyDataLayerStorageMap;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 
@@ -30,9 +31,8 @@ abstract class PortalSkyLightColumnsMixin<M extends DataLayerStorageMap<M>>
       Long2IntOpenHashMap columns,
       long column,
       Operation<Integer> original,
-      @Local(argsOnly = true) boolean updating) {
-    return ((SkyLightColumnAccess) (updating ? updatingSectionData : visibleSectionData))
-        .portalix$getTop(column);
+      @Local SkyDataLayerStorageMap sections) {
+    return ((SkyLightColumnAccess) (Object) sections).portalix$getTop(column);
   }
 
   @WrapOperation(

@@ -3,11 +3,8 @@ package dev.portalix.client.compat.sodium;
 import dev.portalix.client.compat.TerrainIntegration;
 import dev.portalix.client.mixin.compat.sodium.LevelRendererAccessor;
 import net.caffeinemc.mods.sodium.client.render.SodiumWorldRenderer;
-import net.caffeinemc.mods.sodium.client.render.chunk.map.ChunkStatus;
-import net.caffeinemc.mods.sodium.client.render.chunk.map.ChunkTrackerHolder;
 import net.caffeinemc.mods.sodium.client.world.LevelRendererExtension;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.renderer.LevelRenderer;
 import net.minecraft.client.renderer.state.level.CameraRenderState;
 import net.minecraft.world.phys.AABB;
@@ -32,9 +29,9 @@ public final class SodiumTerrainIntegration implements TerrainIntegration {
   }
 
   @Override
-  public boolean completeDemand(LevelRenderer renderer, CameraRenderState camera) {
+  public boolean meshesReady(LevelRenderer renderer, CameraRenderState camera) {
     var world = ((LevelRendererExtension) renderer).sodium$getWorldRenderer();
-    return world != null && ((SodiumPrimaryView) world).portalix$completeDemand(renderer, camera);
+    return world != null && ((SodiumPrimaryView) world).portalix$meshesReady(renderer, camera);
   }
 
   @Override
@@ -62,15 +59,5 @@ public final class SodiumTerrainIntegration implements TerrainIntegration {
   public void invalidateOcclusion(LevelRenderer renderer) {
     var world = ((LevelRendererExtension) renderer).sodium$getWorldRenderer();
     if (world != null) ((SodiumPrimaryView) world).portalix$invalidateOcclusion();
-  }
-
-  @Override
-  public void loaded(ClientLevel level, int x, int z) {
-    ChunkTrackerHolder.get(level).onChunkStatusAdded(x, z, ChunkStatus.FLAG_HAS_BLOCK_DATA);
-  }
-
-  @Override
-  public void unloaded(ClientLevel level, int x, int z) {
-    ChunkTrackerHolder.get(level).onChunkStatusRemoved(x, z, ChunkStatus.FLAG_HAS_BLOCK_DATA);
   }
 }

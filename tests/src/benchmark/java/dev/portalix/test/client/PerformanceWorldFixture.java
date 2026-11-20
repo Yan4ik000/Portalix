@@ -9,8 +9,8 @@ import dev.portalix.item.PortalixIdentity;
 import dev.portalix.item.PortalixVariant;
 import dev.portalix.portal.PortalTopology;
 import dev.portalix.server.portal.GunPortalRegistry;
-import dev.portalix.test.client.mixin.PortalServerEventsAccessor;
-import dev.portalix.test.client.mixin.PortalServerSessionAccessor;
+import dev.portalix.test.mixin.PortalServerEventsAccessor;
+import dev.portalix.test.mixin.PortalServerSessionAccessor;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
@@ -77,11 +77,10 @@ final class PerformanceWorldFixture {
     panel(source.exit(), Blocks.AIR.defaultBlockState());
     panel(destination.entrance(), Blocks.AIR.defaultBlockState());
     panel(destination.exit(), Blocks.QUARTZ_BLOCK.defaultBlockState());
-    // Only the destination is stored in advance; the player must shoot the local endpoint.
     check(registry.apply(player, gun, PortalColor.ORANGE, destination.exit(), PortalixVariant.STANDARD),
         "Cannot store the distant performance destination");
     if (hop == 0) {
-      var stack = new ItemStack(ModItems.PORTALIX.get());
+      var stack = new ItemStack(ModItems.gun(PortalixVariant.STANDARD));
       stack.set(PortalixIdentity.ID.get(), gun);
       player.getInventory().setItem(0, stack);
       player.getInventory().setSelectedSlot(0);

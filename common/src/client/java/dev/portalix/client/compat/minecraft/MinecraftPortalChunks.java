@@ -1,116 +1,79 @@
 package dev.portalix.client.compat.minecraft;
 
 import dev.portalix.client.compat.PortalTerrainBackend;
-import dev.portalix.client.platform.ClientPlatform;
 import dev.portalix.client.portal.PortalViewReadiness;
 import dev.portalix.client.portal.terrain.PortalTerrainColumns;
 import dev.portalix.client.world.RetainedChunkStorage;
+import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
-import java.util.function.Consumer;
-import net.minecraft.client.multiplayer.ClientChunkCache;
+import java.util.concurrent.atomic.AtomicReferenceArray;
 import net.minecraft.client.multiplayer.ClientLevel;
-import net.minecraft.core.SectionPos;
-import net.minecraft.network.FriendlyByteBuf;
-import net.minecraft.network.protocol.game.ClientboundLevelChunkPacketData;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.chunk.LevelChunk;
-import net.minecraft.world.level.levelgen.Heightmap;
+import org.jspecify.annotations.Nullable;
 
 public final class MinecraftPortalChunks {
-  private final ClientChunkCache cache;
-  private final ClientLevel level;
-  private final LevelChunk emptyChunk;
-  private final RetainedChunkStorage<LevelChunk> chunks = new RetainedChunkStorage<>();
-  private final PortalTerrainColumns columns;
+  public interface Access {
+    MinecraftPortalChunks portalix$chunks();
+  }
 
-  public MinecraftPortalChunks(ClientChunkCache cache, ClientLevel level, LevelChunk emptyChunk) {
-    this.cache = cache;
-    this.level = level;
-    this.emptyChunk = emptyChunk;
+  private final RetainedChunkStorage<LevelChunk> overflow = new RetainedChunkStorage<>();
+  private final @Nullable PortalTerrainColumns columns;
+  private @Nullable List<LevelChunk> loaded;
+
+  public MinecraftPortalChunks(ClientLevel level) {
     columns = PortalTerrainBackend.usesVanillaChunkEvents()
         ? new PortalTerrainColumns(level.getMinSectionY(), level.getMaxSectionY() - level.getMinSectionY() + 1)
         : null;
   }
 
-  public PortalTerrainColumns columns() {
+  public @Nullable PortalTerrainColumns columns() {
     return columns;
   }
 
-  public List<LevelChunk> retained() {
-    return chunks.values();
+  public @Nullable LevelChunk find(@Nullable LevelChunk slot, int x, int z) {
+    if (slot != null && slot.getPos().x() == x && slot.getPos().z() == z) return slot;
+    return overflow.get(ChunkPos.pack(x, z));
   }
 
-  public int size() {
-    return chunks.size();
-  }
-
-  public LevelChunk get(int x, int z, boolean load) {
-    var chunk = chunks.get(ChunkPos.pack(x, z));
-    return chunk == null && load ? emptyChunk : chunk;
-  }
-
-  public LevelChunk receive(int x, int z, FriendlyByteBuf buffer,
-      Map<Heightmap.Types, long[]> heightmaps,
-      Consumer<ClientboundLevelChunkPacketData.BlockEntityTagOutput> blockEntities) {
-    var pos = new ChunkPos(x, z);
-    var chunk = chunks.get(pos.pack());
-    boolean added = chunk == null;
-    if (added) chunk = new LevelChunk(level, pos);
-    chunk.replaceWithPacketData(buffer, heightmaps, blockEntities);
-    chunks.put(pos.pack(), chunk);
-    cache.removedLoadedChunks().remove(pos.pack());
-    if (added) {
-      cache.addedLoadedChunks().add(pos.pack());
-      PortalViewReadiness.chunkLoaded();
+  public List<LevelChunk> loaded(AtomicReferenceArray<LevelChunk> slots) {
+    if (loaded == null) {
+      var chunks = new ArrayList<>(overflow.values());
+      for (int i = 0; i < slots.length(); i++) {
+        var chunk = slots.get(i);
+        if (chunk != null) chunks.add(chunk);
+      }
+      loaded = List.copyOf(chunks);
     }
-    sections(chunk, false);
-    level.onChunkLoaded(pos);
-    PortalTerrainBackend.chunkLoaded(level, x, z);
-    ClientPlatform.INSTANCE.chunkLoaded(level, chunk);
-    return chunk;
+    return loaded;
   }
 
-  public void replaceBiomes(int x, int z, FriendlyByteBuf buffer) {
-    var chunk = chunks.get(ChunkPos.pack(x, z));
-    if (chunk != null) chunk.replaceBiomes(buffer);
+  public void retain(LevelChunk chunk) {
+    overflow.put(chunk.getPos().pack(), chunk);
   }
 
-  public void drop(ChunkPos pos) {
-    var chunk = chunks.get(pos.pack());
-    if (chunk != null) {
-      ClientPlatform.INSTANCE.chunkUnloaded(level, chunk);
-      chunks.remove(pos.pack());
-      PortalViewReadiness.chunkForgotten(pos);
-      cache.addedLoadedChunks().remove(pos.pack());
-      cache.removedLoadedChunks().add(pos.pack());
-      sections(chunk, true);
-      level.unload(chunk);
-      PortalTerrainBackend.chunkUnloaded(level, pos.x(), pos.z());
-    }
+  public boolean forget(LevelChunk chunk) {
+    long key = chunk.getPos().pack();
+    return overflow.get(key) == chunk && overflow.remove(key) != null;
+  }
+
+  public void updateColumn(LevelChunk chunk) {
+    var pos = chunk.getPos();
+    if (columns != null) columns.replace(pos.x(), pos.z(), chunk.getSections());
+  }
+
+  public void added() {
+    loaded = null;
+    PortalViewReadiness.chunkLoaded();
+  }
+
+  public void removed(ChunkPos pos) {
+    loaded = null;
+    if (columns != null) columns.remove(pos.x(), pos.z());
+    PortalViewReadiness.chunkForgotten(pos);
   }
 
   public void sectionChanged(int x, int y, int z, boolean empty) {
-    if (chunks.get(ChunkPos.pack(x, z)) != null) {
-      if (columns != null) columns.setEmpty(x, y, z, empty);
-      long section = SectionPos.asLong(x, y, z);
-      (empty ? cache.removedEmptySections() : cache.addedEmptySections()).remove(section);
-      (empty ? cache.addedEmptySections() : cache.removedEmptySections()).add(section);
-    }
-  }
-
-  private void sections(LevelChunk chunk, boolean removed) {
-    var pos = chunk.getPos();
-    var sections = chunk.getSections();
-    if (columns != null) {
-      if (removed) columns.remove(pos.x(), pos.z());
-      else columns.replace(pos.x(), pos.z(), sections);
-    }
-    for (int i = 0; i < sections.length; i++) {
-      long section = SectionPos.asLong(pos.x(), chunk.getSectionYFromSectionIndex(i), pos.z());
-      boolean empty = !removed && sections[i].hasOnlyAir();
-      (empty ? cache.removedEmptySections() : cache.addedEmptySections()).remove(section);
-      (empty ? cache.addedEmptySections() : cache.removedEmptySections()).add(section);
-    }
+    if (columns != null) columns.setEmpty(x, y, z, empty);
   }
 }

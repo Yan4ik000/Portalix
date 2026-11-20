@@ -18,4 +18,8 @@ public interface PortalFrustumState {
   Vec3 portalix$preparationCell();
 
   void portalix$preparationCell(Vec3 origin);
+
+  PortalTerrainWindow portalix$terrainWindow();
+
+  void portalix$terrainWindow(PortalTerrainWindow window);
 }

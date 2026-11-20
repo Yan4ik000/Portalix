@@ -31,7 +31,7 @@ public final class PortalGroundSupport {
     for (var obstacle : obstacles) {
       var slice =
           obstacle
-              .clip(new Plane(new Vec3(0, 1, 0), body.minY))
+              .clip(new Plane(Vec3.Y_AXIS, body.minY))
               .clip(new Plane(new Vec3(0, -1, 0), -body.minY + depth + INSET));
       if (slice.isEmpty()) continue;
       var points = new ArrayList<Vec3>();

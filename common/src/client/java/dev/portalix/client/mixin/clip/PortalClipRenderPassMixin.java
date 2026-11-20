@@ -20,6 +20,6 @@ public abstract class PortalClipRenderPassMixin {
   @Inject(method = "setPipeline", at = @At("TAIL"))
   private void portalix$clip(RenderPipeline pipeline, CallbackInfo ci) {
     if (PortalClipPipelineCache.usesClipUniform(pipeline))
-      ((RenderPass) (Object) this).setUniform("PortalClip", PortalClipping.uniform());
+      ((RenderPass) (Object) this).setUniform(PortalClipping.UNIFORM_NAME, PortalClipping.uniform());
   }
 }

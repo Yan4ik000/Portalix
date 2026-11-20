@@ -3,10 +3,14 @@ package dev.portalix.test;
 import static dev.portalix.test.ServerRegressionSuite.check;
 import static dev.portalix.test.ServerRegressionSuite.near;
 
+import dev.portalix.api.PortalEndpoint;
 import dev.portalix.portal.PortalLink;
+import dev.portalix.network.portal.EntityPortalCrossingPayload;
 import dev.portalix.portal.query.PlayerPortalVisibility;
 import dev.portalix.portal.traversal.EntityPortalState;
+import dev.portalix.portal.traversal.PortalCollisionWorld;
 import dev.portalix.portal.traversal.PortalEntityCollisions;
+import dev.portalix.portal.traversal.PortalEntityMovement;
 import dev.portalix.portal.traversal.PortalItemRotation;
 import dev.portalix.portal.traversal.PortalPassengerGroup;
 import dev.portalix.test.mixin.RegressionMinecartBehaviorAccessor;
@@ -16,10 +20,14 @@ import java.util.List;
 import java.util.UUID;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
+import net.minecraft.network.protocol.common.ClientboundCustomPayloadPacket;
+import net.minecraft.network.protocol.game.ClientboundBundlePacket;
+import net.minecraft.network.protocol.game.ClientboundPlayerPositionPacket;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntitySpawnReason;
 import net.minecraft.world.entity.EntityTypes;
 import net.minecraft.world.entity.Mob;
+import net.minecraft.world.entity.MoverType;
 import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.entity.vehicle.minecart.Minecart;
 import net.minecraft.world.entity.vehicle.minecart.NewMinecartBehavior;
@@ -30,6 +38,7 @@ import net.minecraft.world.level.storage.TagValueOutput;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.properties.BlockStateProperties;
 import net.minecraft.world.level.block.state.properties.RailShape;
+import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 
 final class NativeEntityRegression {
@@ -37,6 +46,10 @@ final class NativeEntityRegression {
 
   static void run(RegressionWorld world) {
     itemPersistence(world);
+    world.reset();
+    boatReplayWithLaggingPassenger(world);
+    world.reset();
+    nestedPassengerGeometry(world);
     world.reset();
     for (boolean passenger : new boolean[] {false, true}) {
       animal(world, passenger);
@@ -52,6 +65,146 @@ final class NativeEntityRegression {
         world.reset();
       }
     }
+    externalBoatConvoy(world);
+  }
+
+  private static void externalBoatConvoy(RegressionWorld world) {
+    var entrance = new PortalEndpoint(world.level.dimension(), new Vec3(144.5, 104, 144.5),
+        new Vec3(0, 1, 0), new Vec3(0, 0, 1), 1, 2);
+    var exit = new PortalEndpoint(world.level.dimension(), new Vec3(192.5, 104, 144.5),
+        new Vec3(0, 1, 0), new Vec3(0, 0, 1), 1, 2);
+    world.surface(entrance, Blocks.STONE.defaultBlockState(), Blocks.AIR.defaultBlockState());
+    world.surface(exit, Blocks.STONE.defaultBlockState(), Blocks.AIR.defaultBlockState());
+    var link = world.link(entrance, exit);
+    world.publish(link);
+    PlayerPortalVisibility.of(world.player).ready(link);
+    var boat = world.add(EntityTypes.OAK_BOAT.create(world.level, EntitySpawnReason.COMMAND));
+    var passenger = world.add(EntityTypes.CHICKEN.create(world.level, EntitySpawnReason.COMMAND));
+    boat.setPos(entrance.center().add(0, .1 - boat.getBbHeight() / 2, 0));
+    check(world.player.startRiding(boat, true, false) && passenger.startRiding(boat, true, false)
+            && boat.getControllingPassenger() == world.player, "Could not seat both boat passengers");
+    PortalPassengerGroup.positionPassengers(boat);
+    boat.move(MoverType.PISTON, new Vec3(0, -.5, 0));
+    var group = List.<Entity>of(boat, world.player, passenger);
+    for (var member : group) {
+      var crossing = EntityPortalState.of(member).lastCrossing();
+      check(crossing != null && crossing.link().equals(link), "Boat convoy member missed the piston crossing");
+    }
+    world.channel.flushOutbound();
+    world.channel.runPendingTasks();
+    int corrections = 0;
+    for (var packet : world.channel.outboundMessages()) {
+      if (!(packet instanceof ClientboundBundlePacket bundle)) continue;
+      var crossings = new ArrayList<EntityPortalCrossingPayload>();
+      boolean corrected = false;
+      for (var child : bundle.subPackets()) {
+        if (child instanceof ClientboundCustomPayloadPacket custom
+            && custom.payload() instanceof EntityPortalCrossingPayload crossing) crossings.add(crossing);
+        if (child instanceof ClientboundPlayerPositionPacket) corrected = true;
+      }
+      if (crossings.isEmpty() || crossings.getFirst().entityId() != boat.getId()) continue;
+      check(corrected && crossings.stream().map(EntityPortalCrossingPayload::entityUuid).toList()
+              .equals(group.stream().map(Entity::getUUID).toList()),
+          "The driver's position correction did not carry the whole convoy's ordered crossing events");
+      for (int i = 0; i < group.size(); i++)
+        check(crossings.get(i).crossings().equals(List.of(EntityPortalState.of(group.get(i)).lastCrossing())),
+            "The external boat correction included crossings from another movement");
+      corrections++;
+    }
+    check(corrections == 1, "Expected one bundled position correction for the external boat crossing");
+    world.player.stopRiding();
+  }
+
+  private static void boatReplayWithLaggingPassenger(RegressionWorld world) {
+    var source = new PortalEndpoint(world.level.dimension(), new Vec3(144.5, 104, 144.5),
+        new Vec3(0, 1, 0), new Vec3(0, 0, 1), 1, 2);
+    var exit = new PortalEndpoint(world.level.dimension(), new Vec3(192.5, 104, 144.5),
+        new Vec3(0, 1, 0), new Vec3(0, 0, 1), 1, 2);
+    world.surface(source, Blocks.STONE.defaultBlockState(), Blocks.AIR.defaultBlockState());
+    world.surface(exit, Blocks.STONE.defaultBlockState(), Blocks.AIR.defaultBlockState());
+    for (var pos : BlockPos.betweenClosed(new BlockPos(189, 103, 141), new BlockPos(195, 103, 148)))
+      world.block(pos, Blocks.STONE.defaultBlockState());
+    var link = world.link(source, exit);
+    world.publish(link);
+    PlayerPortalVisibility.of(world.player).ready(link);
+    PlayerPortalVisibility.of(world.player).ready(link.inverse());
+    var boat = EntityTypes.OAK_BOAT.create(world.level, EntitySpawnReason.COMMAND);
+    check(boat != null, "Boat factory failed");
+    world.add(boat);
+    Vec3 start = new Vec3(192.5, 104.43884155832265, 145.68968187003136);
+    Vec3 movement = new Vec3(0, -.36, .24503177745027643);
+    boat.setPos(start.add(0, .32, 0));
+    world.player.setPos(boat.position());
+    check(world.player.startRiding(boat, true, false), "Player could not board the replay boat");
+    PortalPassengerGroup.positionPassengers(boat);
+    Vec3 previousPassengerFeet = world.player.position();
+    boat.setPos(start);
+    var laggingHulls = PortalPassengerGroup.hulls(boat);
+    var laggingBounds = PortalPassengerGroup.bounds(boat);
+    var arrival = PortalPassengerGroup.arrival(boat, link.inverse(), source.center().add(0, 1, 0));
+    check(PortalEntityMovement.canReplay(boat, Vec3.ZERO, movement),
+        "Lagging passenger geometry prevented replay near the floor portal rim");
+    near(world.player.position(), previousPassengerFeet, 1e-10,
+        "Querying passenger geometry changed the native passenger position");
+    PortalPassengerGroup.positionPassengers(boat);
+    var seatedHulls = PortalPassengerGroup.hulls(boat);
+    for (int i = 0; i < laggingHulls.size(); i++)
+      nearHull(laggingHulls.get(i), seatedHulls.get(i),
+          "Vehicle packet ordering changed the seated passenger collision hulls");
+    nearHull(laggingBounds, PortalPassengerGroup.bounds(boat),
+        "Vehicle packet ordering changed the seated passenger bounds");
+    var seatedArrival = PortalPassengerGroup.arrival(boat, link.inverse(), source.center().add(0, 1, 0));
+    for (int i = 0; i < arrival.size(); i++) {
+      near(arrival.get(i).after(), seatedArrival.get(i).after(), 1e-10,
+          "Lagging passenger changed the arrival seat");
+      nearHull(arrival.get(i).hull(), seatedArrival.get(i).hull(),
+          "Lagging passenger changed the arrival collision hull");
+    }
+    var scene = PortalCollisionWorld.query(boat, link.inverse(), laggingBounds.expandTowards(movement));
+    Vec3 expected = scene.collide(seatedHulls, movement, boat.maxUpStep(), boat.onGround());
+    check(expected.y > movement.y + .1, "The floor rim did not exercise passenger collision");
+    world.player.setPos(previousPassengerFeet);
+    var replay = PortalEntityMovement.moveAuthoritatively(boat, MoverType.SELF, movement, movement);
+    check(replay != null && replay.crossings().isEmpty(), "Boat rim replay unexpectedly crossed a portal");
+    near(boat.position(), start.add(expected), 1e-8,
+        "Lagging passenger changed authoritative replay collision");
+    near(boat.position(), new Vec3(start.x, 104.4125, start.z + movement.z), 1e-7,
+        "Boat replay did not stop at the native seated passenger floor contact");
+    check(world.player.getVehicle() == boat, "Boat replay detached the player");
+    world.player.stopRiding();
+  }
+
+  private static void nestedPassengerGeometry(RegressionWorld world) {
+    var vehicle = EntityTypes.OAK_BOAT.create(world.level, EntitySpawnReason.COMMAND);
+    var passenger = EntityTypes.PIG.create(world.level, EntitySpawnReason.COMMAND);
+    var nested = EntityTypes.CHICKEN.create(world.level, EntitySpawnReason.COMMAND);
+    check(vehicle != null && passenger != null && nested != null, "Nested passenger factory failed");
+    world.add(vehicle);
+    world.add(passenger);
+    world.add(nested);
+    vehicle.snapTo(144.5, 107, 144.5, 37, 0);
+    passenger.setPos(vehicle.position());
+    nested.setPos(vehicle.position());
+    check(passenger.startRiding(vehicle, true, false) && nested.startRiding(passenger, true, false),
+        "Nested passengers could not mount");
+    PortalPassengerGroup.positionPassengers(vehicle);
+    var before = PortalPassengerGroup.hulls(vehicle);
+    Vec3 passengerFeet = passenger.position(), nestedFeet = nested.position();
+    Vec3 displacement = new Vec3(.3, -.32, -.2);
+    vehicle.setPos(vehicle.position().add(displacement));
+    var after = PortalPassengerGroup.hulls(vehicle);
+    check(after.size() == 3, "Nested collision geometry omitted a passenger");
+    for (int i = 0; i < before.size(); i++) {
+      near(after.get(i).getCenter(), before.get(i).getCenter().add(displacement), 1e-10,
+          "Vehicle movement did not carry nested passenger collision geometry");
+    }
+    near(passenger.position(), passengerFeet, 1e-10, "Nested geometry query moved the passenger");
+    near(nested.position(), nestedFeet, 1e-10, "Nested geometry query moved the nested passenger");
+  }
+
+  private static void nearHull(AABB actual, AABB expected, String message) {
+    near(actual.getMinPosition(), expected.getMinPosition(), 1e-10, message);
+    near(actual.getMaxPosition(), expected.getMaxPosition(), 1e-10, message);
   }
 
   private static void minecartAlongWall(RegressionWorld world, boolean mounted, boolean improved) {
@@ -133,6 +286,7 @@ final class NativeEntityRegression {
       check(world.player.startRiding(cart, true, false), "Player could not mount the rail cart");
       PortalPassengerGroup.positionPassengers(cart);
     }
+    minecartArrivalGeometry(cart, link);
     cart.setDeltaMovement(0, 0, .4);
     for (int tick = 0; tick < 40 && EntityPortalState.of(cart).lastCrossing() == null; tick++) {
       if (improved) {
@@ -154,6 +308,30 @@ final class NativeEntityRegression {
           "Rail passenger did not receive its crossing");
       world.player.stopRiding();
     }
+  }
+
+  private static void minecartArrivalGeometry(Minecart cart, PortalLink link) {
+    Vec3 start = cart.position();
+    boolean onRails = cart.isOnRails();
+    cart.setOnRails(true);
+    cart.setPos(start.add(0, .025, 0));
+    PortalPassengerGroup.positionPassengers(cart);
+    var sourceHulls = PortalPassengerGroup.hulls(cart);
+    if (sourceHulls.size() > 1)
+      check(Math.abs(sourceHulls.get(1).minY - sourceHulls.getFirst().minY) < 1e-10,
+          "Rail passenger geometry did not exercise track-bed clipping");
+    for (double height : new double[] {-8, 8}) {
+      Vec3 target = cart.position().add(48, height, 48);
+      var arrival = PortalPassengerGroup.arrival(cart, link, target);
+      for (int i = 0; i < arrival.size(); i++) {
+        Vec3 offset = arrival.get(i).after().subtract(arrival.get(i).before());
+        nearHull(arrival.get(i).hull(), sourceHulls.get(i).move(offset),
+            "A different arrival height changed the minecart group's local collision shape");
+      }
+    }
+    cart.setPos(start);
+    cart.setOnRails(onRails);
+    PortalPassengerGroup.positionPassengers(cart);
   }
 
   private static PortalLink portals(RegressionWorld world, Direction face) {

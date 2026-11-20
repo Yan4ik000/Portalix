@@ -1,6 +1,8 @@
 package dev.portalix.client.mixin.compat.iris;
 
 import net.irisshaders.iris.gl.framebuffer.GlFramebuffer;
+import net.irisshaders.iris.gl.buffer.ShaderStorageBufferHolder;
+import net.irisshaders.iris.gl.program.ComputeProgram;
 import net.irisshaders.iris.pipeline.IrisRenderingPipeline;
 import net.irisshaders.iris.targets.RenderTargets;
 import org.spongepowered.asm.mixin.Mixin;
@@ -19,4 +21,10 @@ public interface IrisRenderingPipelineAccessor {
 
   @Accessor("renderTargets")
   RenderTargets portalix$targets();
+
+  @Accessor("shaderStorageBufferHolder")
+  ShaderStorageBufferHolder portalix$storage();
+
+  @Accessor("shadowComputes")
+  ComputeProgram[] portalix$shadowComputes();
 }

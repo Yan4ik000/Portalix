@@ -21,7 +21,8 @@ public final class PortalixNeoForge {
     NeoForgePortalData.register(bus);
     PortalixMod.initialize();
     bus.addListener((RegisterPayloadHandlersEvent event) ->
-        ModNetworking.register(new NeoForgeNetworking(event.registrar(PortalixMod.MOD_ID).optional())));
+        ModNetworking.register(new NeoForgeNetworking(
+            event.registrar(Integer.toString(ModNetworking.PROTOCOL_VERSION)))));
     NeoForge.EVENT_BUS.addListener((ServerStartedEvent event) ->
         PortalServerEvents.started(event.getServer()));
     NeoForge.EVENT_BUS.addListener((ServerStoppingEvent event) ->

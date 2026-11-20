@@ -15,7 +15,7 @@ public interface SodiumViewCulling {
 
   void portalix$exchangeCulling(LevelRenderer renderer);
 
-  boolean portalix$completeView(LevelRenderer renderer, CameraRenderState camera, boolean primary);
+  boolean portalix$viewMeshesReady(LevelRenderer renderer, CameraRenderState camera, boolean primary);
 
   boolean portalix$primaryOccludes(CameraRenderState camera, AABB bounds);
 }

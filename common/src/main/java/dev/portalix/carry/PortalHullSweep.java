@@ -16,7 +16,7 @@ final class PortalHullSweep {
   private PortalHullSweep() {}
 
   static CarryCollisionSweep.Result move(
-      Entity entity, AABB hull, Vec3 displacement, boolean crossAtEnd) {
+      Entity entity, AABB hull, Vec3 displacement) {
     var nodes = new ArrayList<CarryMotionPath.Node>();
     nodes.add(new CarryMotionPath.Node(hull.getCenter(), null));
     var zeroProgress = new HashSet<PortalLink>();
@@ -47,7 +47,6 @@ final class PortalHullSweep {
                   | (Math.abs(moved.z - wanted.z) > 1e-8 ? 4 : 0)));
       hull = hull.move(moved);
       if (crossing.isEmpty()
-          || !crossAtEnd && crossing.get().fraction() >= 1 - 1e-12
           || Math.abs(PortalAperture.signedDistance(link.entrance().endpoint(), hull.getCenter()))
               > 1e-7
           || !PortalAperture.contains(link.entrance().endpoint(), hull.getCenter())) break;

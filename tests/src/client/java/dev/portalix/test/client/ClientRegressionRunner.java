@@ -75,12 +75,21 @@ public final class ClientRegressionRunner {
   private static CompletableFuture<Void> cleanup;
   private static CompletableFuture<Path> recording;
   private static Throwable failure;
+  private static float detachedCameraDistance = Float.NaN;
   private static java.util.Map<String, Object> failureContext = java.util.Map.of();
   private static java.util.Map<String, Object> performanceFixture = java.util.Map.of("state", "generated-on-demand");
 
   private ClientRegressionRunner() {}
 
   public static boolean active() { return PROFILE != null; }
+
+  public static float detachedCameraDistance(float original) {
+    return Float.isNaN(detachedCameraDistance) ? original : detachedCameraDistance;
+  }
+
+  static void setDetachedCameraDistance(float distance) {
+    detachedCameraDistance = distance;
+  }
 
   public static void frameRendered(RenderTarget target) {
     if (active()) {
@@ -371,7 +380,8 @@ public final class ClientRegressionRunner {
   }
 
   private static int renderDistance() {
-    if (SELECTED.get(sceneIndex) != ClientSystemScenes.PERFORMANCE) return 16;
+    if (SELECTED.get(sceneIndex) != ClientSystemScenes.PERFORMANCE)
+      return Math.clamp(Integer.getInteger("portalix.test.renderDistance", 16), 2, 32);
     int distance = Integer.parseInt(System.getProperty("portalix.test.benchmarkRenderDistance", "16"));
     ClientAssertions.check(distance == 16 || distance == 32, "Benchmark render distance must be 16 or 32 chunks");
     return distance;

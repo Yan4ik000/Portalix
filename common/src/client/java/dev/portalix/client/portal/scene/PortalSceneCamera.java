@@ -7,15 +7,21 @@ import dev.portalix.client.mixin.camera.CameraAccessor;
 import dev.portalix.client.portal.camera.CameraOrientationAccess;
 import dev.portalix.client.portal.clip.PortalCullPlane;
 import dev.portalix.client.portal.clip.PortalFrustumState;
+import dev.portalix.client.portal.clip.PortalTerrainWindow;
+import dev.portalix.portal.PortalViewLimits;
 import dev.portalix.portal.geometry.PortalAperture;
 import dev.portalix.portal.geometry.PortalEllipse;
 import java.util.List;
 import net.minecraft.client.Camera;
+import net.minecraft.client.DeltaTracker;
+import net.minecraft.client.renderer.fog.FogData;
+import net.minecraft.client.renderer.fog.FogRenderer;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.renderer.culling.Frustum;
 import net.minecraft.client.renderer.state.level.CameraRenderState;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.SectionPos;
 import net.minecraft.tags.FluidTags;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.material.FogType;
@@ -26,7 +32,7 @@ import org.joml.Quaternionf;
 import org.joml.Vector3f;
 import org.joml.Vector3fc;
 
-final class PortalSceneCamera extends Camera {
+public final class PortalSceneCamera extends Camera {
   private final Matrix4f view = new Matrix4f();
   private final Matrix4f projection = new Matrix4f();
   private final Matrix4f culling = new Matrix4f();
@@ -46,6 +52,8 @@ final class PortalSceneCamera extends Camera {
   private Vec3 extractedPreparationCell;
   private PortalEndpoint extractedExit;
   private boolean extractedArrival;
+  private int terrainRadius;
+  private int extractedRadius;
   private final Matrix4f extractedView = new Matrix4f();
   private final Matrix4f extractedCulling = new Matrix4f();
   private final Matrix4f extractedRasterCulling = new Matrix4f();
@@ -68,6 +76,7 @@ final class PortalSceneCamera extends Camera {
     return !(position().equals(extractedPosition)
         && exit.equals(extractedExit)
         && arrival == extractedArrival
+        && terrainRadius == extractedRadius
         && view.equals(extractedView)
         && culling.equals(extractedCulling)
         && rasterCulling.equals(extractedRasterCulling));
@@ -79,12 +88,14 @@ final class PortalSceneCamera extends Camera {
         || !preparationCell.equals(extractedPreparationCell)
         || !exit.equals(extractedExit)
         || arrival != extractedArrival
+        || terrainRadius != extractedRadius
         || !view.equals(extractedView)
         || !culling.equals(extractedCulling);
     extractedPosition = position();
     extractedPreparationCell = preparationCell;
     extractedExit = exit;
     extractedArrival = arrival;
+    extractedRadius = terrainRadius;
     extractedView.set(view);
     extractedCulling.set(culling);
     extractedRasterCulling.set(rasterCulling);
@@ -110,6 +121,7 @@ final class PortalSceneCamera extends Camera {
       PortalSceneViewport viewport,
       PortalEndpoint exit,
       boolean arrival,
+      int terrainRadius,
       Matrix4fc viewEffects) {
     float near = ((CameraAccessor) root).portalix$projection().zNear();
     if (environmentLevel != level || !exit.equals(this.exit)) {
@@ -119,6 +131,7 @@ final class PortalSceneCamera extends Camera {
     this.environmentLevel = level;
     this.exit = exit;
     this.arrival = arrival;
+    this.terrainRadius = terrainRadius;
     preparationCell = arrival && PortalTerrainBackend.usesVanillaChunkEvents()
         ? new Vec3(Math.floor(position.x / 8) * 8, Math.floor(position.y / 8) * 8,
             Math.floor(position.z / 8) * 8)
@@ -166,13 +179,16 @@ final class PortalSceneCamera extends Camera {
     rasterCulling.set(raster);
     var windowDirection = new Vector3f(raster.m20() / raster.m00(), raster.m21() / raster.m11(), -1);
     orientation.transform(windowDirection).normalize();
+    var terrain = new PortalTerrainWindow(SectionPos.of(PortalViewLimits.origin(exit)), terrainRadius);
     renderFrustum = new Frustum(view, raster);
+    ((PortalFrustumState) renderFrustum).portalix$terrainWindow(terrain);
     ((PortalFrustumState) renderFrustum)
         .portalix$aperture(windowDirection, PortalCullPlane.of(exit));
     renderFrustum.prepare(position.x, position.y, position.z);
     culling.set(arrival ? cull : raster);
     if (arrival) {
       frustum = new Frustum(view, cull);
+      ((PortalFrustumState) frustum).portalix$terrainWindow(terrain);
       var direction = new Vector3f(cull.m20() / cull.m00(), cull.m21() / cull.m11(), -1);
       orientation.transform(direction).normalize();
       ((PortalFrustumState) frustum).portalix$aperture(direction, null);
@@ -183,6 +199,23 @@ final class PortalSceneCamera extends Camera {
       attributeProbe().tick(level, environmentPosition);
       environmentTick = level.getGameTime();
     }
+  }
+
+  public FogData extractFog(FogRenderer renderer, DeltaTracker delta, float darkening) {
+    var eye = position();
+    double radius = PortalSceneManager.fogRadius(Minecraft.getInstance().options.getEffectiveRenderDistance());
+    setPosition(environmentPosition);
+    FogData fog;
+    try {
+      fog = renderer.setupFog(this, (int) Math.ceil(radius), delta, darkening, environmentLevel);
+    } finally {
+      setPosition(eye);
+    }
+    float airBeforeExit = (float) eye.distanceTo(environmentPosition);
+    fog.environmentalStart += airBeforeExit;
+    fog.environmentalEnd += airBeforeExit;
+    PortalSceneManager.positionTerrainFog(fog, eye, radius);
+    return fog;
   }
 
   @Override

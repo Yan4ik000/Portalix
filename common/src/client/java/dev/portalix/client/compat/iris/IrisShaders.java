@@ -5,6 +5,8 @@ import dev.portalix.client.compat.ShaderBackend;
 import org.joml.Matrix4f;
 
 public final class IrisShaders {
+  public static final int MAX_PORTAL_VIEWS = 4;
+
   private IrisShaders() {}
 
   public static boolean active() {

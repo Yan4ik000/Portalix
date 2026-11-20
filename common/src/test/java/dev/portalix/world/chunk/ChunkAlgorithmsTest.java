@@ -119,8 +119,7 @@ class ChunkAlgorithmsTest {
     queue.retire(10);
     queue.retire(11);
     assertTrue(queue.requested(11));
-    var batch = queue.select(new long[] {1, 100, 101}, 3, value -> value);
-    assertEquals(3, batch.size());
+    var batch = queue.select(new long[] {1, 100, 101}, 3, 1, value -> value);
     assertArrayEquals(new long[] {10}, batch.forgotten());
     assertArrayEquals(new long[] {1, 100}, batch.loaded());
     assertFalse(queue.delivered(10));

@@ -36,9 +36,9 @@ public final class CarryCollisionSweep {
 
   static List<Vec3> axes(int mask) {
     var result = new ArrayList<Vec3>();
-    if ((mask & 1) != 0) result.add(new Vec3(1, 0, 0));
-    if ((mask & 2) != 0) result.add(new Vec3(0, 1, 0));
-    if ((mask & 4) != 0) result.add(new Vec3(0, 0, 1));
+    if ((mask & 1) != 0) result.add(Vec3.X_AXIS);
+    if ((mask & 2) != 0) result.add(Vec3.Y_AXIS);
+    if ((mask & 4) != 0) result.add(Vec3.Z_AXIS);
     return result;
   }
 

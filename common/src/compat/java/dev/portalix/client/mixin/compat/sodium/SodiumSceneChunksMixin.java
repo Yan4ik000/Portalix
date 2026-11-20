@@ -163,10 +163,10 @@ abstract class SodiumSceneChunksMixin implements SodiumPrimaryView {
   }
 
   @Override
-  public boolean portalix$completeDemand(LevelRenderer renderer, CameraRenderState camera) {
+  public boolean portalix$meshesReady(LevelRenderer renderer, CameraRenderState camera) {
     return renderSectionManager != null
         && ((SodiumViewCulling) renderSectionManager)
-            .portalix$completeView(renderer, camera, renderer == portalix$primaryRenderer);
+            .portalix$viewMeshesReady(renderer, camera, renderer == portalix$primaryRenderer);
   }
 
   @Override

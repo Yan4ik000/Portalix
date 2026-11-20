@@ -36,7 +36,7 @@ public final class PortalEntityInitialization {
       long completed = 0;
       List<PortalLink> active = List.of();
       if (owner instanceof ServerPlayer player) {
-        var movement = ((PlayerPortalMoveState.Access) player).portalix$transit();
+        var movement = PlayerPortalMoveState.of(player);
         completed = movement.completedSequence();
         active = movement.activeCrossings(player);
       }

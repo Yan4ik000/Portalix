@@ -4,22 +4,30 @@ import com.mojang.blaze3d.pipeline.RenderTarget;
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.textures.GpuTextureView;
 import dev.portalix.api.PortalEndpoint;
+import dev.portalix.client.ClientNetworking;
 import dev.portalix.client.compat.PortalTerrainBackend;
 import dev.portalix.client.compat.iris.IrisShaders;
 import dev.portalix.client.compat.minecraft.MinecraftSceneRenderer;
+import dev.portalix.client.compat.minecraft.VanillaSceneTerrain;
 import dev.portalix.client.mixin.terrain.ViewAreaAccessor;
 import dev.portalix.client.portal.PortalMousePicking;
 import dev.portalix.client.portal.camera.PortalCameraController;
+import dev.portalix.client.portal.clip.PortalFrustumState;
+import dev.portalix.client.portal.clip.PortalTerrainWindow;
 import dev.portalix.client.portal.entity.PortalEntityScenes;
 import dev.portalix.client.portal.render.PortalSurfaceRenderer;
-import dev.portalix.client.portal.terrain.PortalOcclusionOpenings;
 import dev.portalix.client.portal.terrain.PortalFrameTerrainBudget;
+import dev.portalix.client.portal.terrain.PortalOcclusionOpenings;
 import dev.portalix.client.portal.terrain.PortalRenderSections;
 import dev.portalix.client.portal.terrain.PortalTerrainDemand;
 import dev.portalix.client.portal.terrain.PortalViewIndicesAccess;
+import dev.portalix.network.portal.PortalCameraViewDemandPayload;
+import dev.portalix.network.portal.PortalViewDemandPayload;
 import dev.portalix.portal.PortalLink;
+import dev.portalix.portal.PortalLinkId;
 import dev.portalix.portal.PortalRoutes;
 import dev.portalix.portal.PortalTopology;
+import dev.portalix.portal.PortalViewLimits;
 import dev.portalix.portal.geometry.PortalAperture;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
@@ -30,6 +38,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.function.Predicate;
 import net.minecraft.client.Camera;
 import net.minecraft.client.DeltaTracker;
 import net.minecraft.client.Minecraft;
@@ -38,14 +47,15 @@ import net.minecraft.client.particle.QuadParticleGroup;
 import net.minecraft.client.renderer.LevelRenderer;
 import net.minecraft.client.renderer.MappableRingBuffer;
 import net.minecraft.client.renderer.PostPass;
-import net.minecraft.client.renderer.chunk.SectionRenderDispatcher;
 import net.minecraft.client.renderer.chunk.CompiledSectionMesh;
+import net.minecraft.client.renderer.chunk.SectionRenderDispatcher;
 import net.minecraft.client.renderer.culling.Frustum;
+import net.minecraft.client.renderer.fog.FogData;
 import net.minecraft.client.renderer.state.level.CameraRenderState;
 import net.minecraft.client.renderer.state.level.ChunkLoadingRenderState;
 import net.minecraft.client.renderer.state.level.QuadParticleRenderState;
-import net.minecraft.core.SectionPos;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.SectionPos;
 import net.minecraft.world.phys.Vec3;
 import org.joml.Matrix4f;
 import org.joml.Matrix4fc;
@@ -53,14 +63,13 @@ import org.joml.Vector4f;
 
 @SuppressWarnings("try")
 public final class PortalSceneManager {
-  public static final int RECURSION_DEPTH = 2;
   private static final int INITIAL_VIEW_CAPACITY = 2;
-  private static final int IDLE_VIEW_CAPACITY = 2 * RECURSION_DEPTH;
+  private static final int IDLE_VIEW_CAPACITY = 2 * PortalViewLimits.DEPTH;
   private static final ArrayDeque<PortalRenderScene> PREPARED_SCENES = new ArrayDeque<>();
   private static final Map<List<PortalLink>, PortalRenderScene> SCENES = new HashMap<>();
   private static final List<PortalRenderScene> RENDER_ORDER = new ArrayList<>();
   private static final List<PortalRenderScene> IDLE_SCENES = new ArrayList<>();
-  private static final List<PortalScenePlanner.View> PLANNED_SCENES = new ArrayList<>();
+  private static List<PortalScenePlanner.View> plannedViews = List.of();
   private static ClientLevel level;
   private static volatile ConcurrentLinkedQueue<SectionRenderDispatcher.RenderSection> terrainUpdates;
   private static volatile ConcurrentLinkedQueue<CompiledSectionMesh> terrainReleases;
@@ -71,6 +80,111 @@ public final class PortalSceneManager {
   private static volatile TerrainWorkCameras terrainWorkCameras = NO_TERRAIN_WORK_CAMERAS;
   private static final Matrix4f renderProjection = new Matrix4f();
   private static final ChunkLoadingRenderState CHUNK_EVENTS = new ChunkLoadingRenderState();
+
+  private record ViewDemand(List<PortalLink> frame, List<List<PortalLink>> routes,
+      int detachedDistance, List<PortalLink> waitingPath) {
+    boolean matches(ViewDemand other) {
+      return other != null && frame.equals(other.frame)
+          && detachedDistance == other.detachedDistance && waitingPath.equals(other.waitingPath)
+          && routes.size() == other.routes.size() && routes.containsAll(other.routes);
+    }
+
+    PortalViewDemandPayload payload() {
+      return new PortalViewDemandPayload(frame.stream().map(PortalLinkId::fromLink).toList(),
+          routes.stream().map(route -> route.stream().map(PortalLinkId::fromLink).toList()).toList());
+    }
+
+    PortalCameraViewDemandPayload cameraPayload() {
+      return new PortalCameraViewDemandPayload(payload(), detachedDistance,
+          waitingPath.stream().map(PortalLinkId::fromLink).toList());
+    }
+  }
+
+  private static ViewDemand sentViews;
+
+  private static PortalLink remoteView() {
+    if (activeScene != null) return activeScene.link();
+    var frame = cameraFrame();
+    return frame.isEmpty() ? null : frame.getLast();
+  }
+
+  public static Vec3 terrainOrigin(Vec3 eye) {
+    var view = remoteView();
+    if (view == null) return eye;
+    return PortalViewLimits.origin(view.exit().endpoint());
+  }
+
+  public static boolean limitedTerrain() {
+    int limit = Minecraft.getInstance().options.getEffectiveRenderDistance();
+    return remoteView() != null || PortalViewHorizon.holdingPrimary() && PortalViewLimits.preview(limit) < limit;
+  }
+
+  public static int terrainRadius() {
+    int limit = Minecraft.getInstance().options.getEffectiveRenderDistance();
+    return terrainRadius(activeScene, limit);
+  }
+
+  static int terrainRadius(PortalRenderScene scene, int limit) {
+    return PortalViewHorizon.terrainRadius(terrainView(scene), limit);
+  }
+
+  private static PortalLink terrainView(PortalRenderScene scene) {
+    var frame = cameraFrame();
+    if (scene == null) return frame.isEmpty() ? null : frame.getLast();
+    if (frame.isEmpty()) return scene.link();
+    // The eye can cross ahead of the body. Looking back through the inverse portal sees the body side.
+    int remaining = frame.size();
+    for (var link : scene.path) {
+      if (remaining == 0 || !frame.get(remaining - 1).inverse().equals(link)) return scene.link();
+      remaining--;
+    }
+    return remaining == 0 ? null : frame.get(remaining - 1);
+  }
+
+  public static double fogRadius(int limit) {
+    return PortalViewHorizon.fogRadius(terrainView(activeScene), limit);
+  }
+
+  public static void positionTerrainFog(FogData fog, Vec3 eye, double radius) {
+    var origin = terrainOrigin(eye);
+    double offset = Math.max(Math.hypot(origin.x - eye.x, origin.z - eye.z), Math.abs(origin.y - eye.y));
+    // Minecraft measured these from the virtual eye. Visible terrain starts at the exit.
+    double scale = radius / Math.ceil(radius);
+    fog.renderDistanceStart = (float) (fog.renderDistanceStart * scale + offset);
+    fog.renderDistanceEnd = (float) (fog.renderDistanceEnd * scale + offset);
+  }
+
+  public static FogData viewFog() {
+    if (activeScene != null) return activeScene.rendering.state().cameraRenderState.fogData;
+    if (primaryCameraState == null || remoteView() == null && !PortalViewHorizon.transitioning())
+      return null;
+    return primaryCameraState.fogData;
+  }
+
+  public static void invalidateViewDemand() {
+    sentViews = null;
+  }
+
+  private static List<PortalLink> cameraFrame() {
+    var view = PortalCameraController.currentView();
+    return view == null ? List.of() : view.spacePath();
+  }
+
+  private static void requestViews() {
+    boolean cameraDemand = ClientNetworking.canServerReceive(PortalCameraViewDemandPayload.TYPE);
+    var requested = new ViewDemand(cameraFrame(),
+        plannedViews.stream().filter(view -> view.bounds() != null)
+            .sorted(Comparator.comparingInt(view -> view.path().size()))
+            .map(PortalScenePlanner.View::path).toList(),
+        cameraDemand ? PortalCameraController.requestedBoom() : 0,
+        cameraDemand ? PortalCameraController.waitingPath() : List.of());
+    // Send with the movement that produced this rendered frame, before another client tick advances it.
+    if (!requested.matches(sentViews)
+        && (cameraDemand || ClientNetworking.canServerReceive(PortalViewDemandPayload.TYPE))) {
+      ClientNetworking.sendToServer(cameraDemand ? requested.cameraPayload() : requested.payload());
+      sentViews = requested;
+    }
+  }
 
   private PortalSceneManager() {}
 
@@ -309,6 +423,11 @@ public final class PortalSceneManager {
     primaryCamera = camera;
     if (level == null) return;
     for (var crossing : PortalCameraController.consumeCameraTransitions()) changeCameraSpace(crossing);
+    var terrainWindow = limitedTerrain() ? new PortalTerrainWindow(
+        SectionPos.of(terrainOrigin(root.pos)), terrainRadius()) : null;
+    ((PortalFrustumState) camera.getCullFrustum()).portalix$terrainWindow(terrainWindow);
+    ((PortalFrustumState) root.cullFrustum).portalix$terrainWindow(terrainWindow);
+    if (PortalTerrainBackend.usesVanillaChunkEvents()) VanillaSceneTerrain.preparePrimary(client.levelRenderer, root);
     var links = PortalTopology.links(level);
     publishTerrainChanges();
     if (PortalTerrainBackend.usesVanillaChunkEvents()) {
@@ -335,12 +454,21 @@ public final class PortalSceneManager {
         for (var scene : IDLE_SCENES) PortalTerrainBackend.invalidateOcclusion(scene.renderer);
       }
     }
-    PLANNED_SCENES.clear();
-    PLANNED_SCENES.addAll(PortalScenePlanner.plan(
-        level, root, root.projectionMatrix, root.viewRotationMatrix,
-        client.options.getEffectiveRenderDistance() * 16.0, entrance -> true));
+    var main = client.gameRenderer.mainRenderTarget();
+    plannedViews = links.isEmpty() ? List.of()
+        : planScenes(root, root.projectionMatrix, root.viewRotationMatrix, main, entrance -> true);
+    if (plannedViews.isEmpty()) {
+      if (!SCENES.isEmpty()) {
+        IDLE_SCENES.addAll(SCENES.values());
+        SCENES.clear();
+      }
+      for (var scene : IDLE_SCENES) scene.consumeChunkEvents(CHUNK_EVENTS);
+      PortalFrameTerrainBudget.planViews(0, List.of());
+      terrainWorkCameras = NO_TERRAIN_WORK_CAMERAS;
+      return;
+    }
     Set<List<PortalLink>> used = new HashSet<>();
-    for (var plan : PLANNED_SCENES) used.add(plan.path());
+    for (var plan : plannedViews) used.add(plan.path());
     var iterator = SCENES.entrySet().iterator();
     while (iterator.hasNext()) {
       var entry = iterator.next();
@@ -352,8 +480,7 @@ public final class PortalSceneManager {
 
     for (var scene : SCENES.values()) scene.consumeChunkEvents(CHUNK_EVENTS);
     for (var scene : IDLE_SCENES) scene.consumeChunkEvents(CHUNK_EVENTS);
-    Set<PortalLink> liveLinks = new HashSet<>(links);
-    for (var plan : PLANNED_SCENES.reversed()) {
+    for (var plan : plannedViews.reversed()) {
       var scene = SCENES.get(plan.path());
       if (scene == null) continue;
       scene.visible = plan.bounds();
@@ -366,20 +493,15 @@ public final class PortalSceneManager {
     }
     // Reserve preparation time before the primary view consumes this frame's budget.
     var terrainPlans = new ArrayList<PortalScenePlanner.View>();
-    for (var plan : PLANNED_SCENES)
+    for (var plan : plannedViews)
       if (plan.bounds() != null) terrainPlans.add(plan);
-    PLANNED_SCENES.stream()
-        .filter(plan -> plan.bounds() == null && plan.path().size() == 1)
-        .sorted(Comparator.comparingDouble(plan ->
-            root.pos.distanceToSqr(plan.path().getFirst().entrance().endpoint().center())))
-        .limit(IDLE_VIEW_CAPACITY)
-        .forEach(terrainPlans::add);
+    terrainPlans.addAll(nearestHiddenViews(plannedViews, root.pos));
     var positions = new ArrayList<Vec3>();
     var renderers = new ArrayList<LevelRenderer>();
     for (var plan : terrainPlans) {
       var scene = SCENES.get(plan.path());
       if (scene == null || scene.extracted) {
-        positions.add(plan.position());
+        positions.add(PortalViewLimits.origin(plan.link().exit().endpoint()));
         // Primary occlusion is resolved later; completed hidden views must not reserve a turn.
         if (scene != null && (scene.lastRenderedFrame == PortalFrameTerrainBudget.frame() - 1
             || scene.needsTerrainPreparation()))
@@ -390,16 +512,8 @@ public final class PortalSceneManager {
     if (PortalTerrainBackend.usesVanillaChunkEvents()) {
       if (positions.isEmpty()) terrainWorkCameras = NO_TERRAIN_WORK_CAMERAS;
       else {
-        positions.addFirst(root.pos);
+        positions.addFirst(terrainOrigin(root.pos));
         terrainWorkCameras = new TerrainWorkCameras(positions.toArray(Vec3[]::new));
-      }
-    }
-    var idle = IDLE_SCENES.iterator();
-    while (idle.hasNext()) {
-      var scene = idle.next();
-      if (!liveLinks.containsAll(scene.path)) {
-        idle.remove();
-        scene.close();
       }
     }
   }
@@ -413,7 +527,7 @@ public final class PortalSceneManager {
         destination = scene;
         break;
       }
-    if (destination != null && destination.lastSection != Long.MIN_VALUE) {
+    if (destination != null && destination.terrainPrepared) {
       var viewport = destination.viewport;
       boolean compatibleHistory =
           destination.lastRenderedFrame == PortalFrameTerrainBudget.frame() - 1
@@ -439,7 +553,7 @@ public final class PortalSceneManager {
         var path = new ArrayList<PortalLink>();
         PortalRoutes.append(path, crossing.inverse());
         for (var link : scene.path) PortalRoutes.append(path, link);
-        if (path.isEmpty() || path.size() > RECURSION_DEPTH) {
+        if (path.isEmpty() || path.size() > PortalViewLimits.DEPTH) {
           scene.close();
           continue;
         }
@@ -460,48 +574,63 @@ public final class PortalSceneManager {
     renderProjection.set(projection);
   }
 
+  private static List<PortalScenePlanner.View> planScenes(
+      CameraRenderState root, Matrix4fc projection, Matrix4fc modelView, RenderTarget main,
+      Predicate<PortalEndpoint> primaryVisible) {
+    var sceneLevel = level;
+    int viewLimit = IrisShaders.active() ? IrisShaders.MAX_PORTAL_VIEWS : PortalViewLimits.ROUTES;
+    return PortalScenePlanner.plan(sceneLevel.dimension(), root, projection, modelView,
+        (position, distance) -> PortalViewLimits.nearbyEntrances(sceneLevel, position, distance),
+        terrainRadius() * 16.0, primaryVisible, main.width, main.height, viewLimit,
+        terrainOrigin(root.pos), !cameraFrame().isEmpty());
+  }
+
   public static void render(DeltaTracker delta, Matrix4fc modelView) {
-    if (PLANNED_SCENES.isEmpty()) {
-      trimIdleScenes();
+    if (plannedViews.isEmpty()) {
+      requestViews();
+      if (!IDLE_SCENES.isEmpty()) trimIdleScenes(Set.copyOf(PortalTopology.links(level)));
       return;
     }
     Matrix4fc parentProjection = renderProjection;
     var viewEffects = new Matrix4f(modelView).rotate(primaryCameraState.orientation);
     var main = Minecraft.getInstance().gameRenderer.mainRenderTarget();
     var links = PortalTopology.links(level);
-    PLANNED_SCENES.clear();
-    PLANNED_SCENES.addAll(PortalScenePlanner.plan(
-        level, primaryCameraState, parentProjection, modelView,
-        Minecraft.getInstance().options.getEffectiveRenderDistance() * 16.0,
-        entrance -> !PortalTerrainBackend.primaryOccludes(primaryCameraState, entrance)));
+    plannedViews = planScenes(primaryCameraState, parentProjection, modelView, main,
+        entrance -> !PortalTerrainBackend.primaryOccludes(primaryCameraState, entrance));
+    requestViews();
+    long availablePixels = (long) main.width * main.height * PortalScenePlanner.SCREEN_AREA_LIMIT;
+    for (var plan : plannedViews) {
+      if (plan.bounds() != null)
+        availablePixels -= PortalSceneViewport.of(plan.bounds(), main.width, main.height).pixels();
+    }
     Set<PortalLink> liveLinks = new HashSet<>(links);
-    var hidden = new ArrayList<PortalScenePlanner.View>();
     for (var scene : SCENES.values()) scene.visible = null;
-    for (var plan : PLANNED_SCENES.reversed()) {
+    for (var plan : plannedViews.reversed()) {
       PortalRenderScene parent =
           plan.path().size() == 1 ? null : SCENES.get(plan.path().subList(0, plan.path().size() - 1));
       if (plan.path().size() > 1 && (parent == null || parent.visible == null)) continue;
       var bounds = plan.bounds();
-      if (bounds == null && plan.path().size() == 1) hidden.add(plan);
       var scene = SCENES.get(plan.path());
       if (scene == null && bounds == null) continue;
       if (bounds != null) scene = acquireScene(plan.path(), liveLinks);
       scene.visible = bounds;
-      if (bounds == null) scene.extracted = scene.needsTerrainPreparation();
       if (scene.visible != null) {
         scene.extracted = true;
-        scene.viewport =
-            PortalSceneViewport.of(scene.visible, main.width, main.height)
-                .retainSize(scene.rendering.target().width, scene.rendering.target().height);
+        var viewport = PortalSceneViewport.of(scene.visible, main.width, main.height);
+        var target = scene.rendering.target();
+        var retained = viewport.retainSize(target.width, target.height);
+        long extraPixels = retained.pixels() - viewport.pixels();
+        if (extraPixels <= availablePixels) {
+          viewport = retained;
+          availablePixels -= extraPixels;
+        }
+        scene.viewport = viewport;
         scene.configure(plan.position(), plan.orientation(), parentProjection,
             primaryCameraState.depthFar, primaryCamera, viewEffects);
       }
     }
-    hidden.sort(Comparator.comparingDouble(plan ->
-        primaryCameraState.pos.distanceToSqr(plan.path().getFirst().entrance().endpoint().center())));
     var preparing = new HashSet<List<PortalLink>>();
-    for (int index = 0; index < Math.min(IDLE_VIEW_CAPACITY, hidden.size()); index++) {
-      var plan = hidden.get(index);
+    for (var plan : nearestHiddenViews(plannedViews.reversed(), primaryCameraState.pos)) {
       preparing.add(plan.path());
       var scene = acquireScene(plan.path(), liveLinks);
       scene.visible = null;
@@ -513,20 +642,22 @@ public final class PortalSceneManager {
     while (inactive.hasNext()) {
       var entry = inactive.next();
       var scene = entry.getValue();
-      if (scene.visible == null && !preparing.contains(entry.getKey())) {
+      if (scene.visible != null) continue;
+      if (preparing.contains(entry.getKey())) scene.rendering.releaseShaderView();
+      else {
         scene.renderedThisFrame = false;
         IDLE_SCENES.add(scene);
         inactive.remove();
       }
     }
     RENDER_ORDER.clear();
-    for (var plan : PLANNED_SCENES) {
+    for (var plan : plannedViews) {
       var scene = SCENES.get(plan.path());
       if (scene != null) RENDER_ORDER.add(scene);
     }
-    trimIdleScenes();
+    trimIdleScenes(liveLinks);
     updateTerrainWorkCameras();
-    PLANNED_SCENES.clear();
+    plannedViews = List.of();
     var preparingRenderers = RENDER_ORDER.stream().filter(scene -> scene.extracted)
         .map(scene -> scene.renderer).toList();
     PortalFrameTerrainBudget.planViews(preparingRenderers.size(), preparingRenderers);
@@ -537,13 +668,13 @@ public final class PortalSceneManager {
             scene.extract(delta);
             scene.maintain();
             scene.lastTick = level.getGameTime();
-            scene.lastSection = SectionPos.asLong(scene.camera.blockPosition());
+            scene.terrainPrepared = true;
           }
           continue;
         }
         scene.extract(delta);
         scene.lastTick = level.getGameTime();
-        scene.lastSection = SectionPos.asLong(scene.camera.blockPosition());
+        scene.terrainPrepared = true;
         scene.environmentProjection.set(scene.viewport.projection(parentProjection));
         var camera = scene.rendering.state().cameraRenderState;
         camera.projectionMatrix.set(scene.environmentProjection);
@@ -554,6 +685,17 @@ public final class PortalSceneManager {
     }
   }
 
+  private static List<PortalScenePlanner.View> nearestHiddenViews(
+      List<PortalScenePlanner.View> views, Vec3 cameraPosition) {
+    return views.stream()
+        .filter(view -> view.bounds() == null && view.path().size() == 1
+            && PortalRenderScene.destinationLoaded(level, view.link()))
+        .sorted(Comparator.comparingDouble(view ->
+            cameraPosition.distanceToSqr(view.link().entrance().endpoint().center())))
+        .limit(IDLE_VIEW_CAPACITY)
+        .toList();
+  }
+
   private static void updateTerrainWorkCameras() {
     if (PortalTerrainBackend.usesVanillaChunkEvents()) {
       int count = 1;
@@ -561,10 +703,10 @@ public final class PortalSceneManager {
       if (count == 1) terrainWorkCameras = NO_TERRAIN_WORK_CAMERAS;
       else {
         var positions = new Vec3[count];
-        positions[0] = primaryCameraState.pos;
+        positions[0] = terrainOrigin(primaryCameraState.pos);
         int index = 1;
         for (var scene : RENDER_ORDER)
-          if (scene.extracted) positions[index++] = scene.camera.position();
+          if (scene.extracted) positions[index++] = PortalViewLimits.origin(scene.link().exit().endpoint());
         terrainWorkCameras = new TerrainWorkCameras(positions);
       }
     }
@@ -581,6 +723,8 @@ public final class PortalSceneManager {
       return existing;
     }
     PortalRenderScene reusable = null;
+    var exit = path.getLast().exit().endpoint();
+    int bestPriority = -1;
     double nearest = Double.POSITIVE_INFINITY;
     for (PortalRenderScene candidate : IDLE_SCENES) {
       if (candidate.path.equals(path)) {
@@ -589,14 +733,14 @@ public final class PortalSceneManager {
       }
       // A live path keeps its view caches for the next trip through the pair.
       if (liveLinks.containsAll(candidate.path)) continue;
-      double distance =
-          candidate
-              .link()
-              .exit()
-              .endpoint()
-              .center()
-              .distanceToSqr(path.getLast().exit().endpoint().center());
-      if (distance < nearest) {
+      var oldExit = candidate.link().exit().endpoint();
+      // When one end moved, leave the other end's renderer for its new route.
+      int priority = 1;
+      if (oldExit.equals(exit)) priority = 2;
+      else if (liveLinks.stream().anyMatch(link -> link.exit().endpoint().equals(oldExit))) priority = 0;
+      double distance = oldExit.center().distanceToSqr(exit.center());
+      if (priority > bestPriority || priority == bestPriority && distance < nearest) {
+        bestPriority = priority;
         nearest = distance;
         reusable = candidate;
       }
@@ -604,17 +748,24 @@ public final class PortalSceneManager {
     if (reusable == null) {
       reusable = PREPARED_SCENES.pollFirst();
       if (reusable == null) reusable = new PortalRenderScene(level);
-    } else {
-      IDLE_SCENES.remove(reusable);
-      SCENES.remove(reusable.path, reusable);
-    }
+    } else IDLE_SCENES.remove(reusable);
     reusable.bind(path);
     reusable.lastUsedFrame = PortalFrameTerrainBudget.frame();
     SCENES.put(reusable.path, reusable);
     return reusable;
   }
 
-  private static void trimIdleScenes() {
+  private static void trimIdleScenes(Set<PortalLink> liveLinks) {
+    // Replacements have claimed reusable renderers. Retire disconnected graphs
+    // before they can accumulate terrain events for a route that no longer exists.
+    var idle = IDLE_SCENES.iterator();
+    while (idle.hasNext()) {
+      var scene = idle.next();
+      if (!liveLinks.containsAll(scene.path)) {
+        idle.remove();
+        scene.close();
+      } else scene.rendering.releaseShaderView();
+    }
     int available = IDLE_VIEW_CAPACITY;
     for (var scene : SCENES.values()) if (scene.visible == null) available--;
     if (IDLE_SCENES.size() <= available) return;
@@ -625,6 +776,7 @@ public final class PortalSceneManager {
   public static void clear() {
     RenderSystem.assertOnRenderThread();
     level = null;
+    sentViews = null;
     PortalTerrainBackend.invalidatePrimaryDemand();
     terrainWorkCameras = NO_TERRAIN_WORK_CAMERAS;
     terrainUpdates = null;
@@ -639,7 +791,7 @@ public final class PortalSceneManager {
     IDLE_SCENES.clear();
     SCENES.clear();
     RENDER_ORDER.clear();
-    PLANNED_SCENES.clear();
+    plannedViews = List.of();
     PortalOcclusionOpenings.update(null, List.of());
     primaryCameraState = null;
     primaryCamera = null;

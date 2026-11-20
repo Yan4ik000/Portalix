@@ -6,6 +6,8 @@ import java.util.Map;
 import net.minecraft.resources.Identifier;
 
 public final class SodiumShaderAbi {
+  public static final String SEPARATE_OCCLUSION = "PORTALIX_IRIS_TERRAIN_AO";
+
   private SodiumShaderAbi() {}
 
   public static boolean terrain(Identifier shader) {
@@ -21,9 +23,14 @@ public final class SodiumShaderAbi {
         || !source.hasDeclaration("uint", "_draw_id")
         || source.function("vec3", "_get_draw_translation", "uint") < 0)
       throw new IllegalStateException("Unsupported Sodium terrain shader interface");
+    String occlusion = source.hasDeclaration("vec4", "v_Color")
+            && source.hasDeclaration("vec4", "_vert_color")
+        ? "\n#ifdef " + SEPARATE_OCCLUSION + "\nv_Color = vec4(v_Color.rgb * _vert_color.a, 1.0);\n#endif\n"
+        : "";
     return new PortalShaderInterface(true, true,
         "vec3 section = round(u_RegionOffset + _get_draw_translation(_draw_id) - portalix_CameraFraction.xyz); "
             + "vec3 position = (_vert_position + section) + portalix_CameraFraction.xyz; "
-            + "gl_Position = u_ProjectionMatrix * u_ModelViewMatrix * vec4(position, 1.0); ");
+            + "gl_Position = u_ProjectionMatrix * u_ModelViewMatrix * vec4(position, 1.0); "
+            + occlusion);
   }
 }

@@ -5,17 +5,27 @@ import net.minecraft.world.entity.Entity;
 import net.minecraft.world.phys.Vec3;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.gen.Accessor;
+import org.spongepowered.asm.mixin.gen.Invoker;
 
 @Mixin(ServerGamePacketListenerImpl.class)
 public interface ServerGamePacketListenerImplAccessor {
+  @Invoker("handlePlayerKnownMovement")
+  void portalix$recordKnownMovement(Vec3 movement);
+
   @Accessor("awaitingPositionFromClient")
   Vec3 portalix$awaitingTeleport();
 
-  @Accessor("awaitingTeleport")
-  int portalix$teleportId();
-
   @Accessor("lastVehicle")
   void portalix$lastVehicle(Entity vehicle);
+
+  @Accessor("firstGoodX")
+  void portalix$playerFirstX(double value);
+
+  @Accessor("firstGoodY")
+  void portalix$playerFirstY(double value);
+
+  @Accessor("firstGoodZ")
+  void portalix$playerFirstZ(double value);
 
   @Accessor("vehicleFirstGoodX")
   void portalix$vehicleFirstX(double value);

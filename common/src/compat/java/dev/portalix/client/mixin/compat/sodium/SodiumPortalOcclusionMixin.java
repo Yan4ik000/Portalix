@@ -2,7 +2,7 @@ package dev.portalix.client.mixin.compat.sodium;
 
 import com.llamalad7.mixinextras.injector.ModifyExpressionValue;
 import com.llamalad7.mixinextras.injector.ModifyReturnValue;
-import dev.portalix.client.portal.terrain.PortalOcclusionContext;
+import dev.portalix.client.portal.terrain.PortalOcclusionOpenings;
 import java.util.Arrays;
 import net.caffeinemc.mods.sodium.client.render.chunk.RenderSection;
 import net.caffeinemc.mods.sodium.client.render.chunk.data.BuiltSectionInfo;
@@ -33,7 +33,7 @@ abstract class SodiumPortalOcclusionMixin {
 
   @ModifyReturnValue(method = "getVisibilityData", at = @At("RETURN"))
   private long[] portalix$opening(long[] original) {
-    return PortalOcclusionContext.open(SectionPos.asLong(chunkX, chunkY, chunkZ))
+    return PortalOcclusionOpenings.contains(SectionPos.asLong(chunkX, chunkY, chunkZ))
         ? BuiltSectionInfo.EMPTY.visibilityData
         : original;
   }

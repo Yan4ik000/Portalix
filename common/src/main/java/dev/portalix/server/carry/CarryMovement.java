@@ -1,92 +1,60 @@
 package dev.portalix.server.carry;
 
 import dev.portalix.api.CarryPermission;
-import dev.portalix.carry.CarryAnchor;
 import dev.portalix.carry.CarryBindings;
 import dev.portalix.carry.CarryMotionPath;
-import dev.portalix.carry.EntityCarryWorld;
-import dev.portalix.network.carry.CarryInputPayload;
-import dev.portalix.portal.PortalLink;
-import dev.portalix.portal.PortalRoutes;
 import dev.portalix.portal.PortalTopology;
-import dev.portalix.portal.camera.PortalEyePose;
-import dev.portalix.portal.geometry.PortalAperture;
 import dev.portalix.portal.traversal.PortalEntityMovement;
 import java.util.ArrayList;
+import java.util.function.BooleanSupplier;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.MoverType;
 import net.minecraft.world.phys.Vec3;
+import org.jspecify.annotations.Nullable;
 
 final class CarryMovement {
   private CarryMovement() {}
 
-  static CarryMotionPath validate(
-      ServerPlayer player, Entity entity, CarryInputPayload input, double maxHolderDistance) {
-    double diameter = maxHolderDistance * 2;
-    Vec3 previous = entity.getBoundingBox().getCenter();
-    double distance = 0;
-    var route = new ArrayList<>(CarryBindings.route(entity));
-    var eye = PortalEyePose.sample(player);
-    var distanceRoute = CarryAnchor.distanceRoute(player, eye, route);
-    if (distanceRoute == null
-        || !(PortalRoutes.distance(eye.position(), previous, distanceRoute) <= maxHolderDistance))
-      return null;
-    var nodes = new ArrayList<CarryMotionPath.Node>(input.nodes().size());
-    for (var node : input.nodes()) {
-      Vec3 point = node.point();
-      if (!finite(point)) return null;
-      PortalLink link = null;
-      if (node.crossing() != null) {
-        link = PortalTopology.resolve(entity.level(), node.crossing());
-        if (link == null
-            || !PortalEntityMovement.canTraverse(player, link)
-            || Math.abs(PortalAperture.signedDistance(link.entrance().endpoint(), previous)) > 1e-5
-            || !PortalAperture.contains(link.entrance().endpoint(), previous)
-            || link.transform().point(previous).distanceToSqr(point) > 1e-10) return null;
-        route.add(node.crossing());
-        route = new ArrayList<>(PortalRoutes.simplifyIds(route));
-        distanceRoute = CarryAnchor.distanceRoute(player, eye, route);
-        if (distanceRoute == null) return null;
-      } else distance += previous.distanceTo(point);
-      if (distance > diameter
-          || PortalRoutes.distance(eye.position(), point, distanceRoute) > maxHolderDistance)
-        return null;
-      nodes.add(new CarryMotionPath.Node(point, link));
-      previous = point;
-    }
-    return CarryMotionPath.ofNodes(nodes);
-  }
-
-  static boolean apply(
-      ServerPlayer player, Entity entity, EntityCarryWorld collisions, CarryMotionPath movement) {
-    for (var node : movement.nodes()) {
+  static @Nullable CarryMotionPath apply(ServerPlayer player, Entity entity, CarryMotionPath movement, BooleanSupplier valid) {
+    var nodes = movement.nodes();
+    if (nodes.size() == 1) return permitted(player, entity, entity.position(), valid) ? movement : null;
+    for (int index = 1; index < nodes.size(); index++) {
+      var node = nodes.get(index);
       Vec3 start = entity.getBoundingBox().getCenter();
       Vec3 point = node.point();
-      if (!CarryPermission.EVENT
-          .invoker()
-          .allow(
-              player,
-              entity,
-              CarryPermission.Operation.MOVE,
-              point.subtract(start.subtract(entity.position())))) return false;
+      if (!permitted(player, entity, entity.position().add(point.subtract(start)), valid)) return null;
       if (node.crossing() != null) {
         var link = node.crossing();
         if (PortalEntityMovement.crossAtPlane(
-                entity, link, link.entrance().endpoint().normal().scale(-1))
-            == null) return false;
-      } else {
-        var swept = collisions.sweepWithinSpace(start, point);
-        if (swept.path().nodes().stream().anyMatch(n -> n.crossing() != null)
-            || swept.path().end().distanceToSqr(point) > 1e-10) return false;
+                entity, link, link.entrance().endpoint().normal().scale(-1)) == null
+            || entity.getBoundingBox().getCenter().distanceToSqr(point) > 1e-10) return null;
+      } else if (!point.equals(start)) {
         PortalEntityMovement.moveWithinSpace(entity, MoverType.SELF, point.subtract(start));
+        if (!entity.isAlive() || entity.level() != player.level()) return null;
+        var actual = entity.getBoundingBox().getCenter();
+        if (actual.distanceToSqr(point) > 1e-10) {
+          var completed = new ArrayList<>(nodes.subList(0, index));
+          completed.add(new CarryMotionPath.Node(actual, null));
+          return CarryMotionPath.ofNodes(completed);
+        }
       }
-      if (entity.getBoundingBox().getCenter().distanceToSqr(point) > 1e-10) return false;
     }
-    return true;
+    return movement;
   }
 
-  private static boolean finite(Vec3 point) {
-    return Double.isFinite(point.x) && Double.isFinite(point.y) && Double.isFinite(point.z);
+  private static boolean permitted(ServerPlayer player, Entity entity, Vec3 feet, BooleanSupplier valid) {
+    if (!valid.getAsBoolean()) return false;
+    var level = entity.level();
+    var topology = PortalTopology.links(level);
+    var ownerPosition = player.position();
+    var body = entity.getBoundingBox();
+    var route = CarryBindings.route(entity);
+    return CarryPermission.EVENT.invoker().allow(player, entity, CarryPermission.Operation.MOVE, feet)
+        && valid.getAsBoolean()
+        && PortalTopology.links(level) == topology
+        && player.position().equals(ownerPosition)
+        && entity.getBoundingBox().equals(body)
+        && CarryBindings.route(entity).equals(route);
   }
 }

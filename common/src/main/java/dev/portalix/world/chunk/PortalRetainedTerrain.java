@@ -1,6 +1,7 @@
 package dev.portalix.world.chunk;
 
 import dev.portalix.api.PortalEndpoint;
+import dev.portalix.portal.PortalViewLimits;
 import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
 import java.util.HashMap;
 import java.util.Map;
@@ -33,7 +34,7 @@ public final class PortalRetainedTerrain {
       previous = null;
     }
     if (previous == null && endpoint != null && primary instanceof ChunkTrackingView.Positioned captured) {
-      var center = endpoint.center();
+      var center = PortalViewLimits.origin(endpoint);
       if (captured.contains((int) Math.floor(center.x) >> 4, (int) Math.floor(center.z) >> 4)) {
         int capacity = captureRadius(endpoint, captured, Math.min(radius, captured.viewDistance()), resident);
         views.put(player, new View(endpoint, captured, capacity, capacity, resident));
@@ -91,7 +92,7 @@ public final class PortalRetainedTerrain {
   }
 
   private static ChunkPos center(PortalEndpoint endpoint, ChunkTrackingView.Positioned captured, int radius) {
-    var point = endpoint.center();
+    var point = PortalViewLimits.origin(endpoint);
     var original = captured.center();
     int margin = captured.viewDistance() - radius;
     return new ChunkPos(

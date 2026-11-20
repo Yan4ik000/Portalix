@@ -49,11 +49,10 @@ public final class PortalTerrainDemand {
   }
 
   public static boolean resident(CameraRenderState camera) {
-    var client = Minecraft.getInstance();
-    var level = client.level;
+    int radius = PortalSceneManager.terrainRadius();
+    var level = Minecraft.getInstance().level;
     if (level == null || camera.cullFrustum == null) return false;
-    int radius = client.options.getEffectiveRenderDistance();
-    var center = SectionPos.of(camera.pos);
+    var center = SectionPos.of(PortalSceneManager.terrainOrigin(camera.pos));
     var chunks = level.getChunkSource();
     for (int x = center.x() - radius; x <= center.x() + radius; x++)
       for (int z = center.z() - radius; z <= center.z() + radius; z++) {
@@ -64,14 +63,20 @@ public final class PortalTerrainDemand {
     return true;
   }
 
-  public static boolean vanillaComplete(LevelRenderer renderer, CameraRenderState camera) {
+  public static boolean vanillaMeshesReady(LevelRenderer renderer, CameraRenderState camera) {
     var graph = (PortalTerrainGraphAccess) renderer.sectionOcclusionGraph();
     if (PortalSceneManager.hasPendingTerrainChanges()
-        || !graph.portalix$settled(camera.pos) || !resident(camera)) return false;
+        || !graph.portalix$settled(camera.pos)) return false;
     var client = Minecraft.getInstance();
     for (long column : renderer.sectionOcclusionGraph().expectedChunks())
       if (visibleColumn(client.level, camera, ChunkPos.getX(column), ChunkPos.getZ(column)))
         return false;
+    return visibleMeshesReady(renderer)
+        && !PortalSceneManager.hasPendingTerrainChanges() && graph.portalix$settled(camera.pos);
+  }
+
+  private static boolean visibleMeshesReady(LevelRenderer renderer) {
+    var client = Minecraft.getInstance();
     var dirty = (SceneExtractorAccess) client.levelExtractor;
     for (var section : renderer.visibleSections()) {
       long node = section.getSectionNode();
@@ -90,7 +95,7 @@ public final class PortalTerrainDemand {
             && (!compiled.isVertexBufferUploaded(layer)
                 || !compiled.isIndexBufferUploaded(layer))) return false;
     }
-    return !PortalSceneManager.hasPendingTerrainChanges() && graph.portalix$settled(camera.pos);
+    return true;
   }
 
   private static boolean visibleColumn(

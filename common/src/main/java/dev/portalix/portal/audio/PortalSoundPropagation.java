@@ -209,11 +209,10 @@ public final class PortalSoundPropagation {
       PortalEndpoint portal, List<Vec3> vertices, BoundaryClip clipping, double halfWidth, double halfHeight) {
     static Opening aperture(PortalLink link) {
       var portal = link.entrance().endpoint();
-      var exit = link.exit().endpoint();
-      if (portal.normal().y == 1 || exit.normal().y == 1) {
-        var floor = portal.normal().y == 1 ? portal : exit;
+      var aperture = PortalAperture.limitingAperture(link);
+      if (aperture.normal().y == 1) {
         return new Opening(portal, List.of(), null,
-            PortalAperture.passageHalfWidth(floor), PortalAperture.passageHalfHeight(floor));
+            PortalAperture.passageHalfWidth(aperture), PortalAperture.passageHalfHeight(aperture));
       }
       Vec3 right = portal.right().scale(portal.width() / 2);
       Vec3 up = portal.up().scale(portal.height() / 2);

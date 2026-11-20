@@ -1,23 +1,10 @@
 package dev.portalix.client.compat.sodium;
 
-import dev.portalix.client.mixin.compat.sodium.ViewportAccessor;
-import dev.portalix.client.portal.clip.PortalCullPlane;
-import dev.portalix.client.portal.terrain.PortalOcclusionOpenings;
 import net.caffeinemc.mods.sodium.client.render.viewport.Viewport;
 import net.caffeinemc.mods.sodium.client.util.FogParameters;
 
 public record SodiumCullRequest(
-    Viewport viewport, FogParameters fog, boolean culling, int frame, PortalCullPlane plane) {
-  public SodiumCullRequest(Viewport viewport, FogParameters fog, boolean culling, int frame) {
-    this(viewport, fog, culling, frame, plane(viewport));
-  }
-
-  public static PortalCullPlane plane(Viewport viewport) {
-    if (!(((ViewportAccessor) (Object) viewport).portalix$frustum()
-        instanceof SodiumPortalFrustum portal)) return null;
-    if (PortalOcclusionOpenings.contains(viewport.getChunkCoord().asLong())) return null;
-    return portal.worldExit();
-  }
+    Viewport viewport, FogParameters fog, boolean culling, int frame, float distance) {
 
   public record Footprint(int x, int y, int z, int radius) {
     public static Footprint of(Viewport viewport, float distance) {

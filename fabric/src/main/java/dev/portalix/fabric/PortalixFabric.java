@@ -17,6 +17,7 @@ public final class PortalixFabric implements ModInitializer {
   @Override
   public void onInitialize() {
     PortalixMod.initialize();
+    FabricProtocol.register();
     ModNetworking.register(new FabricNetworking());
     ServerLifecycleEvents.SERVER_STARTED.register(PortalServerEvents::started);
     ServerLifecycleEvents.SERVER_STOPPING.register(PortalServerEvents::stopping);

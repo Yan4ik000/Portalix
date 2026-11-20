@@ -6,10 +6,10 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
 import net.neoforged.neoforge.client.network.event.RegisterClientPayloadHandlersEvent;
 
-public final class NeoForgeClientNetworking implements ClientNetworking.Registration {
+final class NeoForgeClientNetworking implements ClientNetworking.Registration {
   private final RegisterClientPayloadHandlersEvent event;
 
-  public NeoForgeClientNetworking(RegisterClientPayloadHandlersEvent event) {
+  NeoForgeClientNetworking(RegisterClientPayloadHandlersEvent event) {
     this.event = event;
   }
 

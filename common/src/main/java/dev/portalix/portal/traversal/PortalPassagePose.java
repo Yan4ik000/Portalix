@@ -3,7 +3,8 @@ package dev.portalix.portal.traversal;
 import dev.portalix.portal.PortalLink;
 import dev.portalix.portal.PortalTopology;
 import dev.portalix.portal.geometry.PortalAperture;
-import net.minecraft.network.syncher.EntityDataAccessor;
+import dev.portalix.server.portal.PlayerPortalMoveState;
+import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.Avatar;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityDimensions;
@@ -19,8 +20,6 @@ public final class PortalPassagePose {
     float portalix$poseScale();
 
     void portalix$poseScale(float scale);
-
-    boolean portalix$poseField(int id);
   }
 
   public interface NetworkAccess {
@@ -51,40 +50,27 @@ public final class PortalPassagePose {
     set(entity, Math.min(scale(entity), passageScale(entity, link)));
   }
 
-  public static boolean validScale(Entity entity, float requested) {
-    if (!Float.isFinite(requested) || requested <= 0 || requested > 1) return false;
-    if (requested >= scale(entity)) return true;
-    return PortalTopology.links(entity.level()).stream()
-        .anyMatch(
-            link ->
-                PortalEntityMovement.canTraverse(entity, link)
-                    && passageScale(entity, link) <= requested);
-  }
-
   private static float passageScale(Entity entity, PortalLink link) {
     if (!required(entity, link)) return 1;
     EntityDimensions normal = uncompressedDimensions(entity, Pose.STANDING);
-    double preferred = normal.height();
+    EntityDimensions source = uncompressedDimensions(entity, entity.getPose());
+    Vec3 sourceUp = link.transform().inverse().vector(Vec3.Y_AXIS);
+    double preferred =
+        Math.min(
+            source.height(),
+            2 * PortalAperture.supportRadius(source.makeBoundingBox(Vec3.ZERO), sourceUp));
     double height = PortalAperture.passageHeight(link.exit().endpoint(), normal.width(), preferred);
     if (height > 0) {
-      return height < preferred ? Math.nextDown((float) (height / preferred)) : 1;
+      return height < normal.height() ? Math.nextDown((float) (height / normal.height())) : 1;
     }
     return 1;
   }
 
-  public static void changed(Entity entity, EntityDataAccessor<?> field) {
-    if (isPoseField(entity, field.id())) changed(entity);
-  }
-
   public static void changed(Entity entity) {
     float eyeHeight = entity.getEyeHeight();
-    EntityPortalState.of(entity).poseStarted = entity.tickCount;
+    EntityPortalState.of(entity).poseStarted = clock(entity);
     entity.refreshDimensions();
     EntityPortalState.of(entity).eyeHeightChanged(eyeHeight, entity.getEyeHeight());
-  }
-
-  public static boolean isPoseField(Entity entity, int id) {
-    return entity instanceof Access access && access.portalix$poseField(id);
   }
 
   public static EntityDimensions dimensions(Avatar entity, Pose pose, EntityDimensions normal) {
@@ -131,25 +117,13 @@ public final class PortalPassagePose {
         : bounds;
   }
 
-  public static AABB hull(Entity entity, Pose pose, float scale, Vec3 feet) {
-    boolean compact = scale < 1 && (pose == Pose.STANDING || pose == Pose.CROUCHING);
-    EntityDimensions dimensions = uncompressedDimensions(entity, compact ? Pose.STANDING : pose);
-    return (compact ? dimensions.scale(1, scale) : dimensions).makeBoundingBox(feet);
-  }
-
   public static boolean required(Entity entity, PortalLink link) {
     if (!(entity instanceof Player)
         || entity.isPassenger()
         || entity.getPose() != Pose.STANDING && entity.getPose() != Pose.CROUCHING) return false;
 
     return link.exit().endpoint().normal().y > .1
-        || link.transform().vector(new Vec3(0, 1, 0)).y < 1 - 1e-7;
-  }
-
-  public static boolean fits(Entity entity, AABB hull) {
-    var body = hull.deflate(1e-7);
-    Boolean portal = fitsThroughPortal(entity, body);
-    return portal != null ? portal : entity.level().noCollision(entity, body);
+        || link.transform().vector(Vec3.Y_AXIS).y < 1 - 1e-7;
   }
 
   public static Boolean fitsThroughPortal(Entity entity, AABB body) {
@@ -172,7 +146,7 @@ public final class PortalPassagePose {
     if (!compact(player) || player.level().isClientSide() && !player.isLocalInstanceAuthoritative())
       return;
     var state = EntityPortalState.of(player);
-    if (player.tickCount - state.poseStarted < 4) return;
+    if (clock(player) - state.poseStarted < 4) return;
     EntityDimensions standing = uncompressedDimensions(player, player.getPose());
     Vec3 feet = player.position();
     var hull = standing.makeBoundingBox(feet).deflate(1e-7);
@@ -196,5 +170,11 @@ public final class PortalPassagePose {
     Vec3 oldEye = player.getEyePosition();
     set(player, false);
     state.cameraHistory().shifted(player.tickCount, oldEye.subtract(player.getEyePosition()));
+  }
+
+  static int clock(Entity entity) {
+    return entity instanceof ServerPlayer player
+        ? PlayerPortalMoveState.of(player).clientTick()
+        : entity.tickCount;
   }
 }

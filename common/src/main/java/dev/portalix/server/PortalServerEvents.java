@@ -1,9 +1,10 @@
 package dev.portalix.server;
 
 import dev.portalix.carry.CarryBindings;
-import dev.portalix.network.carry.CarryInputPayload;
 import dev.portalix.network.gun.GunCommand;
 import dev.portalix.network.portal.PortalViewReadyPayload;
+import dev.portalix.network.portal.PortalCameraViewDemandPayload;
+import dev.portalix.network.portal.PortalViewDemandPayload;
 import dev.portalix.portal.PortalLink;
 import dev.portalix.portal.PortalLinkId;
 import dev.portalix.portal.traversal.PortalCrossingSync;
@@ -20,10 +21,6 @@ public final class PortalServerEvents {
   private static PortalServerSession session;
 
   private PortalServerEvents() {}
-
-  public static void receiveCarryInput(ServerPlayer player, CarryInputPayload input) {
-    if (session != null) session.carryInput(player, input);
-  }
 
   public static void receiveGunCommand(ServerPlayer player, GunCommand command) {
     if (session != null) session.handle(player, command);
@@ -49,7 +46,6 @@ public final class PortalServerEvents {
   }
 
   public static void disconnected(ServerPlayer player) {
-    ProjectileStateSync.disconnected(player);
     if (session != null) session.disconnect(player);
   }
 
@@ -66,12 +62,33 @@ public final class PortalServerEvents {
 
   public static void trackingStopped(Entity entity, ServerPlayer observer) {
     PortalCrossingSync.trackingStopped(entity, observer);
+    ProjectileStateSync.trackingStopped(entity, observer);
     if (session != null && entity instanceof ServerPlayer owner)
       session.trackingStopped(owner, observer);
   }
 
   public static void acknowledgeView(ServerPlayer player, PortalViewReadyPayload payload) {
     if (session != null) session.acknowledgeView(player, payload);
+  }
+
+  public static void requestViews(ServerPlayer player, PortalViewDemandPayload payload) {
+    if (session != null) session.requestViews(player, payload);
+  }
+
+  public static void requestCameraViews(ServerPlayer player, PortalCameraViewDemandPayload payload) {
+    if (session != null) session.requestCameraViews(player, payload);
+  }
+
+  public static void clientTickEnded(ServerPlayer player) {
+    if (session != null) session.clientTickEnded(player);
+  }
+
+  public static void cameraCrossed(ServerPlayer player, PortalLink link) {
+    if (session != null) session.cameraCrossed(player, link);
+  }
+
+  public static void resetCamera(ServerPlayer player) {
+    if (session != null) session.resetCamera(player);
   }
 
   public static void observerMoved(ServerPlayer player) {
@@ -94,8 +111,16 @@ public final class PortalServerEvents {
     if (session != null) session.observerMoveFinished(player);
   }
 
+  public static void chunkRefreshConfirmed(ServerPlayer player) {
+    if (session != null) session.chunkRefreshConfirmed(player);
+  }
+
   public static void chunkDeliveryChanged(ServerPlayer player, long chunk) {
     if (session != null) session.chunkDeliveryChanged(player, chunk);
+  }
+
+  public static boolean retainsTerrain(ServerPlayer player, long chunk) {
+    return session != null && session.retainsTerrain(player, chunk);
   }
 
   public static boolean retainedDuringMove(ServerPlayer player, long chunk) {

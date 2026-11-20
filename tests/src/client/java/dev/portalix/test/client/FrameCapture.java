@@ -164,13 +164,13 @@ public final class FrameCapture {
   }
 
   public record Statistics(int samples, int matched, double fraction, double meanLuminance,
-                           double luminanceDeviation, Optional<Point> centroid, Optional<Region> extent) {}
+                           double luminanceDeviation, Optional<Region> extent) {}
 
   public record Difference(double meanChannelDifference, double changedFraction, int changedPixels) {}
 
   /** Broad material signatures tolerate lighting, antialiasing and shader tone mapping. */
   public enum Material implements IntPredicate {
-    RED, GREEN, BLUE, ORANGE, CYAN, MAGENTA, LIGHT, DARK;
+    RED, GREEN, BLUE, ORANGE, CYAN, MAGENTA;
 
     @Override public boolean test(int argb) {
       int r = red(argb), g = green(argb), b = blue(argb);
@@ -181,8 +181,6 @@ public final class FrameCapture {
         case ORANGE -> r >= 50 && g >= 20 && r > g * 1.2 && g > b * 1.35;
         case CYAN -> g >= 40 && b >= 40 && Math.min(g, b) > r * 1.3;
         case MAGENTA -> r >= 40 && b >= 40 && Math.min(r, b) > g * 1.3;
-        case LIGHT -> Math.min(r, Math.min(g, b)) >= 180;
-        case DARK -> Math.max(r, Math.max(g, b)) <= 12;
       };
     }
   }
@@ -199,7 +197,7 @@ public final class FrameCapture {
     private final Path png;
     private final String source;
 
-    private Frame(long id, long presentationNanos, long gameTick, int playerTick, int width, int height, int[] pixels,
+    Frame(long id, long presentationNanos, long gameTick, int playerTick, int width, int height, int[] pixels,
                   CameraSnapshot camera, Path png, String source) {
       this.id = id;
       this.presentationNanos = presentationNanos;
@@ -225,6 +223,10 @@ public final class FrameCapture {
     public float cameraPitch() { return requireCamera().pitch; }
     public float cameraYaw() { return requireCamera().yaw; }
 
+    Matrix4f inverseCameraTransform() {
+      CameraSnapshot view = requireCamera();
+      return new Matrix4f(view.projection).mul(view.viewRotation).invert();
+    }
 
     public BufferedImage toBufferedImage() {
       BufferedImage image = new BufferedImage(width, height, BufferedImage.TYPE_INT_RGB);
@@ -299,13 +301,13 @@ public final class FrameCapture {
     public Statistics statistics(Region region, IntPredicate mask) {
       validate(region);
       int matched = 0, minX = width, minY = height, maxX = -1, maxY = -1;
-      double luminance = 0, squares = 0, sumX = 0, sumY = 0;
+      double luminance = 0, squares = 0;
       for (int y = region.y; y < region.y + region.height; y++) for (int x = region.x; x < region.x + region.width; x++) {
         int pixel = pixels[y * width + x];
         double value = .2126 * red(pixel) + .7152 * green(pixel) + .0722 * blue(pixel);
         luminance += value; squares += value * value;
         if (mask.test(pixel)) {
-          matched++; sumX += x + .5; sumY += y + .5;
+          matched++;
           minX = Math.min(minX, x); minY = Math.min(minY, y);
           maxX = Math.max(maxX, x); maxY = Math.max(maxY, y);
         }
@@ -313,23 +315,29 @@ public final class FrameCapture {
       double mean = luminance / region.area();
       return new Statistics(region.area(), matched, (double) matched / region.area(), mean,
           Math.sqrt(Math.max(0, squares / region.area() - mean * mean)),
-          matched == 0 ? Optional.empty() : Optional.of(new Point(sumX / matched, sumY / matched)),
           matched == 0 ? Optional.empty() : Optional.of(new Region(minX, minY, maxX - minX + 1, maxY - minY + 1)));
     }
 
     public Difference difference(Frame other, Region region, int channelThreshold) {
+      return difference(other, region, channelThreshold, null);
+    }
+
+    Difference difference(Frame other, Region region, int channelThreshold, boolean[] mask) {
       validate(region);
       if (width != other.width || height != other.height) throw new IllegalArgumentException("Different frame sizes");
       if (channelThreshold < 0 || channelThreshold > 255) throw new IllegalArgumentException("Invalid pixel threshold");
       long total = 0;
-      int changed = 0;
+      int samples = 0, changed = 0;
       for (int y = region.y; y < region.y + region.height; y++) for (int x = region.x; x < region.x + region.width; x++) {
+        if (mask != null && !mask[(y - region.y) * region.width + x - region.x]) continue;
         int first = pixels[y * width + x], second = other.pixels[y * width + x];
         int r = Math.abs(red(first) - red(second)), g = Math.abs(green(first) - green(second)), b = Math.abs(blue(first) - blue(second));
         total += r + g + b;
         if (Math.max(r, Math.max(g, b)) > channelThreshold) changed++;
+        samples++;
       }
-      return new Difference((double) total / (region.area() * 3L), (double) changed / region.area(), changed);
+      if (samples == 0) throw new AssertionError("The paired image region misses the portal clear core: " + region);
+      return new Difference((double) total / (samples * 3L), (double) changed / samples, changed);
     }
 
     public void assertNotBlack() {
@@ -341,17 +349,15 @@ public final class FrameCapture {
       require(stats.fraction > .01 && stats.meanLuminance > 0, "Image region is black: " + region + ": " + stats);
     }
 
-    public Statistics assertMaterial(Region region, IntPredicate material, double minimumFraction, double maximumFraction) {
+    public void assertMaterial(Region region, IntPredicate material, double minimumFraction, double maximumFraction) {
       if (minimumFraction < 0 || maximumFraction > 1 || minimumFraction > maximumFraction) throw new IllegalArgumentException("Invalid fraction range");
       Statistics stats = statistics(region, material);
       require(stats.fraction >= minimumFraction && stats.fraction <= maximumFraction,
           "Material fraction outside [" + minimumFraction + ", " + maximumFraction + "] in " + region + ": " + stats);
-      return stats;
     }
 
-    /** Spatial evidence for a sprite or particle cloud in an authored region, rather than one bright pixel. */
-    public Statistics assertSprite(Region region, IntPredicate material, int minimumPixels, int maximumPixels,
-                                   int minimumSpanX, int minimumSpanY) {
+    public void assertSprite(Region region, IntPredicate material, int minimumPixels, int maximumPixels,
+                             int minimumSpanX, int minimumSpanY) {
       if (minimumPixels < 1 || maximumPixels < minimumPixels || minimumSpanX < 1 || minimumSpanY < 1)
         throw new IllegalArgumentException("Invalid sprite bounds");
       Statistics stats = statistics(region, material);
@@ -359,7 +365,6 @@ public final class FrameCapture {
           "Sprite pixel count outside [" + minimumPixels + ", " + maximumPixels + "]: " + stats);
       Region extent = stats.extent.orElseThrow();
       require(extent.width >= minimumSpanX && extent.height >= minimumSpanY, "Sprite extent too small: " + extent);
-      return stats;
     }
 
     private void validate(Region region) {
