@@ -40,9 +40,9 @@ public final class PortalSurface {
 
   static List<BlockPos> blocks(PortalRectangle rectangle, Vec3 normal) {
     Vec3 backing = rectangle.center().subtract(normal.scale(.5));
-    double x = rectangle.extent(new Vec3(1, 0, 0));
-    double y = rectangle.extent(new Vec3(0, 1, 0));
-    double z = rectangle.extent(new Vec3(0, 0, 1));
+    double x = rectangle.extent(Vec3.X_AXIS);
+    double y = rectangle.extent(Vec3.Y_AXIS);
+    double z = rectangle.extent(Vec3.Z_AXIS);
     List<BlockPos> result = new ArrayList<>();
     for (int ix = lower(backing.x, x); ix <= upper(backing.x, x); ix++) {
       for (int iy = lower(backing.y, y); iy <= upper(backing.y, y); iy++) {
@@ -64,7 +64,7 @@ public final class PortalSurface {
   }
 
   static PortalRectangle blockFace(BlockPos block, Vec3 normal) {
-    Vec3 up = Math.abs(normal.y) > .5 ? new Vec3(0, 0, 1) : new Vec3(0, 1, 0);
+    Vec3 up = Math.abs(normal.y) > .5 ? Vec3.Z_AXIS : Vec3.Y_AXIS;
     return new PortalRectangle(
         Vec3.atCenterOf(block).add(normal.scale(.5)), up.cross(normal), up, .5, .5);
   }

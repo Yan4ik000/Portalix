@@ -9,6 +9,7 @@ import net.minecraft.world.level.ClipContext;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.chunk.LevelChunk;
 import net.minecraft.world.level.material.FluidState;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.BlockHitResult;
@@ -30,7 +31,7 @@ final class LoadedBlockRaycast implements BlockGetter {
         end,
         context,
         (ray, pos) -> {
-          var chunk = world.level.getChunkSource().getChunkNow(pos.getX() >> 4, pos.getZ() >> 4);
+          var chunk = world.chunkAt(pos);
           if (chunk == null) {
             AABB cell = new AABB(pos);
             Vec3 boundary = cell.contains(start) ? start : cell.clip(start, end).orElse(end);
@@ -51,9 +52,13 @@ final class LoadedBlockRaycast implements BlockGetter {
         end, Direction.getApproximateNearest(start.subtract(end)), BlockPos.containing(end));
   }
 
+  private LevelChunk chunkAt(BlockPos pos) {
+    return level.getChunkSource().getChunkNow(pos.getX() >> 4, pos.getZ() >> 4);
+  }
+
   @Override
   public BlockState getBlockState(BlockPos pos) {
-    var chunk = level.getChunkSource().getChunkNow(pos.getX() >> 4, pos.getZ() >> 4);
+    var chunk = chunkAt(pos);
     return chunk == null ? Blocks.AIR.defaultBlockState() : chunk.getBlockState(pos);
   }
 
@@ -64,7 +69,7 @@ final class LoadedBlockRaycast implements BlockGetter {
 
   @Override
   public BlockEntity getBlockEntity(BlockPos pos) {
-    var chunk = level.getChunkSource().getChunkNow(pos.getX() >> 4, pos.getZ() >> 4);
+    var chunk = chunkAt(pos);
     return chunk == null ? null : chunk.getBlockEntity(pos);
   }
 

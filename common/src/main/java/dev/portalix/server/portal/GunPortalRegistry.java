@@ -21,6 +21,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.util.function.BooleanSupplier;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ChunkTrackingView;
@@ -111,14 +112,17 @@ public final class GunPortalRegistry {
       PortalColor color,
       PortalEndpoint endpoint,
       PortalixVariant variant) {
-    if (obstacles(gun, color, endpoint.dimension(), endpoint.center()).stream()
-        .anyMatch(other -> PortalSurface.overlapsPortal(endpoint, other))) return false;
+    if (overlaps(gun, color, endpoint)) return false;
     Pair previous = states.get(gun);
+    var footprint = PortalSurface.placementFootprint(endpoint);
+    long beforeClearance = revision;
+    BooleanSupplier stillApplicable = () ->
+        previous == states.get(gun) && (beforeClearance == revision || !overlaps(gun, color, endpoint));
+    if (!BlockPortalPlacement.prepare(player, endpoint, footprint, stillApplicable)
+        || !stillApplicable.getAsBoolean()) return false;
     var blue = previous == null ? null : previous.blue();
     var orange = previous == null ? null : previous.orange();
-    var footprint = PortalSurface.placementFootprint(endpoint);
     var portal = new PortalInstance(endpoint, server.getTickCount(), ++revision, variant);
-    if (!BlockPortalPlacement.prepare(player, endpoint, footprint)) return false;
     var columns = new LongOpenHashSet();
     for (var block : footprint.blocks()) columns.add(ChunkPos.pack(block.getX() >> 4, block.getZ() >> 4));
     var member = new Member(portal, footprint, columns.toLongArray());
@@ -127,6 +131,11 @@ public final class GunPortalRegistry {
         color == PortalColor.BLUE ? member : blue,
         color == PortalColor.ORANGE ? member : orange);
     return true;
+  }
+
+  private boolean overlaps(UUID gun, PortalColor color, PortalEndpoint endpoint) {
+    return obstacles(gun, color, endpoint.dimension(), endpoint.center()).stream()
+        .anyMatch(other -> PortalSurface.overlapsPortal(endpoint, other));
   }
 
   private void update(UUID gun, Member blue, Member orange) {

@@ -51,12 +51,8 @@ record PortalRectangle(Vec3 center, Vec3 right, Vec3 up, double halfWidth, doubl
       }
       double a = (-extent - origin) / delta, b = (extent - origin) / delta;
       double near = Math.min(a, b), far = Math.max(a, b);
-      if (near > enter + EPSILON) normal = Vec3.ZERO;
       enter = Math.max(enter, near);
-      if (near >= enter - EPSILON) {
-        Vec3 candidate = axis.scale(delta > 0 ? -1 : 1);
-        normal = candidate;
-      }
+      if (near >= enter - EPSILON) normal = axis.scale(delta > 0 ? -1 : 1);
       exit = Math.min(exit, far);
       if (enter >= exit - EPSILON) return null;
     }
