@@ -2,7 +2,7 @@ Portalix
 Required Notice: Copyright © 2026 Yan4ik000
 
 The project's original code is distributed under the PolyForm Perimeter License 1.0.1.
-The full license text is available in LICENSE. This license does not apply
+The full license text is available in LICENSE.md. This license does not apply
 to the original Valve materials listed below or their modified portions.
 
 Portal 2 materials
@@ -38,7 +38,7 @@ The rights to the original materials belong to Valve Corporation and/or its
 licensors. I (Yan4ik000) do not claim authorship of these materials and do not
 license them under PolyForm Perimeter 1.0.1.
 
-LicenseRef-PolyForm-Perimeter-1.0.1 in the metadata refers to LICENSE.
+LicenseRef-PolyForm-Perimeter-1.0.1 in the metadata refers to LICENSE.md.
 
 LicenseRef-Portalix-ThirdParty in the metadata refers to this notice
 and identifies third-party materials and code fragments excluded from PolyForm Perimeter 1.0.1.
