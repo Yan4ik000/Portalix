@@ -11,6 +11,7 @@
   "subtitles.portalix.hold": "Portalix holds object",
   "subtitles.portalix.release": "Portalix releases object",
   "subtitles.portalix.grab_failed": "Cannot pick up object",
+  "subtitles.portalix.portal_traverse": "Portal traversal",
   "item.portalix.portalix": "Portalix",
   "item.portalix.orange_portalix": "Portalix",
   "item.portalix.blue_portalix": "Portalix",

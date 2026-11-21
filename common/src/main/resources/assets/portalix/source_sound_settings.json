@@ -134,6 +134,24 @@
     "soundLevel": 80,
     "engineGain": 1.0
   },
+  "portal_enter": {
+    "source": "PortalPlayer.EnterPortal",
+    "volume": 0.15,
+    "volumeMax": 0.15,
+    "pitchMin": 0.95,
+    "pitchMax": 1.05,
+    "soundLevel": 70,
+    "engineGain": 0.5
+  },
+  "portal_exit": {
+    "source": "PortalPlayer.ExitPortal",
+    "volume": 0.05,
+    "volumeMax": 0.05,
+    "pitchMin": 0.95,
+    "pitchMax": 1.05,
+    "soundLevel": 70,
+    "engineGain": 0.3
+  },
   "portal_ambient": {
     "source": "Portal.ambient_loop",
     "volume": 0.5,

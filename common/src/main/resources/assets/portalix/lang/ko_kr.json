@@ -11,6 +11,7 @@
   "subtitles.portalix.hold": "Portalix가 물체를 잡고 있음",
   "subtitles.portalix.release": "Portalix가 물체를 놓음",
   "subtitles.portalix.grab_failed": "물체를 잡을 수 없음",
+  "subtitles.portalix.portal_traverse": "포털 통과",
   "item.portalix.portalix": "포털 건",
   "item.portalix.orange_portalix": "포털 건",
   "item.portalix.blue_portalix": "포털 건",

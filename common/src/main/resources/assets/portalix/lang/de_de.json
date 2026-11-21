@@ -11,6 +11,7 @@
   "subtitles.portalix.hold": "Portalix hält ein Objekt",
   "subtitles.portalix.release": "Portalix lässt ein Objekt los",
   "subtitles.portalix.grab_failed": "Objekt kann nicht aufgenommen werden",
+  "subtitles.portalix.portal_traverse": "Durchgang durch ein Portal",
   "item.portalix.portalix": "Portalkanone",
   "item.portalix.orange_portalix": "Portalkanone",
   "item.portalix.blue_portalix": "Portalkanone",

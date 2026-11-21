@@ -25,7 +25,9 @@ public enum GunSounds {
   HOLD("hold"),
   HOLD_INTRO("hold_intro"),
   RELEASE("release"),
-  GRAB_FAILED("grab_failed");
+  GRAB_FAILED("grab_failed"),
+  PORTAL_ENTER("portal_enter"),
+  PORTAL_EXIT("portal_exit");
 
   private final String id;
   private Supplier<SoundEvent> event;

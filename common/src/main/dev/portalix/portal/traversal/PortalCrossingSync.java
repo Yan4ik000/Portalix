@@ -1,5 +1,6 @@
 package dev.portalix.portal.traversal;
 
+import dev.portalix.api.PortalEndpoint;
 import dev.portalix.compat.minecraft.EntityMotion;
 import dev.portalix.compat.minecraft.ServerPlayerMotion;
 import dev.portalix.network.ModNetworking;
@@ -8,6 +9,7 @@ import dev.portalix.portal.PortalLink;
 import dev.portalix.portal.query.PlayerPortalVisibility;
 import dev.portalix.server.EntityObservers;
 import dev.portalix.server.PortalServerEvents;
+import dev.portalix.sound.GunSounds;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -23,9 +25,11 @@ import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
 import net.minecraft.network.protocol.game.ClientGamePacketListener;
 import net.minecraft.network.protocol.game.ClientboundBundlePacket;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.sounds.SoundSource;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.MoverType;
+import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.Vec3;
 
 public final class PortalCrossingSync {
@@ -77,6 +81,10 @@ public final class PortalCrossingSync {
       clientCrossing.crossed(entity, crossing);
       return;
     }
+    if (!entity.isPassenger() && !entity.isSilent()) {
+      playSound(entity.level(), crossing.link().entrance().endpoint(), GunSounds.PORTAL_ENTER);
+      playSound(entity.level(), crossing.link().exit().endpoint(), GunSounds.PORTAL_EXIT);
+    }
     if (entity instanceof ServerPlayer player) PortalServerEvents.cameraCrossed(player, crossing.link());
     var state = EntityPortalState.of(entity);
     if (state.outgoing == null) state.outgoing = new EntityPortalState.OutgoingCrossings();
@@ -90,6 +98,13 @@ public final class PortalCrossingSync {
     outgoing.events.add(crossing);
     if (CONTROLLER_MOVE.isBound()) CONTROLLER_MOVE.get().crossed(entity, crossing);
     entity.needsSync = true;
+  }
+
+  private static void playSound(Level level, PortalEndpoint portal, GunSounds sound) {
+    Vec3 position = portal.center().add(portal.normal().scale(.25));
+    var random = level.getRandom();
+    level.playSound(null, position.x, position.y, position.z, sound.sound(), SoundSource.BLOCKS,
+        sound.volume(random), sound.pitch(random));
   }
 
   static void completed(Entity entity, PortalEntityMovement.MoveResult result) {

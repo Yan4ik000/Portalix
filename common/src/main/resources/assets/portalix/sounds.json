@@ -145,6 +145,32 @@
       }
     ]
   },
+  "portal_enter": {
+    "subtitle": "subtitles.portalix.portal_traverse",
+    "sounds": [
+      {
+        "name": "portalix:portal_enter_0",
+        "preload": true
+      },
+      {
+        "name": "portalix:portal_enter_1",
+        "preload": true
+      }
+    ]
+  },
+  "portal_exit": {
+    "subtitle": "subtitles.portalix.portal_traverse",
+    "sounds": [
+      {
+        "name": "portalix:portal_exit_0",
+        "preload": true
+      },
+      {
+        "name": "portalix:portal_exit_1",
+        "preload": true
+      }
+    ]
+  },
   "portal_ambient": {
     "sounds": [
       {
