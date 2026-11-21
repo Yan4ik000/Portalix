@@ -1,0 +1,102 @@
+name: Publish release to mod platforms
+
+on:
+    release:
+        types: [published]
+    workflow_dispatch:
+        inputs:
+            release_tag:
+                description: Tag of an existing published GitHub release
+                required: true
+                type: string
+
+permissions:
+    contents: read
+
+concurrency:
+    group: publish-release-${{ github.event.release.tag_name || inputs.release_tag }}
+    cancel-in-progress: false
+
+env:
+    RELEASE_TAG: ${{ github.event.release.tag_name || inputs.release_tag }}
+    RELEASE_SOURCE: ${{ github.event_name == 'workflow_dispatch' && 'release-source' || '.' }}
+
+jobs:
+    prepare:
+        runs-on: ubuntu-latest
+        timeout-minutes: 10
+        outputs:
+            assets: ${{ steps.plan.outputs.assets }}
+            release_commit: ${{ steps.release-source.outputs.commit }}
+        steps:
+            - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+              with:
+                  ref: ${{ github.sha }}
+                  persist-credentials: false
+
+            - name: Check out release configuration
+              id: release-source
+              if: github.event_name == 'workflow_dispatch'
+              uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+              with:
+                  ref: refs/tags/${{ inputs.release_tag }}
+                  path: release-source
+                  persist-credentials: false
+
+            - name: Validate release JARs
+              id: plan
+              env:
+                  GH_TOKEN: ${{ github.token }}
+              run: |
+                  gh release download "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" \
+                      --pattern 'Portalix-*.jar' --dir "$RUNNER_TEMP/portalix"
+                  assets=$(python3 .github/scripts/publish_release.py plan "$RUNNER_TEMP/portalix")
+                  echo "assets=$assets" >> "$GITHUB_OUTPUT"
+
+    publish:
+        name: ${{ matrix.platform }} / ${{ matrix.asset }}
+        needs: prepare
+        runs-on: ubuntu-latest
+        timeout-minutes: 10
+        strategy:
+            fail-fast: false
+            matrix:
+                platform: [CurseForge, Modrinth]
+                asset: ${{ fromJSON(needs.prepare.outputs.assets) }}
+        env:
+            ASSET_NAME: ${{ matrix.asset }}
+        steps:
+            - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+              with:
+                  ref: ${{ github.sha }}
+                  persist-credentials: false
+
+            - name: Check out release configuration
+              if: github.event_name == 'workflow_dispatch'
+              uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+              with:
+                  ref: ${{ needs.prepare.outputs.release_commit }}
+                  path: release-source
+                  persist-credentials: false
+
+            - name: Download release JAR
+              env:
+                  GH_TOKEN: ${{ github.token }}
+              run: |
+                  gh release download "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" \
+                      --pattern "$ASSET_NAME" --dir "$RUNNER_TEMP/portalix"
+
+            - name: Upload to CurseForge
+              if: matrix.platform == 'CurseForge'
+              env:
+                  GH_TOKEN: ${{ github.token }}
+                  CURSEFORGE_TOKEN: ${{ secrets.CURSEFORGE_TOKEN }}
+              run: python3 .github/scripts/publish_release.py curseforge "$RUNNER_TEMP/portalix/$ASSET_NAME"
+
+            - name: Upload to Modrinth
+              if: matrix.platform == 'Modrinth'
+              env:
+                  GH_TOKEN: ${{ github.token }}
+                  MODRINTH_PROJECT_ID: ${{ vars.MODRINTH_PROJECT_ID || secrets.MODRINTH_PROJECT_ID }}
+                  MODRINTH_TOKEN: ${{ secrets.MODRINTH_TOKEN }}
+              run: python3 .github/scripts/publish_release.py modrinth "$RUNNER_TEMP/portalix/$ASSET_NAME"
