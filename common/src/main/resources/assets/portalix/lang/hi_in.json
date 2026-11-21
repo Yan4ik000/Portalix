@@ -1,5 +1,6 @@
 {
   "message.portalix.access.denied": "आप इस सर्वर पर पोर्टल गन का इस्तेमाल नहीं कर सकते।",
+  "message.portalix.update.available": "Portalix: मॉड का अपडेट उपलब्ध है। मौजूदा संस्करण: %1$s। नया संस्करण: %2$s",
   "commands.portalix.access.unavailable": "पोर्टल गन की पहुँच सेटिंग उपलब्ध नहीं हैं।",
   "commands.portalix.access.save_failed": "पोर्टल गन की पहुँच सेटिंग सहेजी नहीं जा सकीं। सर्वर का लॉग देखें।",
   "commands.portalix.access.not_trusted": "यह खिलाड़ी पोर्टल गन की अनुमति सूची में नहीं है।",

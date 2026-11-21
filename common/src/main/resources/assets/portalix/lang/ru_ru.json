@@ -1,5 +1,6 @@
 {
   "message.portalix.access.denied": "На этом сервере у вас нет права пользоваться портальной пушкой.",
+  "message.portalix.update.available": "Portalix: доступно обновление мода. Текущая версия: %1$s. Новая версия: %2$s",
   "commands.portalix.access.unavailable": "Настройки доступа к портальной пушке недоступны.",
   "commands.portalix.access.save_failed": "Не удалось сохранить настройки доступа к портальной пушке. Подробности в журнале сервера.",
   "commands.portalix.access.not_trusted": "Этого игрока нет в белом списке портальной пушки.",

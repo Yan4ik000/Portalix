@@ -1,5 +1,6 @@
 {
   "message.portalix.access.denied": "No puedes usar la pistola de portales en este servidor.",
+  "message.portalix.update.available": "Portalix: Hay una actualización disponible para el mod. Versión actual: %1$s. Nueva versión: %2$s",
   "commands.portalix.access.unavailable": "Los ajustes de acceso a la pistola de portales no están disponibles.",
   "commands.portalix.access.save_failed": "No se han podido guardar los ajustes de acceso a la pistola de portales. Consulta el registro del servidor.",
   "commands.portalix.access.not_trusted": "Ese jugador no está en la lista blanca de la pistola de portales.",

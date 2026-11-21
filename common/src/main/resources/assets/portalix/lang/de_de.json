@@ -1,5 +1,6 @@
 {
   "message.portalix.access.denied": "Du darfst die Portalkanone auf diesem Server nicht benutzen.",
+  "message.portalix.update.available": "Portalix: Ein Update für die Mod ist verfügbar. Aktuelle Version: %1$s. Neue Version: %2$s",
   "commands.portalix.access.unavailable": "Die Zugriffsregeln für die Portalkanone sind nicht verfügbar.",
   "commands.portalix.access.save_failed": "Die Zugriffsregeln für die Portalkanone konnten nicht gespeichert werden. Siehe Serverprotokoll.",
   "commands.portalix.access.not_trusted": "Dieser Spieler steht nicht auf der Freigabeliste der Portalkanone.",

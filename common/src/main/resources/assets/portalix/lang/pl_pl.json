@@ -1,5 +1,6 @@
 {
   "message.portalix.access.denied": "Na tym serwerze nie możesz używać działa portalowego.",
+  "message.portalix.update.available": "Portalix: Dostępna jest aktualizacja moda. Bieżąca wersja: %1$s. Nowa wersja: %2$s",
   "commands.portalix.access.unavailable": "Ustawienia dostępu do działa portalowego są niedostępne.",
   "commands.portalix.access.save_failed": "Nie udało się zapisać ustawień dostępu do działa portalowego. Sprawdź dziennik serwera.",
   "commands.portalix.access.not_trusted": "Tego gracza nie ma na liście uprawnionych do korzystania z działa portalowego.",

@@ -1,5 +1,6 @@
 {
   "message.portalix.access.denied": "Bu sunucuda portal silahını kullanamazsın.",
+  "message.portalix.update.available": "Portalix: Mod için bir güncelleme var. Mevcut sürüm: %1$s. Yeni sürüm: %2$s",
   "commands.portalix.access.unavailable": "Portal silahı erişim ayarları kullanılamıyor.",
   "commands.portalix.access.save_failed": "Portal silahı erişim ayarları kaydedilemedi. Sunucu günlüğüne bak.",
   "commands.portalix.access.not_trusted": "Bu oyuncu portal silahı izin listesinde yok.",

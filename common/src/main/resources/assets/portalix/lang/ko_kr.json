@@ -1,5 +1,6 @@
 {
   "message.portalix.access.denied": "이 서버에서는 포털 건을 사용할 수 없습니다.",
+  "message.portalix.update.available": "Portalix: 모드 업데이트가 있습니다. 현재 버전: %1$s. 새 버전: %2$s",
   "commands.portalix.access.unavailable": "포털 건 사용 권한 설정을 불러올 수 없습니다.",
   "commands.portalix.access.save_failed": "포털 건 사용 권한 설정을 저장하지 못했습니다. 서버 로그를 확인하세요.",
   "commands.portalix.access.not_trusted": "해당 플레이어는 포털 건 사용 허용 목록에 없습니다.",

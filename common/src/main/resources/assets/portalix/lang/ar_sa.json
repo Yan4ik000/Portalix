@@ -1,5 +1,6 @@
 {
   "message.portalix.access.denied": "لا يمكنك استخدام مدفع البوابات على هذا الخادم.",
+  "message.portalix.update.available": "Portalix: يتوفر تحديث للمود. الإصدار الحالي: %1$s. الإصدار الجديد: %2$s",
   "commands.portalix.access.unavailable": "إعدادات الوصول إلى مدفع البوابات غير متاحة.",
   "commands.portalix.access.save_failed": "تعذّر حفظ إعدادات الوصول إلى مدفع البوابات. راجع سجل الخادم.",
   "commands.portalix.access.not_trusted": "هذا اللاعب ليس في قائمة المسموح لهم باستخدام مدفع البوابات.",

@@ -1,5 +1,6 @@
 {
   "message.portalix.access.denied": "Non puoi usare lo sparaportali su questo server.",
+  "message.portalix.update.available": "Portalix: È disponibile un aggiornamento della mod. Versione attuale: %1$s. Nuova versione: %2$s",
   "commands.portalix.access.unavailable": "Le impostazioni di accesso allo sparaportali non sono disponibili.",
   "commands.portalix.access.save_failed": "Impossibile salvare le impostazioni di accesso allo sparaportali. Consulta il registro del server.",
   "commands.portalix.access.not_trusted": "Questo giocatore non è nell’elenco di chi può usare lo sparaportali.",

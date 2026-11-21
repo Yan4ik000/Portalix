@@ -1,5 +1,6 @@
 {
   "message.portalix.access.denied": "Não podes usar a arma de portais neste servidor.",
+  "message.portalix.update.available": "Portalix: Está disponível uma atualização do mod. Versão atual: %1$s. Nova versão: %2$s",
   "commands.portalix.access.unavailable": "As definições de acesso à arma de portais não estão disponíveis.",
   "commands.portalix.access.save_failed": "Não foi possível guardar as definições de acesso à arma de portais. Consulta o registo do servidor.",
   "commands.portalix.access.not_trusted": "Esse jogador não está na lista de permissões da arma de portais.",

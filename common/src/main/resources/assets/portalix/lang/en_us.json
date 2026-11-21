@@ -1,5 +1,6 @@
 {
   "message.portalix.access.denied": "You cannot use the Portalix gun on this server.",
+  "message.portalix.update.available": "Portalix: A mod update is available. Current version: %1$s. New version: %2$s",
   "commands.portalix.access.unavailable": "Portalix access settings are unavailable.",
   "commands.portalix.access.save_failed": "Could not save Portalix access settings. See the server log.",
   "commands.portalix.access.not_trusted": "That player is not on the Portalix allowlist.",

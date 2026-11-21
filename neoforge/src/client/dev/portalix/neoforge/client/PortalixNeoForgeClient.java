@@ -3,6 +3,7 @@ package dev.portalix.neoforge.client;
 import dev.portalix.PortalixMod;
 import dev.portalix.client.ClientNetworking;
 import dev.portalix.client.PortalixClient;
+import dev.portalix.client.PortalixUpdateChecker;
 import dev.portalix.client.config.PortalixClientSettings;
 import dev.portalix.client.config.PortalixSettingsScreen;
 import dev.portalix.client.gun.model.PortalixItemModel;
@@ -35,6 +36,9 @@ public final class PortalixNeoForgeClient {
     }));
     NeoForge.EVENT_BUS.addListener((ClientTickEvent.Post event) ->
         PortalixClient.tick(Minecraft.getInstance()));
+    String version = container.getModInfo().getVersion().toString();
+    NeoForge.EVENT_BUS.addListener((ClientPlayerNetworkEvent.LoggingIn event) ->
+        PortalixUpdateChecker.check(Minecraft.getInstance(), event.getConnection(), "neoforge", version));
     NeoForge.EVENT_BUS.addListener((ClientPlayerNetworkEvent.LoggingOut event) ->
         PortalixClient.disconnected(event.getPlayer()));
   }

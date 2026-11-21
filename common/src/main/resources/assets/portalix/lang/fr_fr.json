@@ -1,5 +1,6 @@
 {
   "message.portalix.access.denied": "Vous ne pouvez pas utiliser le pistolet à portails sur ce serveur.",
+  "message.portalix.update.available": "Portalix : Une mise à jour du mod est disponible. Version actuelle : %1$s. Nouvelle version : %2$s",
   "commands.portalix.access.unavailable": "Les paramètres d’accès au pistolet à portails sont indisponibles.",
   "commands.portalix.access.save_failed": "Impossible d’enregistrer les paramètres d’accès au pistolet à portails. Consultez le journal du serveur.",
   "commands.portalix.access.not_trusted": "Ce joueur ne figure pas sur la liste des joueurs autorisés à utiliser le pistolet à portails.",

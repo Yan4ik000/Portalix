@@ -1,5 +1,6 @@
 {
   "message.portalix.access.denied": "你无权在此服务器上使用传送门枪。",
+  "message.portalix.update.available": "Portalix: 模组有可用更新。当前版本：%1$s。新版本：%2$s",
   "commands.portalix.access.unavailable": "传送门枪的使用权限设置不可用。",
   "commands.portalix.access.save_failed": "无法保存传送门枪的使用权限设置。请查看服务器日志。",
   "commands.portalix.access.not_trusted": "该玩家不在传送门枪的使用白名单中。",

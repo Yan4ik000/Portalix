@@ -1,5 +1,6 @@
 {
   "message.portalix.access.denied": "このサーバーではポータルガンを使用できません。",
+  "message.portalix.update.available": "Portalix: MODのアップデートが利用可能です。現在のバージョン：%1$s。新しいバージョン：%2$s",
   "commands.portalix.access.unavailable": "ポータルガンの使用権限設定を利用できません。",
   "commands.portalix.access.save_failed": "ポータルガンの使用権限設定を保存できませんでした。サーバーログを確認してください。",
   "commands.portalix.access.not_trusted": "そのプレイヤーはポータルガンの使用許可リストに登録されていません。",
