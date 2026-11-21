@@ -5,6 +5,7 @@ import dev.portalix.item.PortalLoot;
 import dev.portalix.network.ModNetworking;
 import dev.portalix.server.PortalServerEvents;
 import net.fabricmc.api.ModInitializer;
+import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerEntityEvents;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
@@ -19,6 +20,8 @@ public final class PortalixFabric implements ModInitializer {
     PortalixMod.initialize();
     FabricProtocol.register();
     ModNetworking.register(new FabricNetworking());
+    CommandRegistrationCallback.EVENT.register((dispatcher, context, environment) ->
+        PortalServerEvents.registerCommands(dispatcher));
     ServerLifecycleEvents.SERVER_STARTED.register(PortalServerEvents::started);
     ServerLifecycleEvents.SERVER_STOPPING.register(PortalServerEvents::stopping);
     ServerLifecycleEvents.SERVER_STOPPED.register(PortalServerEvents::stopped);

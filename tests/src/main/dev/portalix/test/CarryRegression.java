@@ -55,7 +55,7 @@ final class CarryRegression implements ServerRegressionSuite.Scenario {
     world.player.snapTo(160.5, 104, 160.5, 0, 0);
     var controller = new CarryController(new GunStateBroadcaster(player ->
         new GunStatePayload(player.getId(), player.getUUID(), -1,
-            GunStatePayload.EMPTY_TARGET, 0, 0, false)));
+            GunStatePayload.EMPTY_TARGET, 0, 0, false)), holder -> true);
     Vec3 center = world.player.getEyePosition().add(0, 0, 1.5);
     var target = world.item(center);
     UUID owner = world.player.getUUID();
@@ -210,7 +210,7 @@ final class CarryRegression implements ServerRegressionSuite.Scenario {
     target.setOldPosAndRot();
     controller = new CarryController(new GunStateBroadcaster(player ->
         new GunStatePayload(player.getId(), player.getUUID(), -1,
-            GunStatePayload.EMPTY_TARGET, 0, 0, false)));
+            GunStatePayload.EMPTY_TARGET, 0, 0, false)), holder -> true);
     UUID owner = world.player.getUUID();
     controller.toggleGrab(world.player);
     check(controller.targetId(owner) == target.getId() && controller.targetUuid(owner).equals(target.getUUID()),
@@ -237,7 +237,7 @@ final class CarryRegression implements ServerRegressionSuite.Scenario {
     world.add(pig);
     pig.setPos(player.getEyePosition().add(0, -pig.getBbHeight() / 2, 1.5));
     var controller = new CarryController(new GunStateBroadcaster(owner ->
-        new GunStatePayload(owner.getId(), owner.getUUID(), -1, GunStatePayload.EMPTY_TARGET, 0, 0, false)));
+        new GunStatePayload(owner.getId(), owner.getUUID(), -1, GunStatePayload.EMPTY_TARGET, 0, 0, false)), holder -> true);
     try {
       controller.toggleGrab(player);
       check(controller.targetId(player.getUUID()) == pig.getId(), "Could not grab the mob before entering the web");
@@ -283,7 +283,7 @@ final class CarryRegression implements ServerRegressionSuite.Scenario {
       animal.setLeashedTo(world.player, true);
       var controller = new CarryController(new GunStateBroadcaster(player ->
           new GunStatePayload(player.getId(), player.getUUID(), -1,
-              GunStatePayload.EMPTY_TARGET, 0, 0, false)));
+              GunStatePayload.EMPTY_TARGET, 0, 0, false)), holder -> true);
       float health = animal.getHealth();
       try {
         controller.toggleGrab(world.player);
@@ -339,7 +339,7 @@ final class CarryRegression implements ServerRegressionSuite.Scenario {
     check(passenger.startRiding(vehicle, true, false), "Carry passenger fixture could not mount");
     vehicle.positionRider(passenger);
     var controller = new CarryController(new GunStateBroadcaster(player ->
-        new GunStatePayload(player.getId(), player.getUUID(), -1, GunStatePayload.EMPTY_TARGET, 0, 0, false)));
+        new GunStatePayload(player.getId(), player.getUUID(), -1, GunStatePayload.EMPTY_TARGET, 0, 0, false)), holder -> true);
     try {
       controller.toggleGrab(world.player);
       check(!controller.isHolding(world.player.getUUID()) && CarryBindings.holderId(vehicle) == -1

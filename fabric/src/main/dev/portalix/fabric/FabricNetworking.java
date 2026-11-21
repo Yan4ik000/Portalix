@@ -26,6 +26,12 @@ final class FabricNetworking implements ModNetworking.Registration {
   }
 
   @Override
+  public <T extends CustomPacketPayload> void optionalClientbound(
+      CustomPacketPayload.Type<T> type, StreamCodec<? super RegistryFriendlyByteBuf, T> codec) {
+    clientbound(type, codec);
+  }
+
+  @Override
   public <T extends CustomPacketPayload> void clientbound(
       CustomPacketPayload.Type<T> type, StreamCodec<? super RegistryFriendlyByteBuf, T> codec) {
     PayloadTypeRegistry.clientboundPlay().register(type, codec);

@@ -7,6 +7,7 @@ import dev.portalix.network.ModNetworking;
 import dev.portalix.network.portal.PortalCameraViewDemandPayload;
 import dev.portalix.network.portal.PortalViewDemandPayload;
 import dev.portalix.network.portal.PortalViewReadyPayload;
+import dev.portalix.network.portal.PortalViewSettingsPayload;
 import dev.portalix.network.portal.PortalViewStatusPayload;
 import dev.portalix.platform.PortalPlatform;
 import dev.portalix.platform.RegistryPlatform;
@@ -26,6 +27,7 @@ import dev.portalix.world.chunk.ChunkDeliveryAccess;
 import dev.portalix.world.chunk.ChunkViewUnion;
 import dev.portalix.world.chunk.PortalChunkObservers;
 import dev.portalix.world.chunk.PortalLoadingObservers;
+import dev.portalix.world.chunk.PortalLoadingSources;
 import dev.portalix.world.chunk.PortalRetainedTerrain;
 import dev.portalix.world.chunk.PortalRetainedTerrain.Claim;
 import dev.portalix.world.chunk.WarmColumnAccess;
@@ -76,7 +78,7 @@ public final class PortalChunkTracker implements AutoCloseable {
           PortalixMod.id("portal_preparation"),
           () -> new TicketType(0, TicketType.FLAG_LOADING));
   private final GunPortalRegistry portals;
-  private final Map<ServerLevel, Long2IntMap> loadingObservers = new HashMap<>();
+  private final Map<ServerLevel, LoadingRegions> loadingObservers = new HashMap<>();
   private final PortalRetainedTerrain retainedTerrain = new PortalRetainedTerrain(
       ChunkLevel.byStatus(FullChunkStatus.FULL) - ChunkLevel.byStatus(FullChunkStatus.ENTITY_TICKING));
   private final Map<ServerLevel, LongOpenHashSet> simulationTickets = new HashMap<>();
@@ -90,6 +92,14 @@ public final class PortalChunkTracker implements AutoCloseable {
 
   public PortalChunkTracker(GunPortalRegistry portals) {
     this.portals = portals;
+  }
+
+  public void requestViewSettings(ServerPlayer player, PortalViewSettingsPayload payload) {
+    var tracking = trackingFor(player);
+    if (!payload.equals(tracking.settings)) {
+      tracking.settings = payload;
+      tracking.demandChanged = true;
+    }
   }
 
   public void requestViews(ServerPlayer player, PortalViewDemandPayload payload) {
@@ -160,15 +170,20 @@ public final class PortalChunkTracker implements AutoCloseable {
     var level = player.level();
     long now = level.getGameTime();
     var visibility = PlayerPortalVisibility.of(player);
+    var map = (ChunkMapAccessor) level.getChunkSource().chunkMap;
+    int limit = map.portalix$playerViewDistance(player);
+    int arrivalRadius = viewRadius(tracking, link, limit);
     if (canLoadChunks(player)) {
       var delivery = (ChunkDeliveryAccess) player.connection.chunkSender;
-      var map = (ChunkMapAccessor) level.getChunkSource().chunkMap;
-      int limit = map.portalix$playerViewDistance(player);
+      int returnRadius = viewRadius(tracking, link.inverse(), limit);
+      int sourceRadius = visibility.loadingTransitionActive(now)
+          ? visibility.trackingDistance(now, limit) : returnRadius;
       var warm = tracking.warm;
       var loading = tracking.warmColumns;
       var source = PortalViewLimits.frontColumn(link.entrance().endpoint());
       var target = PortalViewLimits.frontColumn(link.exit().endpoint());
-      warm.crossed(source, target, player.getChunkTrackingView(), limit, now, delivery.portalix$presentColumns(level),
+      warm.crossed(source, target, player.getChunkTrackingView(), limit, sourceRadius, returnRadius, arrivalRadius,
+          now, delivery.portalix$presentColumns(level),
           key -> {
             if (!delivery.portalix$delivered(level, key)) return false;
             if (!warm.contains(key)) {
@@ -179,7 +194,7 @@ public final class PortalChunkTracker implements AutoCloseable {
             return delivery.portalix$retain(player, key);
           }, loading::portalix$retainColumn);
     }
-    visibility.portalCrossed(now);
+    visibility.portalCrossed(now, arrivalRadius);
     tracking.loadingObservers.portalix$loadingDelayChanged(player);
     tracking.camera.crossed(link);
     tracking.deferredDemand = null;
@@ -242,6 +257,8 @@ public final class PortalChunkTracker implements AutoCloseable {
       visibility.resetObservation(new LongOpenHashSet());
     }
     var tracking = new PlayerTracking(player);
+    if (previous != null && previous.player.connection == player.connection)
+      tracking.settings = previous.settings;
     playerTracking.put(id, tracking);
     return tracking;
   }
@@ -298,7 +315,8 @@ public final class PortalChunkTracker implements AutoCloseable {
         continue;
       }
       retainedTerrain.observe(player.getUUID(), portals.unlinkedEndpoint(player), player.getChunkTrackingView(),
-          PortalViewLimits.preview(((ChunkMapAccessor) player.level().getChunkSource().chunkMap).portalix$playerViewDistance(player)),
+          PortalViewLimits.preview(
+              ((ChunkMapAccessor) player.level().getChunkSource().chunkMap).portalix$playerViewDistance(player)),
           position -> player.level().getChunkSource().getChunkNow(ChunkPos.getX(position), ChunkPos.getZ(position)) != null);
     }
     retainedTerrain.retainPlayers(active);
@@ -325,13 +343,10 @@ public final class PortalChunkTracker implements AutoCloseable {
     for (var player : players) {
       if (!canLoadChunks(player)) continue;
       var tracking = playerTracking.get(player.getUUID());
-      int loadingRadius = ((ChunkMapAccessor) player.level().getChunkSource().chunkMap).portalix$serverViewDistance();
-      int sourceWeight = loadingRadius - PlayerPortalVisibility.of(player).viewRadius();
-      for (long center : tracking.centers)
-        addLoadingSource(desiredLoading, player.level(), center, sourceWeight);
+      for (var region : Long2IntMaps.fastIterable(tracking.centers))
+        addLoadingRegion(desiredLoading, player.level(), region.getLongKey(), region.getIntValue());
       if (tracking.retained != null)
-        addLoadingSource(desiredLoading, player.level(), tracking.retained.center().pack(),
-            loadingRadius - tracking.retained.radius());
+        addLoadingRegion(desiredLoading, player.level(), tracking.retained.center().pack(), tracking.retained.radius());
       if (tracking.preparationCenter != null)
         desiredPreparation.computeIfAbsent(player.level(), ignored -> new LongOpenHashSet())
             .add(tracking.preparationCenter.longValue());
@@ -408,23 +423,30 @@ public final class PortalChunkTracker implements AutoCloseable {
     var levels = new HashSet<>(loadingObservers.keySet());
     levels.addAll(desired.keySet());
     for (var level : levels) {
-      var previous = loadingObservers.get(level);
-      var next = desired.getOrDefault(level, Long2IntMaps.EMPTY_MAP);
-      if (next.equals(previous)) {
-        next = previous;
-        desired.put(level, next);
+      var distanceManager = (PortalLoadingObservers) level.getChunkSource().chunkMap.getDistanceManager();
+      var regions = desired.get(level);
+      if (regions == null) {
+        distanceManager.portalix$observeLoading(Long2IntMaps.EMPTY_MAP, List.of());
+        loadingObservers.remove(level);
+        continue;
       }
-      ((PortalLoadingObservers) level.getChunkSource().chunkMap.getDistanceManager())
-          .portalix$observeLoading(next, priorities.getOrDefault(level, List.of()));
+      int nativeRadius = ((ChunkMapAccessor) level.getChunkSource().chunkMap).portalix$serverViewDistance();
+      var current = loadingObservers.get(level);
+      if (current == null || current.nativeRadius() != nativeRadius || !regions.equals(current.regions())) {
+        var sources = new Long2IntOpenHashMap();
+        for (var region : Long2IntMaps.fastIterable(regions))
+          PortalLoadingSources.addRegion(sources, region.getLongKey(), region.getIntValue(), nativeRadius);
+        current = new LoadingRegions(nativeRadius, regions, sources);
+        loadingObservers.put(level, current);
+      }
+      distanceManager.portalix$observeLoading(current.sources(), priorities.getOrDefault(level, List.of()));
     }
-    loadingObservers.clear();
-    loadingObservers.putAll(desired);
   }
 
-  private static void addLoadingSource(Map<ServerLevel, Long2IntMap> sources,
-      ServerLevel level, long center, int distance) {
-    var positions = sources.computeIfAbsent(level, ignored -> new Long2IntOpenHashMap());
-    positions.put(center, Math.min(distance, positions.getOrDefault(center, Integer.MAX_VALUE)));
+  private static void addLoadingRegion(Map<ServerLevel, Long2IntMap> levels,
+      ServerLevel level, long center, int radius) {
+    var regions = levels.computeIfAbsent(level, ignored -> new Long2IntOpenHashMap());
+    if (radius > regions.get(center)) regions.put(center, radius);
   }
 
   private static Viewpoint viewpoint(ServerPlayer player, PlayerTracking tracking, Vec3 velocity) {
@@ -510,18 +532,26 @@ public final class PortalChunkTracker implements AutoCloseable {
         ? List.copyOf(path) : List.of();
   }
 
+  private int viewRadius(PlayerTracking tracking, PortalLink link, int limit) {
+    var settings = tracking.settings;
+    if (settings == null) return PortalViewLimits.preview(limit);
+    int own = settings.ownRadius();
+    int other = settings.otherRadius();
+    return own != other && portals.ownsEntrance(tracking.player.getUUID(), link) ? own : other;
+  }
+
   private void update(ServerPlayer player, boolean captureUnlinkedTerrain) {
     var level = player.level();
     var chunkSource = level.getChunkSource();
     var chunkMap = (ChunkMapAccessor) chunkSource.chunkMap;
     int primaryRadius = chunkMap.portalix$playerViewDistance(player);
-    int radius = PortalViewLimits.preview(primaryRadius);
     var visibility = PlayerPortalVisibility.of(player);
     PlayerTracking tracking = trackingFor(player);
     boolean loading = canLoadChunks(player);
     var endpoint = loading ? portals.unlinkedEndpoint(player) : null;
     if (captureUnlinkedTerrain)
-      retainedTerrain.observe(player.getUUID(), endpoint, player.getChunkTrackingView(), radius,
+      retainedTerrain.observe(player.getUUID(), endpoint, player.getChunkTrackingView(),
+          PortalViewLimits.preview(primaryRadius),
           position -> chunkSource.getChunkNow(ChunkPos.getX(position), ChunkPos.getZ(position)) != null);
     var retained = loading ? retainedTerrain.claim(player.getUUID(), chunkMap.portalix$serverViewDistance()) : null;
     Long preparationCenter = endpoint == null ? null : PortalViewLimits.frontColumn(endpoint).pack();
@@ -540,16 +570,18 @@ public final class PortalChunkTracker implements AutoCloseable {
       tracking.warm.advance(now, primaryRadius, tracking::canRelease,
           key -> releaseColumn(player, tracking.warmColumns, key));
     else tracking.warm.clear(key -> releaseColumn(player, tracking.warmColumns, key));
-    boolean replan = tracking.primaryRadius != trackingRadius || topologyChanged || tracking.demandChanged
-        || !Objects.equals(view, tracking.view) || visibility.viewRadius() != radius
+    boolean replan = tracking.trackingRadius != trackingRadius || tracking.viewDistance != primaryRadius
+        || topologyChanged || tracking.demandChanged || !Objects.equals(view, tracking.view)
         || !eye.equals(tracking.eye) || !velocity.equals(tracking.velocity);
-    boolean chunksChanged = visibility.viewRadius() != radius || !Objects.equals(tracking.preparationCenter, preparationCenter)
+    boolean chunksChanged = tracking.viewDistance == 0 || !Objects.equals(tracking.preparationCenter, preparationCenter)
         || !Objects.equals(tracking.retained, retained);
     var observers = visibility.observers();
     var simulation = visibility.simulationChunks();
-    tracking.primaryRadius = trackingRadius;
+    tracking.trackingRadius = trackingRadius;
+    tracking.viewDistance = primaryRadius;
     if (replan) {
       var plan = PortalObservationPlanner.plan(eye, velocity, trackingRadius,
+          link -> viewRadius(tracking, link, primaryRadius),
           (point, distance) -> PortalViewLimits.nearbyEntrances(level, point, distance * 16.0),
           view, tracking.routes,
           id -> PortalTopology.resolve(level, id));
@@ -576,14 +608,14 @@ public final class PortalChunkTracker implements AutoCloseable {
     var previous = visibility.chunks();
     var chunks = previous;
     if (chunksChanged) {
-      chunks = ChunkViewUnion.collect(tracking.centers, radius);
+      chunks = ChunkViewUnion.collect(tracking.centers);
       for (long center : tracking.safetyCenters) addCore(chunks, center);
       if (retained != null) retained.addChunks(chunks);
       if (preparationCenter != null) addCore(chunks, preparationCenter);
       chunks.addAll(simulation);
     }
     var previousEyes = visibility.eyes();
-    visibility.observe(chunks, observers, simulation, radius);
+    visibility.observe(chunks, observers, simulation);
     if (!visibility.eyes().equals(previousEyes)) observersToRefresh.add(player.getUUID());
     if (chunksChanged && !trackingMoves.containsKey(player.getUUID())) reconcile(player, previous, chunks);
   }
@@ -700,7 +732,7 @@ public final class PortalChunkTracker implements AutoCloseable {
     Viewpoint view;
     boolean demandChanged;
     @Nullable DeferredDemand deferredDemand;
-    LongOpenHashSet centers = new LongOpenHashSet();
+    Long2IntMap centers = Long2IntMaps.EMPTY_MAP;
     LongOpenHashSet safetyCenters = new LongOpenHashSet();
     LongOpenHashSet simulationCenters = new LongOpenHashSet();
     @Nullable Long preparationCenter;
@@ -709,7 +741,9 @@ public final class PortalChunkTracker implements AutoCloseable {
     final PortalLoadingObservers loadingObservers;
     final WarmColumnAccess warmColumns;
     final TicketStorage tickets;
-    int primaryRadius;
+    int trackingRadius;
+    int viewDistance;
+    @Nullable PortalViewSettingsPayload settings;
     List<PortalLink> links = List.of();
     Vec3 eye = Vec3.ZERO;
     Vec3 velocity = Vec3.ZERO;
@@ -763,6 +797,8 @@ public final class PortalChunkTracker implements AutoCloseable {
 
   private record WaitingCameraCheck(List<PortalLink> topology, List<PortalLinkId> ids, Vec3 eye,
       Vec3 previousEye, List<PortalLink> bodyPath, double boom, double allowance, List<PortalLink> path) {}
+
+  private record LoadingRegions(int nativeRadius, Long2IntMap regions, Long2IntMap sources) {}
 
   private record SimulationView(ServerLevel level, LongOpenHashSet chunks, boolean loading) {}
 

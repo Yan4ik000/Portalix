@@ -1,4 +1,15 @@
 {
+  "message.portalix.access.denied": "Bu sunucuda portal silahını kullanamazsın.",
+  "commands.portalix.access.unavailable": "Portal silahı erişim ayarları kullanılamıyor.",
+  "commands.portalix.access.save_failed": "Portal silahı erişim ayarları kaydedilemedi. Sunucu günlüğüne bak.",
+  "commands.portalix.access.not_trusted": "Bu oyuncu portal silahı izin listesinde yok.",
+  "commands.portalix.access.ambiguous": "İzin listesinde bu ada sahip birden fazla oyuncu var. Oyuncunun UUID’sini kullan.",
+  "commands.portalix.access.mode.restricted": "Portal silahını yalnızca operatörler ve izin listesindeki oyuncular kullanabilir.",
+  "commands.portalix.access.mode.all": "Tüm oyuncular portal silahını kullanabilir.",
+  "commands.portalix.access.empty": "Portal silahı izin listesi boş.",
+  "commands.portalix.access.list": "Portal silahı izin listesi (%s): %s",
+  "commands.portalix.access.added": "Portal silahı izin listesinde güncellenen kayıt sayısı: %s",
+  "commands.portalix.access.removed": "%s, portal silahı izin listesinden çıkarıldı.",
   "item.portalix.potato_portalix": "Portal silahı",
   "key.category.portalix.controls": "Portalix",
   "key.portalix.grab": "Nesneyi tut / bırak",
@@ -25,5 +36,12 @@
   "item.portalix.miniature_black_hole": "Minyatür kara delik",
   "item.portalix.cooling_unit": "Soğutma ünitesi",
   "item.portalix.ai_module": "Yapay zekâ modülü",
-  "item.portalix.potatos": "Potatos"
+  "item.portalix.potatos": "Potatos",
+  "options.portalix.title": "Portalix Ayarları",
+  "options.portalix.crosshair": "Portalix Nişangâhı",
+  "options.portalix.own_portal_distance": "Kendi portallarından görüş mesafesi (yığın)",
+  "options.portalix.other_portal_distance": "Başkalarının portallarından görüş mesafesi (yığın)",
+  "options.portalix.distance_warning": "16 yığından yüksek değerler, portallar açılırken ciddi takılmalara neden olabilir.",
+  "options.portalix.portal_ambient_sound": "Sürekli portal sesi",
+  "options.portalix.save_error": "Portalix ayar dosyası kaydedilemedi."
 }

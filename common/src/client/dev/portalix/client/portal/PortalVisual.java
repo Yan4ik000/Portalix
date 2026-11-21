@@ -2,6 +2,7 @@ package dev.portalix.client.portal;
 
 import dev.portalix.api.PortalEndpoint;
 import dev.portalix.api.PortalInstance;
+import dev.portalix.client.config.PortalixClientSettings;
 import dev.portalix.client.gun.sound.SourcePositionalSound;
 import dev.portalix.client.particle.PortalParticleEffect;
 import dev.portalix.client.particle.PortalParticleMesh;
@@ -79,7 +80,8 @@ final class PortalVisual {
   void tick(double now, boolean ready, Vec3 camera) {
     particles.advance(now);
     animation.link(ready, now);
-    if (PortalAudioRouter.withinDistance(camera, endpoint.center(), AMBIENT_DISTANCE)) {
+    if (PortalixClientSettings.get().portalAmbientSound()
+        && PortalAudioRouter.withinDistance(camera, endpoint.center(), AMBIENT_DISTANCE)) {
       if (ambient == null || !client.getSoundManager().isActive(ambient)) {
         ambient =
             new SourcePositionalSound(

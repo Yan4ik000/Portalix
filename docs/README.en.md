@@ -62,6 +62,22 @@ Put the JAR in `mods` on both the client and server. On Fabric, add Fabric API t
 | F | Pick up / release object |
 | R | Reset portals |
 
+## Settings
+
+On Fabric, open Mods → Portalix → Configure through [Mod Menu](https://modrinth.com/mod/modmenu). On NeoForge, use the built-in mod list. The screen controls the Portalix crosshair, looping portal sound, and separate view distances for your portals and other players' portals. The range is 4 to 64 chunks and defaults to 8. The normal world view distance is configured separately. Preferences are stored in `config/portalix-client.json`.
+
+By default, every player may use the gun. Operators and the server console can change the policy and allowlist.
+
+| Command | Action |
+| --- | --- |
+| `/portalix access mode restricted` | Allow operators and allowlisted players to use the gun |
+| `/portalix access mode all` | Allow all players to use the gun |
+| `/portalix access add <player>` | Add a player to the allowlist |
+| `/portalix access remove <name or UUID>` | Remove a player from the allowlist |
+| `/portalix access list` | Show the allowlist |
+
+Rules are stored in `portalix-access.json` in the world folder. Every player can pass through open portals.
+
 ## More examples
 
 | Grabbing and throwing objects | Riding through a portal |

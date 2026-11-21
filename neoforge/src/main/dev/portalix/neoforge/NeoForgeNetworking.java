@@ -32,6 +32,12 @@ final class NeoForgeNetworking implements ModNetworking.Registration {
   }
 
   @Override
+  public <T extends CustomPacketPayload> void optionalClientbound(
+      CustomPacketPayload.Type<T> type, StreamCodec<? super RegistryFriendlyByteBuf, T> codec) {
+    registrar.optional().playToClient(type, codec);
+  }
+
+  @Override
   public <T extends CustomPacketPayload> void clientbound(
       CustomPacketPayload.Type<T> type, StreamCodec<? super RegistryFriendlyByteBuf, T> codec) {
     registrar.playToClient(type, codec);

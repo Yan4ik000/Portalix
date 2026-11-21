@@ -53,7 +53,7 @@ abstract class CourseSceneSupport implements ClientSystemScene {
         var endpoint = new dev.portalix.api.PortalEndpoint(owner.level().dimension(), center,
             normal, new Vec3(0, 1, 0), 1, 2);
         ClientAssertions.check(registry.apply(owner, fixture.gunId(), color, endpoint,
-            dev.portalix.item.PortalixVariant.STANDARD), "Native scene portal placement failed");
+            dev.portalix.item.PortalixVariant.STANDARD, () -> true), "Native scene portal placement failed");
       }
     });
   }

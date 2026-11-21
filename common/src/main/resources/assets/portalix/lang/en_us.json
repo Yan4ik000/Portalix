@@ -1,4 +1,15 @@
 {
+  "message.portalix.access.denied": "You cannot use the Portalix gun on this server.",
+  "commands.portalix.access.unavailable": "Portalix access settings are unavailable.",
+  "commands.portalix.access.save_failed": "Could not save Portalix access settings. See the server log.",
+  "commands.portalix.access.not_trusted": "That player is not on the Portalix allowlist.",
+  "commands.portalix.access.ambiguous": "Multiple allowlist entries have that name. Use the player's UUID.",
+  "commands.portalix.access.mode.restricted": "Only operators and allowlisted players can use the Portalix gun.",
+  "commands.portalix.access.mode.all": "All players can use the Portalix gun.",
+  "commands.portalix.access.empty": "The Portalix allowlist is empty.",
+  "commands.portalix.access.list": "Portalix allowlist (%s): %s",
+  "commands.portalix.access.added": "Portalix allowlist entries updated: %s",
+  "commands.portalix.access.removed": "Removed %s from the Portalix allowlist.",
   "item.portalix.potato_portalix": "Portalix",
   "key.category.portalix.controls": "Portalix",
   "key.portalix.grab": "Grab / release object",
@@ -25,5 +36,12 @@
   "item.portalix.miniature_black_hole": "Miniature Black Hole",
   "item.portalix.cooling_unit": "Cooling Unit",
   "item.portalix.ai_module": "AI Module",
-  "item.portalix.potatos": "Potatos"
+  "item.portalix.potatos": "Potatos",
+  "options.portalix.title": "Portalix Settings",
+  "options.portalix.crosshair": "Portalix Crosshair",
+  "options.portalix.own_portal_distance": "Own Portal View Distance (chunks)",
+  "options.portalix.other_portal_distance": "Other Players' Portal View Distance (chunks)",
+  "options.portalix.distance_warning": "Values above 16 chunks may cause severe stuttering when portals open.",
+  "options.portalix.portal_ambient_sound": "Continuous Portal Sound",
+  "options.portalix.save_error": "Could not save the Portalix settings file."
 }

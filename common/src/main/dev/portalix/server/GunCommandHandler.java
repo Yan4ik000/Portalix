@@ -11,43 +11,57 @@ import dev.portalix.server.portal.GunPortalRegistry;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
+import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerPlayer;
 
 final class GunCommandHandler {
+  private static final int DENIAL_INTERVAL_TICKS = 40;
   private final Map<UUID, Long> lastAcceptedCommandTick = new HashMap<>();
   private final Map<UUID, Long> lastGrabTick = new HashMap<>();
+  private final Map<UUID, Long> lastDenialTick = new HashMap<>();
   private final PortalShotManager shots;
   private final GunStateSync stateSync;
 
   private final CarryController carryController;
   private final GunPortalRegistry portalRegistry;
   private final GunStateBroadcaster broadcaster;
+  private final GunAccess access;
 
   GunCommandHandler(
       CarryController carryController,
       GunPortalRegistry portalRegistry,
       PortalShotManager shots,
       GunStateBroadcaster broadcaster,
-      GunStateSync stateSync) {
+      GunStateSync stateSync,
+      GunAccess access) {
     this.carryController = carryController;
     this.portalRegistry = portalRegistry;
     this.broadcaster = broadcaster;
     this.shots = shots;
     this.stateSync = stateSync;
+    this.access = access;
   }
 
   void receiveCommand(ServerPlayer player, GunCommand command) {
-    if (command == GunCommand.RESET
-        && EntityPortalState.of(player).crossedWithin(GunFireTiming.RESET_CROSSING_COOLDOWN_NANOS))
-      return;
     carryController.checkEquipment(player);
-    long tick = player.level().getServer().getTickCount();
-    UUID owner = player.getUUID();
     if (command == GunCommand.SYNC_STATE) {
       stateSync.requestSync(player);
       return;
     }
     if (!GunPermissions.canUse(player)) return;
+    long tick = player.level().getServer().getTickCount();
+    UUID owner = player.getUUID();
+    if (!access.allows(player)) {
+      Long previousDenial = lastDenialTick.get(owner);
+      if (previousDenial == null || tick - previousDenial >= DENIAL_INTERVAL_TICKS) {
+        lastDenialTick.put(owner, tick);
+        player.sendOverlayMessage(Component.translatable("message.portalix.access.denied"));
+      }
+      return;
+    }
+    if (command == GunCommand.RESET
+        && EntityPortalState.of(player).crossedWithin(GunFireTiming.RESET_CROSSING_COOLDOWN_NANOS))
+      return;
     UUID gun = PortalixIdentity.ensure(player.getMainHandItem());
     Map<UUID, Long> cooldown =
         command == GunCommand.TOGGLE_GRAB ? lastGrabTick : lastAcceptedCommandTick;
@@ -78,10 +92,12 @@ final class GunCommandHandler {
   void disconnect(ServerPlayer player) {
     this.lastAcceptedCommandTick.remove(player.getUUID());
     this.lastGrabTick.remove(player.getUUID());
+    this.lastDenialTick.remove(player.getUUID());
   }
 
   void clear() {
     this.lastAcceptedCommandTick.clear();
     this.lastGrabTick.clear();
+    this.lastDenialTick.clear();
   }
 }

@@ -13,9 +13,11 @@ import dev.portalix.network.portal.EntityPortalInitPayload;
 import dev.portalix.network.portal.PlayerPortalMoveAckPayload;
 import dev.portalix.network.portal.PlayerPortalMovePayload;
 import dev.portalix.network.portal.PortalCameraViewDemandPayload;
+import dev.portalix.network.portal.PortalOwnedStatePayload;
 import dev.portalix.network.portal.PortalStatePayload;
 import dev.portalix.network.portal.PortalViewDemandPayload;
 import dev.portalix.network.portal.PortalViewReadyPayload;
+import dev.portalix.network.portal.PortalViewSettingsPayload;
 import dev.portalix.network.portal.PortalViewStatusPayload;
 import dev.portalix.network.portal.ProjectilePortalMovePayload;
 import dev.portalix.network.portal.ProjectileStatePayload;
@@ -43,6 +45,9 @@ public final class ModNetworking {
         StreamCodec<? super RegistryFriendlyByteBuf, T> codec,
         BiConsumer<ServerPlayer, T> receiver);
 
+    <T extends CustomPacketPayload> void optionalClientbound(
+        CustomPacketPayload.Type<T> type, StreamCodec<? super RegistryFriendlyByteBuf, T> codec);
+
     <T extends CustomPacketPayload> void optionalBidirectional(
         CustomPacketPayload.Type<T> type, StreamCodec<? super RegistryFriendlyByteBuf, T> codec,
         BiConsumer<ServerPlayer, T> receiver);
@@ -65,6 +70,7 @@ public final class ModNetworking {
     registration.clientbound(ProjectileStatePayload.TYPE, ProjectileStatePayload.CODEC);
     registration.clientbound(EntityPortalInitPayload.TYPE, EntityPortalInitPayload.CODEC);
     registration.clientbound(PortalStatePayload.TYPE, PortalStatePayload.CODEC);
+    registration.optionalClientbound(PortalOwnedStatePayload.TYPE, PortalOwnedStatePayload.CODEC);
     registration.serverbound(
         ProjectilePortalMovePayload.TYPE, ProjectilePortalMovePayload.CODEC,
         ProjectileStateSync::requestSnapshot);
@@ -86,6 +92,9 @@ public final class ModNetworking {
     registration.optionalServerbound(
         PortalCameraViewDemandPayload.TYPE, PortalCameraViewDemandPayload.CODEC,
         PortalServerEvents::requestCameraViews);
+    registration.optionalServerbound(
+        PortalViewSettingsPayload.TYPE, PortalViewSettingsPayload.CODEC,
+        PortalServerEvents::requestViewSettings);
     registration.serverbound(
         GunCommandPayload.TYPE, GunCommandPayload.CODEC,
         (player, payload) -> PortalServerEvents.receiveGunCommand(player, payload.command()));

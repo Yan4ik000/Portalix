@@ -7,6 +7,7 @@ import dev.portalix.network.gun.GunStatePayload;
 import dev.portalix.network.portal.PortalCameraViewDemandPayload;
 import dev.portalix.network.portal.PortalViewDemandPayload;
 import dev.portalix.network.portal.PortalViewReadyPayload;
+import dev.portalix.network.portal.PortalViewSettingsPayload;
 import dev.portalix.portal.PortalLink;
 import dev.portalix.server.carry.CarryController;
 import dev.portalix.server.portal.GunPortalRegistry;
@@ -17,8 +18,11 @@ import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.Entity;
+import net.minecraft.world.level.storage.LevelResource;
 
 public final class PortalServerSession {
+  private final MinecraftServer server;
+  private final GunAccess access;
   private final CarryController carryController;
   private final GunPortalRegistry portalRegistry;
   private final PortalShotManager shots;
@@ -27,13 +31,29 @@ public final class PortalServerSession {
   private final PortalChunkTracker chunkTracker;
 
   public PortalServerSession(MinecraftServer server) {
+    this.server = server;
+    access = new GunAccess(server.getWorldPath(LevelResource.ROOT));
     portalRegistry = new GunPortalRegistry(server);
     chunkTracker = new PortalChunkTracker(portalRegistry);
     var broadcaster = new GunStateBroadcaster(this::snapshot);
-    carryController = new CarryController(broadcaster);
-    shots = new PortalShotManager(portalRegistry, broadcaster);
+    carryController = new CarryController(broadcaster, access::allows);
+    shots = new PortalShotManager(portalRegistry, broadcaster, access);
     stateSync = new GunStateSync(carryController, portalRegistry, shots, broadcaster);
-    gunCommands = new GunCommandHandler(carryController, portalRegistry, shots, broadcaster, stateSync);
+    gunCommands = new GunCommandHandler(carryController, portalRegistry, shots, broadcaster, stateSync, access);
+  }
+
+  GunAccess gunAccess(MinecraftServer server) {
+    return this.server == server ? access : null;
+  }
+
+  void gunAccessChanged(MinecraftServer server) {
+    if (this.server != server) return;
+    for (var player : server.getPlayerList().getPlayers()) {
+      if (!access.allows(player)) {
+        shots.revoke(player.getUUID());
+        carryController.drop(player.getUUID(), player);
+      }
+    }
   }
 
   public void tick(MinecraftServer server) {
@@ -82,6 +102,10 @@ public final class PortalServerSession {
 
   public void requestViews(ServerPlayer player, PortalViewDemandPayload payload) {
     chunkTracker.requestViews(player, payload);
+  }
+
+  public void requestViewSettings(ServerPlayer player, PortalViewSettingsPayload payload) {
+    chunkTracker.requestViewSettings(player, payload);
   }
 
   public void requestCameraViews(ServerPlayer player, PortalCameraViewDemandPayload payload) {

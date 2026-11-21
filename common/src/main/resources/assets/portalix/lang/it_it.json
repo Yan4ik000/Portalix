@@ -1,4 +1,15 @@
 {
+  "message.portalix.access.denied": "Non puoi usare lo sparaportali su questo server.",
+  "commands.portalix.access.unavailable": "Le impostazioni di accesso allo sparaportali non sono disponibili.",
+  "commands.portalix.access.save_failed": "Impossibile salvare le impostazioni di accesso allo sparaportali. Consulta il registro del server.",
+  "commands.portalix.access.not_trusted": "Questo giocatore non è nell’elenco di chi può usare lo sparaportali.",
+  "commands.portalix.access.ambiguous": "L’elenco contiene più giocatori con questo nome. Usa l’UUID del giocatore.",
+  "commands.portalix.access.mode.restricted": "Solo gli operatori e i giocatori autorizzati possono usare lo sparaportali.",
+  "commands.portalix.access.mode.all": "Tutti i giocatori possono usare lo sparaportali.",
+  "commands.portalix.access.empty": "L’elenco dei giocatori autorizzati a usare lo sparaportali è vuoto.",
+  "commands.portalix.access.list": "Giocatori autorizzati a usare lo sparaportali (%s): %s",
+  "commands.portalix.access.added": "Voci aggiornate nell’elenco degli autorizzati a usare lo sparaportali: %s",
+  "commands.portalix.access.removed": "%s è stato rimosso dall’elenco dei giocatori autorizzati a usare lo sparaportali.",
   "item.portalix.potato_portalix": "Sparaportali",
   "key.category.portalix.controls": "Portalix",
   "key.portalix.grab": "Afferra / rilascia oggetto",
@@ -25,5 +36,12 @@
   "item.portalix.miniature_black_hole": "Buco nero in miniatura",
   "item.portalix.cooling_unit": "Unità di raffreddamento",
   "item.portalix.ai_module": "Modulo IA",
-  "item.portalix.potatos": "Potatos"
+  "item.portalix.potatos": "Potatos",
+  "options.portalix.title": "Impostazioni di Portalix",
+  "options.portalix.crosshair": "Mirino di Portalix",
+  "options.portalix.own_portal_distance": "Distanza visiva dai propri portali (chunk)",
+  "options.portalix.other_portal_distance": "Distanza visiva dai portali altrui (chunk)",
+  "options.portalix.distance_warning": "Valori superiori a 16 chunk possono causare forti scatti all’apertura dei portali.",
+  "options.portalix.portal_ambient_sound": "Suono continuo dei portali",
+  "options.portalix.save_error": "Impossibile salvare il file delle impostazioni di Portalix."
 }

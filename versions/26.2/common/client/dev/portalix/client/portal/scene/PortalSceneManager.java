@@ -5,6 +5,7 @@ import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.textures.GpuTextureView;
 import dev.portalix.api.PortalEndpoint;
 import dev.portalix.client.ClientNetworking;
+import dev.portalix.client.PortalixClient;
 import dev.portalix.client.compat.PortalTerrainBackend;
 import dev.portalix.client.compat.iris.IrisShaders;
 import dev.portalix.client.compat.minecraft.MinecraftSceneRenderer;
@@ -116,7 +117,7 @@ public final class PortalSceneManager {
 
   public static boolean limitedTerrain() {
     int limit = Minecraft.getInstance().options.getEffectiveRenderDistance();
-    return remoteView() != null || PortalViewHorizon.holdingPrimary() && PortalViewLimits.preview(limit) < limit;
+    return remoteView() != null || PortalViewHorizon.terrainRadius(null, limit) < limit;
   }
 
   public static int terrainRadius() {
@@ -579,10 +580,12 @@ public final class PortalSceneManager {
       Predicate<PortalEndpoint> primaryVisible) {
     var sceneLevel = level;
     int viewLimit = IrisShaders.active() ? IrisShaders.MAX_PORTAL_VIEWS : PortalViewLimits.ROUTES;
+    int renderDistance = Minecraft.getInstance().options.getEffectiveRenderDistance();
     return PortalScenePlanner.plan(sceneLevel.dimension(), root, projection, modelView,
         (position, distance) -> PortalViewLimits.nearbyEntrances(sceneLevel, position, distance),
         terrainRadius() * 16.0, primaryVisible, main.width, main.height, viewLimit,
-        terrainOrigin(root.pos), !cameraFrame().isEmpty());
+        terrainOrigin(root.pos), terrainView(null),
+        link -> PortalixClient.portalPreviewRadius(link, renderDistance));
   }
 
   public static void render(DeltaTracker delta, Matrix4fc modelView) {

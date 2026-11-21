@@ -3,6 +3,7 @@ package dev.portalix.client;
 import dev.portalix.carry.CarryBindings;
 import dev.portalix.client.carry.CarryOwnerState;
 import dev.portalix.client.carry.ClientCarryController;
+import dev.portalix.client.config.PortalixClientSettings;
 import dev.portalix.client.gun.GunInputHandler;
 import dev.portalix.client.gun.animation.GunAnimationClip;
 import dev.portalix.client.gun.animation.GunAnimator;
@@ -21,7 +22,10 @@ import dev.portalix.network.gun.GunCommand;
 import dev.portalix.network.gun.GunCommandPayload;
 import dev.portalix.network.gun.GunEventPayload;
 import dev.portalix.network.gun.GunStatePayload;
+import dev.portalix.network.portal.PortalViewSettingsPayload;
+import dev.portalix.portal.PortalLink;
 import dev.portalix.portal.PortalTopology;
+import dev.portalix.portal.PortalViewLimits;
 import java.util.List;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientLevel;
@@ -42,6 +46,7 @@ final class PortalClientSession implements AutoCloseable {
   final GunEquipAnimation equipAnimation;
   private final RemoteGunAnimations remoteAnimations;
   private boolean needsStateSync = true;
+  private PortalViewSettingsPayload sentViewSettings;
 
   PortalClientSession(ClientLevel level, LocalPlayer player) {
     this.level = level;
@@ -99,7 +104,26 @@ final class PortalClientSession implements AutoCloseable {
     needsStateSync = true;
   }
 
+  int previewRadius(PortalLink view, int limit) {
+    if (sentViewSettings == null) return PortalViewLimits.preview(limit);
+    return portals.ownsEntrance(view) ? sentViewSettings.ownRadius() : sentViewSettings.otherRadius();
+  }
+
+  private void synchronizeViewSettings() {
+    var settings = PortalixClientSettings.get();
+    int own = settings.ownPortalRenderDistance();
+    int other = settings.otherPortalRenderDistance();
+    if (sentViewSettings != null
+        && sentViewSettings.ownRadius() == own && sentViewSettings.otherRadius() == other) return;
+    if (!ClientNetworking.canServerReceive(PortalViewSettingsPayload.TYPE)) return;
+    var request = new PortalViewSettingsPayload(own, other);
+    ClientNetworking.sendToServer(request);
+    sentViewSettings = request;
+    PortalSceneManager.invalidateTerrainPreparation();
+  }
+
   void tick(Minecraft mc) {
+    if (mc.player != null) synchronizeViewSettings();
     if (this.needsStateSync
         && mc.player != null
         && ClientNetworking.canServerReceive(GunCommandPayload.TYPE)) {

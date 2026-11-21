@@ -6,6 +6,7 @@ import dev.portalix.api.PortalInstance;
 import dev.portalix.item.PortalixIdentity;
 import dev.portalix.item.PortalixVariant;
 import dev.portalix.network.ModNetworking;
+import dev.portalix.network.portal.PortalOwnedStatePayload;
 import dev.portalix.network.portal.PortalStatePayload;
 import dev.portalix.portal.PortalLink;
 import dev.portalix.portal.PortalTopology;
@@ -35,7 +36,7 @@ import net.minecraft.world.phys.Vec3;
 public final class GunPortalRegistry {
   private final MinecraftServer server;
 
-  private record Member(PortalInstance portal, PortalSurface.Footprint footprint, long[] columns) {
+  private record Member(PortalInstance portal, UUID author, PortalSurface.Footprint footprint, long[] columns) {
     PortalEndpoint endpoint() {
       return portal.endpoint();
     }
@@ -113,13 +114,15 @@ public final class GunPortalRegistry {
       UUID gun,
       PortalColor color,
       PortalEndpoint endpoint,
-      PortalixVariant variant) {
-    if (overlaps(gun, color, endpoint)) return false;
+      PortalixVariant variant,
+      BooleanSupplier permitted) {
+    if (!permitted.getAsBoolean() || overlaps(gun, color, endpoint)) return false;
     Pair previous = states.get(gun);
     var footprint = PortalSurface.placementFootprint(endpoint);
     long beforeClearance = revision;
     BooleanSupplier stillApplicable = () ->
-        previous == states.get(gun) && (beforeClearance == revision || !overlaps(gun, color, endpoint));
+        permitted.getAsBoolean() && previous == states.get(gun)
+            && (beforeClearance == revision || !overlaps(gun, color, endpoint));
     if (!BlockPortalPlacement.prepare(player, endpoint, footprint, stillApplicable)
         || !stillApplicable.getAsBoolean()) return false;
     var blue = previous == null ? null : previous.blue();
@@ -127,7 +130,7 @@ public final class GunPortalRegistry {
     var portal = new PortalInstance(endpoint, server.getTickCount(), ++revision, variant);
     var columns = new LongOpenHashSet();
     for (var block : footprint.blocks()) columns.add(ChunkPos.pack(block.getX() >> 4, block.getZ() >> 4));
-    var member = new Member(portal, footprint, columns.toLongArray());
+    var member = new Member(portal, player.getUUID(), footprint, columns.toLongArray());
     update(
         gun,
         color == PortalColor.BLUE ? member : blue,
@@ -226,17 +229,29 @@ public final class GunPortalRegistry {
       PortalClosureResolver.updateLinks(level, pairs.values().stream().flatMap(List::stream).toList());
   }
 
+  boolean ownsEntrance(UUID player, PortalLink link) {
+    var state = states.get(link.gun());
+    if (state == null) return false;
+    long entrance = link.entrance().identity();
+    var blue = state.blue();
+    var member = blue != null && blue.portal.identity() == entrance ? blue : state.orange();
+    return member != null && member.portal.identity() == entrance && member.author.equals(player);
+  }
+
   private void send(ServerPlayer observer, Pair state, boolean effects) {
-    if (ModNetworking.canPlayerReceive(observer, PortalStatePayload.TYPE))
-      ModNetworking.sendToPlayer(
-          observer,
-          new PortalStatePayload(
-              state.gun(),
-              ++revision,
-              server.getTickCount(),
-              portal(state.blue()),
-              portal(state.orange()),
-              effects));
+    boolean ownership = ModNetworking.canPlayerReceive(observer, PortalOwnedStatePayload.TYPE);
+    if (!ownership && !ModNetworking.canPlayerReceive(observer, PortalStatePayload.TYPE)) return;
+    var snapshot = new PortalStatePayload(state.gun(), ++revision, server.getTickCount(),
+        portal(state.blue()), portal(state.orange()), effects);
+    if (ownership) {
+      UUID player = observer.getUUID();
+      int mask = 0;
+      if (state.blue() != null && player.equals(state.blue().author)) mask |= PortalColor.BLUE.mask();
+      if (state.orange() != null && player.equals(state.orange().author)) mask |= PortalColor.ORANGE.mask();
+      ModNetworking.sendToPlayer(observer, new PortalOwnedStatePayload(snapshot, mask));
+    } else {
+      ModNetworking.sendToPlayer(observer, snapshot);
+    }
   }
 
   public void synchronize(ServerPlayer observer) {

@@ -14,7 +14,11 @@ public final class PortalViewTransition {
   }
 
   public static double retainedRadius(double departed, double elapsed, int limit) {
+    return retainedRadius(departed, elapsed, PortalViewLimits.preview(limit), limit);
+  }
+
+  public static double retainedRadius(double departed, double elapsed, int preview, int limit) {
     double remainingArea = departed * departed - 4 * Math.max(0, elapsed - LOAD_DELAY_TICKS) / SLOWDOWN;
-    return Math.clamp(Math.sqrt(Math.max(0, remainingArea)), PortalViewLimits.preview(limit), limit);
+    return Math.clamp(Math.sqrt(Math.max(0, remainingArea)), preview, limit);
   }
 }

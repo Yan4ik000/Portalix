@@ -1,4 +1,15 @@
 {
+  "message.portalix.access.denied": "你無權在此伺服器上使用傳送門槍。",
+  "commands.portalix.access.unavailable": "傳送門槍的使用權限設定無法使用。",
+  "commands.portalix.access.save_failed": "無法儲存傳送門槍的使用權限設定。請查看伺服器日誌。",
+  "commands.portalix.access.not_trusted": "該玩家不在傳送門槍的使用白名單中。",
+  "commands.portalix.access.ambiguous": "白名單中有多位同名玩家。請使用該玩家的 UUID。",
+  "commands.portalix.access.mode.restricted": "只有伺服器管理員和白名單中的玩家可以使用傳送門槍。",
+  "commands.portalix.access.mode.all": "所有玩家都可以使用傳送門槍。",
+  "commands.portalix.access.empty": "傳送門槍的使用白名單是空的。",
+  "commands.portalix.access.list": "傳送門槍使用白名單（%s 人）：%s",
+  "commands.portalix.access.added": "傳送門槍使用白名單中已更新的項目數：%s",
+  "commands.portalix.access.removed": "已將玩家 %s 從傳送門槍使用白名單移除。",
   "item.portalix.potato_portalix": "傳送門槍",
   "key.category.portalix.controls": "Portalix",
   "key.portalix.grab": "抓取 / 放開物體",
@@ -25,5 +36,12 @@
   "item.portalix.miniature_black_hole": "微型黑洞",
   "item.portalix.cooling_unit": "冷卻裝置",
   "item.portalix.ai_module": "人工智慧模組",
-  "item.portalix.potatos": "Potatos"
+  "item.portalix.potatos": "Potatos",
+  "options.portalix.title": "Portalix 設定",
+  "options.portalix.crosshair": "Portalix 準星",
+  "options.portalix.own_portal_distance": "自己的傳送門視野距離（區塊）",
+  "options.portalix.other_portal_distance": "其他玩家的傳送門視野距離（區塊）",
+  "options.portalix.distance_warning": "設為超過 16 個區塊時，開啟傳送門可能會造成嚴重卡頓。",
+  "options.portalix.portal_ambient_sound": "傳送門持續音效",
+  "options.portalix.save_error": "無法儲存 Portalix 設定檔。"
 }

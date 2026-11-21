@@ -25,6 +25,7 @@ final class GunShootingRegression implements ServerRegressionSuite.Scenario {
   private int started = -1;
   private int lastFireTick;
   private int phase;
+  private GunAccessRegression access;
 
   GunShootingRegression(RegressionWorld world) {
     this.world = world;
@@ -36,6 +37,7 @@ final class GunShootingRegression implements ServerRegressionSuite.Scenario {
 
   @Override
   public boolean tick() {
+    if (access != null) return access.tick();
     int now = world.level.getServer().getTickCount();
     session.tick(world.level.getServer());
     if (started < 0) {
@@ -43,10 +45,7 @@ final class GunShootingRegression implements ServerRegressionSuite.Scenario {
       var stack = new ItemStack(ModItems.gun(PortalixVariant.STANDARD));
       stack.set(PortalixIdentity.ID.get(), gun);
       world.player.setItemSlot(EquipmentSlot.MAINHAND, stack);
-      world.clear(new Vec3(160, 104, 152), 8);
-      for (int x = 151; x <= 167; x++)
-        for (int y = 101; y <= 107; y++)
-          world.block(new BlockPos(x, y, 160), Blocks.STONE.defaultBlockState());
+      prepareWall(world);
       fire(GunCommand.FIRE_BLUE, 154.5);
       started = now;
       return false;
@@ -90,7 +89,16 @@ final class GunShootingRegression implements ServerRegressionSuite.Scenario {
       return false;
     }
     check(links.isEmpty(), "Breaking portal support left a traversable pair");
-    return true;
+    session.clear();
+    access = new GunAccessRegression(world);
+    return false;
+  }
+
+  static void prepareWall(RegressionWorld world) {
+    world.clear(new Vec3(160, 104, 152), 8);
+    for (int x = 151; x <= 167; x++)
+      for (int y = 101; y <= 107; y++)
+        world.block(new BlockPos(x, y, 160), Blocks.STONE.defaultBlockState());
   }
 
   private void fire(GunCommand command, double x) {
@@ -106,7 +114,8 @@ final class GunShootingRegression implements ServerRegressionSuite.Scenario {
   @Override
   public void close() {
     try {
-      session.clear();
+      if (access != null) access.close();
+      else session.clear();
     } finally {
       world.player.setNoGravity(noGravity);
     }

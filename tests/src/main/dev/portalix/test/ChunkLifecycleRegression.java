@@ -183,9 +183,9 @@ final class ChunkLifecycleRegression implements ServerRegressionSuite.Scenario {
       world.block(marker, Blocks.GOLD_BLOCK.defaultBlockState());
       world.player.snapTo(entrance.center().add(0, -world.player.getEyeHeight(), -2), 0, 0);
       world.player.setDeltaMovement(Vec3.ZERO);
-      check(registry.apply(world.player, gun, PortalColor.BLUE, entrance, PortalixVariant.STANDARD),
+      check(registry.apply(world.player, gun, PortalColor.BLUE, entrance, PortalixVariant.STANDARD, () -> true),
           "Could not place the chunk course entrance");
-      check(registry.apply(world.player, gun, PortalColor.ORANGE, exit, PortalixVariant.STANDARD),
+      check(registry.apply(world.player, gun, PortalColor.ORANGE, exit, PortalixVariant.STANDARD, () -> true),
           "Could not place the distant chunk course exit");
       started = now;
     }
@@ -261,7 +261,6 @@ final class ChunkLifecycleRegression implements ServerRegressionSuite.Scenario {
     var chunks = visibility.chunks();
     var observers = visibility.observers();
     var simulation = visibility.simulationChunks();
-    int viewRadius = visibility.viewRadius();
     visibility.resetObservation(new LongOpenHashSet());
     var chicken = new Chicken(EntityTypes.CHICKEN, world.level);
     chicken.setPos(source);
@@ -294,7 +293,7 @@ final class ChunkLifecycleRegression implements ServerRegressionSuite.Scenario {
     check(local.size() == 1 && local.getFirst() instanceof ClientboundSoundEntityPacket,
         "A normal recipient must retain exactly one native entity sound: " + local);
 
-    visibility.observe(chunks, observers, simulation, viewRadius);
+    visibility.observe(chunks, observers, simulation);
     registry.clear(gun);
     chicken.setPos(source);
     world.level.playSeededSound(null, chicken, sound, SoundSource.NEUTRAL, 1, 1, seed + 3);

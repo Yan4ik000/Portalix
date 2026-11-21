@@ -7,7 +7,7 @@ public final class ServerRegressionSuite {
   private ServerRegressionSuite() {}
 
   public enum Group {
-    PLACEMENT("placement materials and orientations, firing, support removal and reset"),
+    PLACEMENT("placement materials and orientations, firing, support removal, reset and gun access"),
     TRAVERSAL("native item and animal movement, passengers, leashes, save/load and normal ticks"),
     PLAYER_TRAVERSAL("player movement through wall, floor and ceiling portals"),
     PROJECTILES("native snowball, bow and trident use, portal flight and impacts"),

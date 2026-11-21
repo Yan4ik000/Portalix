@@ -7,6 +7,7 @@ import net.minecraft.server.level.ServerPlayer;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.fml.common.Mod;
 import net.neoforged.neoforge.common.NeoForge;
+import net.neoforged.neoforge.event.RegisterCommandsEvent;
 import net.neoforged.neoforge.event.entity.EntityLeaveLevelEvent;
 import net.neoforged.neoforge.event.entity.player.PlayerEvent;
 import net.neoforged.neoforge.event.server.ServerStartedEvent;
@@ -23,6 +24,8 @@ public final class PortalixNeoForge {
     bus.addListener((RegisterPayloadHandlersEvent event) ->
         ModNetworking.register(new NeoForgeNetworking(
             event.registrar(Integer.toString(ModNetworking.PROTOCOL_VERSION)))));
+    NeoForge.EVENT_BUS.addListener((RegisterCommandsEvent event) ->
+        PortalServerEvents.registerCommands(event.getDispatcher()));
     NeoForge.EVENT_BUS.addListener((ServerStartedEvent event) ->
         PortalServerEvents.started(event.getServer()));
     NeoForge.EVENT_BUS.addListener((ServerStoppingEvent event) ->

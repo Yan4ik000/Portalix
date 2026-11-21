@@ -192,14 +192,14 @@ final class PlacementRegression {
       world.surface(blue, Blocks.STONE.defaultBlockState(), Blocks.AIR.defaultBlockState());
       world.surface(orange, Blocks.STONE.defaultBlockState(), Blocks.AIR.defaultBlockState());
       world.surface(replacement, Blocks.STONE.defaultBlockState(), Blocks.MOSS_CARPET.defaultBlockState());
-      check(registry.apply(world.player, gun, PortalColor.BLUE, blue, variant), "Missing old blue portal");
-      check(registry.apply(world.player, gun, PortalColor.ORANGE, orange, variant), "Missing old orange portal");
+      check(registry.apply(world.player, gun, PortalColor.BLUE, blue, variant, () -> true), "Missing old blue portal");
+      check(registry.apply(world.player, gun, PortalColor.ORANGE, orange, variant, () -> true), "Missing old orange portal");
       var before = List.copyOf(PortalTopology.links(world.level));
       world.player.setGameMode(GameType.SURVIVAL);
       expectRejection(AFTER_BREAK, world.player, front, () -> {
         world.block(support, Blocks.AIR.defaultBlockState());
         return true;
-      }, () -> registry.apply(world.player, gun, PortalColor.BLUE, replacement, variant));
+      }, () -> registry.apply(world.player, gun, PortalColor.BLUE, replacement, variant, () -> true));
       check(PortalTopology.links(world.level).equals(before), "Rejected replacement changed the original pair");
       check(world.level.getBlockState(support).isAir() && world.level.getBlockState(front).isAir(),
           "Rejected replacement reverted a published break or callback change");
@@ -247,19 +247,19 @@ final class PlacementRegression {
       PortalixVariant variant = PortalixVariant.STANDARD;
       world.surface(blue, Blocks.STONE.defaultBlockState(), Blocks.AIR.defaultBlockState());
       world.surface(orange, Blocks.STONE.defaultBlockState(), Blocks.AIR.defaultBlockState());
-      check(registry.apply(world.player, gun, PortalColor.BLUE, blue, variant),
+      check(registry.apply(world.player, gun, PortalColor.BLUE, blue, variant, () -> true),
           "Failed initial " + variant + " placement");
       check(PortalTopology.links(world.level).isEmpty(),
           "An unpaired portal became traversable");
-      check(registry.apply(world.player, gun, PortalColor.ORANGE, orange, variant),
+      check(registry.apply(world.player, gun, PortalColor.ORANGE, orange, variant, () -> true),
           "Failed second " + variant + " placement");
       var links = PortalTopology.links(world.level);
       check(links.size() == 2,
           "A complete pair did not publish two directions");
       check(links.getFirst().inverse().equals(links.getLast()), "Pair directions disagree");
-      check(!registry.apply(world.player, otherGun, PortalColor.BLUE, blue, variant),
+      check(!registry.apply(world.player, otherGun, PortalColor.BLUE, blue, variant, () -> true),
           "Different guns can overlap");
-      check(registry.apply(world.player, gun, PortalColor.BLUE, blue, variant),
+      check(registry.apply(world.player, gun, PortalColor.BLUE, blue, variant, () -> true),
           "Replacing a portal at the same location failed");
       BlockPos support = PortalSurface.placementFootprint(blue).blocks().getFirst();
       world.block(support, Blocks.AIR.defaultBlockState());

@@ -6,6 +6,8 @@ import dev.portalix.portal.PortalLinkId;
 import dev.portalix.portal.PortalViewLimits;
 import dev.portalix.portal.geometry.PortalAperture;
 import dev.portalix.portal.query.PlayerPortalVisibility;
+import it.unimi.dsi.fastutil.longs.Long2IntMap;
+import it.unimi.dsi.fastutil.longs.Long2IntOpenHashMap;
 import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -15,6 +17,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.function.BiFunction;
 import java.util.function.Function;
+import java.util.function.ToIntFunction;
 import net.minecraft.core.SectionPos;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.phys.Vec3;
@@ -23,32 +26,36 @@ import org.jspecify.annotations.Nullable;
 final class PortalObservationPlanner {
   private PortalObservationPlanner() {}
 
-  static Geometry plan(Vec3 eye, Vec3 velocity, int radius, BiFunction<Vec3, Integer, List<PortalLink>> entrances,
-      Viewpoint view, List<List<PortalLinkId>> requested, Function<PortalLinkId, PortalLink> resolve) {
-    var plan = new Plan(radius);
+  static Geometry plan(Vec3 eye, Vec3 velocity, int radius, ToIntFunction<PortalLink> portalRadius,
+      BiFunction<Vec3, Integer, List<PortalLink>> entrances, Viewpoint view,
+      List<List<PortalLinkId>> requested, Function<PortalLinkId, PortalLink> resolve) {
+    var plan = new Plan(radius, portalRadius);
     var roots = entrances.apply(eye, radius);
     plan.prepareCrossings(eye, velocity, roots);
     if (view != null) {
       if (!view.frame.isEmpty()) {
-        var exit = view.frame.getLast().exit().endpoint();
+        var link = view.frame.getLast();
+        var exit = link.exit().endpoint();
         long center = PortalViewLimits.frontColumn(exit).pack();
-        plan.centers.add(center);
+        int cameraRadius = portalRadius.applyAsInt(link);
+        plan.addCenter(center, cameraRadius);
         plan.safety(exit);
         plan.simulationCenters.add(center);
-        plan.camera = new PlayerPortalVisibility.Observer(view.eye, exit, true);
+        plan.camera = new PlayerPortalVisibility.Observer(view.eye, exit, true, cameraRadius);
       }
       if (view.approach != null) {
         var approach = view.approach;
-        plan.observe(new Observer(approach.eye, Vec3.ZERO, null), approach.link, true);
+        plan.observe(new Observer(approach.eye, Vec3.ZERO, null, 0), approach.link, true);
       }
       for (var route : requested) plan.demand(view, route, resolve);
     }
-    List<Observer> frontier = List.of(new Observer(eye, velocity, null));
+    List<Observer> frontier = List.of(new Observer(eye, velocity, null, 0));
     for (int depth = 0; depth < PortalViewLimits.DEPTH && plan.hasRoom(); depth++) {
       var candidates = new ArrayList<ObservationCandidate>();
       for (var observer : frontier) {
         for (var link : depth == 0 ? roots
-            : entrances.apply(PortalViewLimits.origin(observer.last.exit().endpoint()), plan.previewRadius)) {
+            : entrances.apply(PortalViewLimits.origin(observer.last.exit().endpoint()),
+                observer.radius)) {
           if (!plan.reachable(observer, link)) continue;
           candidates.add(new ObservationCandidate(observer, link,
               arriving(link.entrance().endpoint(), observer.eye, observer.velocity),
@@ -92,19 +99,18 @@ final class PortalObservationPlanner {
     final int primaryRange;
     final double reachSquared;
     PlayerPortalVisibility.Observer camera;
-    final LongOpenHashSet centers = new LongOpenHashSet();
+    final Long2IntMap centers = new Long2IntOpenHashMap();
     final LongOpenHashSet simulationCenters = new LongOpenHashSet();
     final LongOpenHashSet safetyCenters = new LongOpenHashSet();
     final HashSet<PortalEndpoint> safetyPortals = new HashSet<>();
-    final LinkedHashMap<ObserverView, Boolean> observations = new LinkedHashMap<>();
+    final LinkedHashMap<ObserverView, PlayerPortalVisibility.Observer> observations = new LinkedHashMap<>();
+    final ToIntFunction<PortalLink> portalRadius;
 
-    final int previewRadius;
-
-    Plan(int radius) {
+    Plan(int radius, ToIntFunction<PortalLink> portalRadius) {
       primaryRange = radius * 16;
       double reach = primaryRange + 16;
       reachSquared = reach * reach;
-      previewRadius = PortalViewLimits.preview(radius);
+      this.portalRadius = portalRadius;
     }
 
     boolean hasRoom() { return observations.size() < PortalViewLimits.ROUTES; }
@@ -112,12 +118,12 @@ final class PortalObservationPlanner {
     boolean reachable(Observer observer, PortalLink link) {
       if (observer.last == null)
         return link.entrance().endpoint().center().distanceToSqr(observer.eye) <= reachSquared;
-      return reachableFrom(observer.last, link);
+      return reachableFrom(observer.last, link, observer.radius);
     }
 
-    private boolean reachableFrom(PortalLink previous, PortalLink next) {
+    private static boolean reachableFrom(PortalLink previous, PortalLink next, int radius) {
       return !previous.inverse().equals(next) && PortalViewLimits.containsEntrance(
-          PortalViewLimits.origin(previous.exit().endpoint()), next.entrance().endpoint(), previewRadius);
+          PortalViewLimits.origin(previous.exit().endpoint()), next.entrance().endpoint(), radius);
     }
 
     void prepareCrossings(Vec3 eye, Vec3 velocity, List<PortalLink> roots) {
@@ -138,18 +144,20 @@ final class PortalObservationPlanner {
         if (link == null) return;
         var entrance = link.entrance().endpoint();
         if (!links.isEmpty()) {
-          if (!reachableFrom(links.getLast(), link)) return;
+          var previous = links.getLast();
+          if (!reachableFrom(previous, link, portalRadius.applyAsInt(previous))) return;
         } else if (camera.frame.isEmpty()) {
           // A detached camera can see beyond the body-centered primary range.
           double reach = primaryRange + Math.max(16, camera.boom);
           if (camera.eye.distanceToSqr(entrance.center()) > reach * reach) return;
         } else {
-          var exit = camera.frame.getLast().exit().endpoint();
-          if (!PortalViewLimits.containsEntrance(PortalViewLimits.origin(exit), entrance, previewRadius)) return;
+          var previous = camera.frame.getLast();
+          if (!PortalViewLimits.containsEntrance(
+              PortalViewLimits.origin(previous.exit().endpoint()), entrance, portalRadius.applyAsInt(previous))) return;
         }
         links.add(link);
       }
-      var observer = new Observer(camera.eye, camera.velocity, null);
+      var observer = new Observer(camera.eye, camera.velocity, null, 0);
       for (var link : links) {
         observer = observe(observer, link);
         if (observer == null) return;
@@ -169,27 +177,36 @@ final class PortalObservationPlanner {
       var exit = link.exit().endpoint();
       var virtualEye = link.transform().point(observer.eye);
       var view = new ObserverView(virtualEye, exit);
-      if (!observations.containsKey(view)) {
+      var previous = observations.get(view);
+      int radius = portalRadius.applyAsInt(link);
+      long center = PortalViewLimits.frontColumn(exit).pack();
+      if (previous == null) {
         if (!hasRoom()) return null;
-        observations.put(view, arrival);
-        long center = PortalViewLimits.frontColumn(exit).pack();
+        observations.put(view, new PlayerPortalVisibility.Observer(virtualEye, exit, arrival, radius));
         simulationCenters.add(center);
         safety(entrance);
         safety(exit);
-        if (centers.size() < PortalViewLimits.REGIONS) centers.add(center);
-      } else if (!observations.get(view) && arrival) {
-        observations.put(view, true);
+      } else if ((!previous.arrival() && arrival) || previous.radius() < radius) {
+        observations.put(view, new PlayerPortalVisibility.Observer(
+            virtualEye, exit, previous.arrival() || arrival, Math.max(previous.radius(), radius)));
       }
-      return new Observer(virtualEye, link.transform().vector(observer.velocity), link);
+      addCenter(center, radius);
+      return new Observer(virtualEye, link.transform().vector(observer.velocity), link, radius);
+    }
+
+    void addCenter(long center, int radius) {
+      int previous = centers.get(center);
+      if (radius > previous && (previous != 0 || centers.size() < PortalViewLimits.REGIONS))
+        centers.put(center, radius);
     }
 
     Geometry geometry() {
       var observers = new ArrayList<PlayerPortalVisibility.Observer>(observations.size() + 1);
       if (camera != null) observers.add(camera);
-      observations.forEach((view, arrival) -> {
-        if (camera == null || !camera.eye().equals(view.eye) || !camera.exit().equals(view.exit))
-          observers.add(new PlayerPortalVisibility.Observer(view.eye, view.exit, arrival));
-      });
+      for (var observer : observations.values()) {
+        if (camera == null || !camera.eye().equals(observer.eye()) || !camera.exit().equals(observer.exit()))
+          observers.add(observer);
+      }
       return new Geometry(centers, safetyCenters, simulationCenters, observers);
     }
   }
@@ -224,12 +241,12 @@ final class PortalObservationPlanner {
 
   record CameraApproach(Vec3 eye, PortalLink link) {}
 
-  private record Observer(Vec3 eye, Vec3 velocity, PortalLink last) {}
+  private record Observer(Vec3 eye, Vec3 velocity, PortalLink last, int radius) {}
 
   private record ObserverView(Vec3 eye, PortalEndpoint exit) {}
 
   private record ObservationCandidate(Observer observer, PortalLink link, boolean arrival, double distanceSquared) {}
 
-  record Geometry(LongOpenHashSet centers, LongOpenHashSet safetyCenters, LongOpenHashSet simulationCenters,
+  record Geometry(Long2IntMap centers, LongOpenHashSet safetyCenters, LongOpenHashSet simulationCenters,
       List<PlayerPortalVisibility.Observer> observers) {}
 }

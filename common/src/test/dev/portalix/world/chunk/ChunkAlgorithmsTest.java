@@ -2,6 +2,7 @@ package dev.portalix.world.chunk;
 
 import static org.junit.jupiter.api.Assertions.*;
 
+import it.unimi.dsi.fastutil.longs.Long2IntOpenHashMap;
 import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
 import it.unimi.dsi.fastutil.longs.Long2ObjectLinkedOpenHashMap;
 import java.util.ArrayList;
@@ -22,6 +23,35 @@ import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.Vec3;
 
 class ChunkAlgorithmsTest {
+  @Test
+  void nativeLoadingSourcesCoverTheBorderOfAnExtendedPortalView() {
+    var center = new ChunkPos(-126, 37);
+    // Native player loading also makes the adjacent columns block ticking.
+    int halo = 1;
+    for (int nativeRadius : new int[] {2, 10, 32}) {
+      var sources = new Long2IntOpenHashMap();
+      PortalLoadingSources.addRegion(sources, center.pack(), 64, nativeRadius);
+      var columns = new LongOpenHashSet();
+      for (var source : sources.long2IntEntrySet()) {
+        int weight = source.getIntValue();
+        assertTrue(weight >= 0 && weight <= nativeRadius);
+        var tile = ChunkPos.unpack(source.getLongKey());
+        int extent = nativeRadius - weight + halo;
+        for (int x = tile.x() - extent; x <= tile.x() + extent; x++)
+          for (int z = tile.z() - extent; z <= tile.z() + extent; z++)
+            columns.add(ChunkPos.pack(x, z));
+      }
+      ChunkTrackingView.of(center, 64).forEach(pos -> assertTrue(columns.contains(pos.pack())));
+      int width = 2 * (64 + halo) + 1;
+      assertEquals(width * width, columns.size());
+      assertFalse(columns.contains(ChunkPos.pack(center.x() + 65 + halo, center.z())));
+    }
+    var sources = new Long2IntOpenHashMap();
+    PortalLoadingSources.addRegion(sources, center.pack(), 8, 16);
+    assertEquals(1, sources.size());
+    assertEquals(8, sources.get(center.pack()));
+  }
+
   @Test
   void retainedTerrainSharesOneGlobalViewWithoutExtendingObservedTerrain() {
     var dimension = ResourceKey.<Level>create(Registries.DIMENSION, Identifier.withDefaultNamespace("overworld"));

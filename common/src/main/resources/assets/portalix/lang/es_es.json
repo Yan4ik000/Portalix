@@ -1,4 +1,15 @@
 {
+  "message.portalix.access.denied": "No puedes usar la pistola de portales en este servidor.",
+  "commands.portalix.access.unavailable": "Los ajustes de acceso a la pistola de portales no están disponibles.",
+  "commands.portalix.access.save_failed": "No se han podido guardar los ajustes de acceso a la pistola de portales. Consulta el registro del servidor.",
+  "commands.portalix.access.not_trusted": "Ese jugador no está en la lista blanca de la pistola de portales.",
+  "commands.portalix.access.ambiguous": "Hay varios jugadores con ese nombre en la lista blanca. Usa el UUID del jugador.",
+  "commands.portalix.access.mode.restricted": "Solo los operadores y los jugadores de la lista blanca pueden usar la pistola de portales.",
+  "commands.portalix.access.mode.all": "Todos los jugadores pueden usar la pistola de portales.",
+  "commands.portalix.access.empty": "La lista blanca de la pistola de portales está vacía.",
+  "commands.portalix.access.list": "Lista blanca de la pistola de portales (%s): %s",
+  "commands.portalix.access.added": "Entradas actualizadas en la lista blanca de la pistola de portales: %s",
+  "commands.portalix.access.removed": "Se ha eliminado a %s de la lista blanca de la pistola de portales.",
   "item.portalix.potato_portalix": "Pistola de portales",
   "key.category.portalix.controls": "Portalix",
   "key.portalix.grab": "Coger / soltar objeto",
@@ -25,5 +36,12 @@
   "item.portalix.miniature_black_hole": "Agujero negro en miniatura",
   "item.portalix.cooling_unit": "Unidad de refrigeración",
   "item.portalix.ai_module": "Módulo de IA",
-  "item.portalix.potatos": "Potatos"
+  "item.portalix.potatos": "Potatos",
+  "options.portalix.title": "Ajustes de Portalix",
+  "options.portalix.crosshair": "Mira de Portalix",
+  "options.portalix.own_portal_distance": "Distancia de visión por tus portales (chunks)",
+  "options.portalix.other_portal_distance": "Distancia de visión por portales ajenos (chunks)",
+  "options.portalix.distance_warning": "Los valores superiores a 16 chunks pueden provocar tirones fuertes al abrir portales.",
+  "options.portalix.portal_ambient_sound": "Sonido continuo de los portales",
+  "options.portalix.save_error": "No se ha podido guardar el archivo de ajustes de Portalix."
 }

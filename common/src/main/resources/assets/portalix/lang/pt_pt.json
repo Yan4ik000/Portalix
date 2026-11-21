@@ -1,4 +1,15 @@
 {
+  "message.portalix.access.denied": "Não podes usar a arma de portais neste servidor.",
+  "commands.portalix.access.unavailable": "As definições de acesso à arma de portais não estão disponíveis.",
+  "commands.portalix.access.save_failed": "Não foi possível guardar as definições de acesso à arma de portais. Consulta o registo do servidor.",
+  "commands.portalix.access.not_trusted": "Esse jogador não está na lista de permissões da arma de portais.",
+  "commands.portalix.access.ambiguous": "Há vários jogadores com esse nome na lista de permissões. Usa o UUID do jogador.",
+  "commands.portalix.access.mode.restricted": "Só os operadores e os jogadores na lista de permissões podem usar a arma de portais.",
+  "commands.portalix.access.mode.all": "Todos os jogadores podem usar a arma de portais.",
+  "commands.portalix.access.empty": "A lista de permissões da arma de portais está vazia.",
+  "commands.portalix.access.list": "Lista de permissões da arma de portais (%s): %s",
+  "commands.portalix.access.added": "Entradas atualizadas na lista de permissões da arma de portais: %s",
+  "commands.portalix.access.removed": "%s foi removido da lista de permissões da arma de portais.",
   "item.portalix.potato_portalix": "Arma de portais",
   "key.category.portalix.controls": "Portalix",
   "key.portalix.grab": "Agarrar / largar objeto",
@@ -25,5 +36,12 @@
   "item.portalix.miniature_black_hole": "Buraco negro em miniatura",
   "item.portalix.cooling_unit": "Unidade de arrefecimento",
   "item.portalix.ai_module": "Módulo de IA",
-  "item.portalix.potatos": "Potatos"
+  "item.portalix.potatos": "Potatos",
+  "options.portalix.title": "Definições do Portalix",
+  "options.portalix.crosshair": "Mira do Portalix",
+  "options.portalix.own_portal_distance": "Visão através dos teus portais (chunks)",
+  "options.portalix.other_portal_distance": "Visão através dos portais de outros (chunks)",
+  "options.portalix.distance_warning": "Valores acima de 16 chunks podem causar quebras fortes de fluidez ao abrir portais.",
+  "options.portalix.portal_ambient_sound": "Som contínuo dos portais",
+  "options.portalix.save_error": "Não foi possível guardar o ficheiro de definições do Portalix."
 }

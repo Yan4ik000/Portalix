@@ -15,8 +15,10 @@ import dev.portalix.portal.placement.BlockPortalPlacement;
 import dev.portalix.portal.query.PlayerPortalVisibility;
 import dev.portalix.server.portal.GunPortalRegistry;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import net.minecraft.server.MinecraftServer;
@@ -30,7 +32,9 @@ import net.minecraft.world.phys.Vec3;
 final class PortalShotManager {
   private final GunPortalRegistry portalRegistry;
   private final GunStateBroadcaster broadcaster;
+  private final GunAccess access;
   private final List<PendingShot> pendingShots = new ArrayList<>();
+  private final Map<UUID, Long> revokedThrough = new HashMap<>();
   private long shotSequence;
 
   private record PendingShot(
@@ -45,14 +49,16 @@ final class PortalShotManager {
       Set<UUID> audience,
       double range) {}
 
-  PortalShotManager(GunPortalRegistry portalRegistry, GunStateBroadcaster broadcaster) {
+  PortalShotManager(GunPortalRegistry portalRegistry, GunStateBroadcaster broadcaster, GunAccess access) {
     this.portalRegistry = portalRegistry;
     this.broadcaster = broadcaster;
+    this.access = access;
   }
 
   void synchronize(ServerPlayer observer, boolean force) {
     for (var pending : pendingShots) {
-      if (observer.level() == pending.level
+      if (!revoked(pending)
+          && observer.level() == pending.level
           && (observes(observer, pending.shot.start(), pending.range * pending.range)
               || observes(observer, pending.shot.end(), pending.range * pending.range))
           && ModNetworking.canPlayerReceive(observer, GunShotPayload.TYPE)) {
@@ -143,7 +149,8 @@ final class PortalShotManager {
       if (player == null
           || !player.isAlive()
           || player.isSpectator()
-          || player.level() != pending.level) {
+          || player.level() != pending.level
+          || !canResolve(player, pending)) {
         iterator.remove();
         continue;
       }
@@ -165,7 +172,8 @@ final class PortalShotManager {
     boolean placed =
         placement.isPresent()
             && portalRegistry.apply(
-                player, pending.gun, pending.color, placement.get(), pending.shot.variant());
+                player, pending.gun, pending.color, placement.get(), pending.shot.variant(),
+                () -> canResolve(player, pending));
     PortalImpactPayload impact =
         new PortalImpactPayload(
             pending.shot.sequence(),
@@ -189,12 +197,26 @@ final class PortalShotManager {
     return pendingShots.removeIf(shot -> shot.gun.equals(gun));
   }
 
+  void revoke(UUID owner) {
+    revokedThrough.put(owner, shotSequence);
+  }
+
+  private boolean revoked(PendingShot pending) {
+    return pending.shot.sequence() <= revokedThrough.getOrDefault(pending.owner, 0L);
+  }
+
+  private boolean canResolve(ServerPlayer player, PendingShot pending) {
+    return !revoked(pending) && access.allows(player);
+  }
+
   void disconnect(UUID player) {
     pendingShots.removeIf(shot -> shot.owner.equals(player));
     for (var shot : pendingShots) shot.audience.remove(player);
+    revokedThrough.remove(player);
   }
 
   void clear() {
     pendingShots.clear();
+    revokedThrough.clear();
   }
 }

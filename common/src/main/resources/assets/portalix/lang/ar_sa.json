@@ -1,4 +1,15 @@
 {
+  "message.portalix.access.denied": "لا يمكنك استخدام مدفع البوابات على هذا الخادم.",
+  "commands.portalix.access.unavailable": "إعدادات الوصول إلى مدفع البوابات غير متاحة.",
+  "commands.portalix.access.save_failed": "تعذّر حفظ إعدادات الوصول إلى مدفع البوابات. راجع سجل الخادم.",
+  "commands.portalix.access.not_trusted": "هذا اللاعب ليس في قائمة المسموح لهم باستخدام مدفع البوابات.",
+  "commands.portalix.access.ambiguous": "هناك عدة لاعبين بهذا الاسم في قائمة السماح. استخدم معرّف اللاعب (UUID).",
+  "commands.portalix.access.mode.restricted": "يمكن لمشغّلي الخادم واللاعبين في قائمة السماح فقط استخدام مدفع البوابات.",
+  "commands.portalix.access.mode.all": "يمكن لجميع اللاعبين استخدام مدفع البوابات.",
+  "commands.portalix.access.empty": "قائمة المسموح لهم باستخدام مدفع البوابات فارغة.",
+  "commands.portalix.access.list": "قائمة المسموح لهم باستخدام مدفع البوابات (%s): %s",
+  "commands.portalix.access.added": "عدد الإدخالات المحدّثة في قائمة السماح لمدفع البوابات: %s",
+  "commands.portalix.access.removed": "أُزيل اللاعب %s من قائمة المسموح لهم باستخدام مدفع البوابات.",
   "item.portalix.potato_portalix": "مدفع البوابات",
   "key.category.portalix.controls": "Portalix",
   "key.portalix.grab": "التقاط الجسم / إفلاته",
@@ -25,5 +36,12 @@
   "item.portalix.miniature_black_hole": "ثقب أسود مصغّر",
   "item.portalix.cooling_unit": "وحدة التبريد",
   "item.portalix.ai_module": "وحدة الذكاء الاصطناعي",
-  "item.portalix.potatos": "Potatos"
+  "item.portalix.potatos": "Potatos",
+  "options.portalix.title": "إعدادات Portalix",
+  "options.portalix.crosshair": "علامة تصويب Portalix",
+  "options.portalix.own_portal_distance": "مدى الرؤية عبر بواباتك (قطع)",
+  "options.portalix.other_portal_distance": "مدى الرؤية عبر بوابات الآخرين (قطع)",
+  "options.portalix.distance_warning": "قد تتسبّب القيم التي تزيد على 16 قطعة في تقطّع شديد عند فتح البوابات.",
+  "options.portalix.portal_ambient_sound": "صوت البوابات المستمر",
+  "options.portalix.save_error": "تعذّر حفظ ملف إعدادات Portalix."
 }

@@ -93,7 +93,7 @@ final class EntitySystemFixture implements AutoCloseable {
             new Vec3(0, 1, 0), 1, 2);
         for (BlockPos pos : PortalSurface.placementFootprint(endpoint).blocks())
           block(pos, Blocks.STONE.defaultBlockState());
-        check(registry.apply(owner, gunId, color, endpoint, PortalixVariant.STANDARD),
+        check(registry.apply(owner, gunId, color, endpoint, PortalixVariant.STANDARD, () -> true),
             "Entity scene registry rejected a valid supported portal");
       }
       portalGeneration = PortalTopology.links(level).stream().filter(link -> link.gun().equals(gunId))

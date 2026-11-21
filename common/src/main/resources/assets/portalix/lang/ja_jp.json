@@ -1,4 +1,15 @@
 {
+  "message.portalix.access.denied": "このサーバーではポータルガンを使用できません。",
+  "commands.portalix.access.unavailable": "ポータルガンの使用権限設定を利用できません。",
+  "commands.portalix.access.save_failed": "ポータルガンの使用権限設定を保存できませんでした。サーバーログを確認してください。",
+  "commands.portalix.access.not_trusted": "そのプレイヤーはポータルガンの使用許可リストに登録されていません。",
+  "commands.portalix.access.ambiguous": "使用許可リストに同じ名前のプレイヤーが複数います。プレイヤーのUUIDを指定してください。",
+  "commands.portalix.access.mode.restricted": "ポータルガンを使用できるのは、オペレーターと使用許可リストに登録されたプレイヤーだけです。",
+  "commands.portalix.access.mode.all": "すべてのプレイヤーがポータルガンを使用できます。",
+  "commands.portalix.access.empty": "ポータルガンの使用許可リストは空です。",
+  "commands.portalix.access.list": "ポータルガンの使用許可リスト（%s人）：%s",
+  "commands.portalix.access.added": "ポータルガンの使用許可リストで更新された項目数：%s",
+  "commands.portalix.access.removed": "%sをポータルガンの使用許可リストから削除しました。",
   "item.portalix.potato_portalix": "ポータルガン",
   "key.category.portalix.controls": "Portalix",
   "key.portalix.grab": "オブジェクトを掴む / 放す",
@@ -25,5 +36,12 @@
   "item.portalix.miniature_black_hole": "小型ブラックホール",
   "item.portalix.cooling_unit": "冷却ユニット",
   "item.portalix.ai_module": "AIモジュール",
-  "item.portalix.potatos": "Potatos"
+  "item.portalix.potatos": "Potatos",
+  "options.portalix.title": "Portalixの設定",
+  "options.portalix.crosshair": "Portalixの照準",
+  "options.portalix.own_portal_distance": "自分のポータルの描画距離（チャンク）",
+  "options.portalix.other_portal_distance": "他のプレイヤーのポータルの描画距離（チャンク）",
+  "options.portalix.distance_warning": "16チャンクを超えると、ポータルを開いたときに大きなカクつきが発生することがあります。",
+  "options.portalix.portal_ambient_sound": "ポータルの持続音",
+  "options.portalix.save_error": "Portalixの設定ファイルを保存できませんでした。"
 }

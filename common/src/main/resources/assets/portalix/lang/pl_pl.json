@@ -1,4 +1,15 @@
 {
+  "message.portalix.access.denied": "Na tym serwerze nie możesz używać działa portalowego.",
+  "commands.portalix.access.unavailable": "Ustawienia dostępu do działa portalowego są niedostępne.",
+  "commands.portalix.access.save_failed": "Nie udało się zapisać ustawień dostępu do działa portalowego. Sprawdź dziennik serwera.",
+  "commands.portalix.access.not_trusted": "Tego gracza nie ma na liście uprawnionych do korzystania z działa portalowego.",
+  "commands.portalix.access.ambiguous": "Na liście uprawnionych jest kilku graczy o tej nazwie. Użyj UUID gracza.",
+  "commands.portalix.access.mode.restricted": "Działa portalowego mogą używać tylko operatorzy i gracze z listy uprawnionych.",
+  "commands.portalix.access.mode.all": "Wszyscy gracze mogą używać działa portalowego.",
+  "commands.portalix.access.empty": "Lista graczy uprawnionych do korzystania z działa portalowego jest pusta.",
+  "commands.portalix.access.list": "Gracze uprawnieni do korzystania z działa portalowego (%s): %s",
+  "commands.portalix.access.added": "Liczba zaktualizowanych wpisów na liście uprawnionych do korzystania z działa portalowego: %s",
+  "commands.portalix.access.removed": "Usunięto gracza %s z listy uprawnionych do korzystania z działa portalowego.",
   "item.portalix.potato_portalix": "Działo portalowe",
   "key.category.portalix.controls": "Portalix",
   "key.portalix.grab": "Chwyć / puść obiekt",
@@ -25,5 +36,12 @@
   "item.portalix.miniature_black_hole": "Miniaturowa czarna dziura",
   "item.portalix.cooling_unit": "Układ chłodzenia",
   "item.portalix.ai_module": "Moduł SI",
-  "item.portalix.potatos": "Potatos"
+  "item.portalix.potatos": "Potatos",
+  "options.portalix.title": "Ustawienia Portalix",
+  "options.portalix.crosshair": "Celownik Portalix",
+  "options.portalix.own_portal_distance": "Zasięg widoku przez własne portale (chunki)",
+  "options.portalix.other_portal_distance": "Zasięg widoku przez cudze portale (chunki)",
+  "options.portalix.distance_warning": "Wartości powyżej 16 chunków mogą powodować silne zacięcia przy otwieraniu portali.",
+  "options.portalix.portal_ambient_sound": "Ciągły dźwięk portali",
+  "options.portalix.save_error": "Nie udało się zapisać pliku ustawień Portalix."
 }

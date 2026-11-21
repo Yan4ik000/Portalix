@@ -1,8 +1,9 @@
 package dev.portalix.world.chunk;
 
 import it.unimi.dsi.fastutil.ints.Int2ObjectOpenHashMap;
+import it.unimi.dsi.fastutil.longs.Long2IntMap;
+import it.unimi.dsi.fastutil.longs.Long2IntMaps;
 import it.unimi.dsi.fastutil.longs.LongArrayList;
-import it.unimi.dsi.fastutil.longs.LongCollection;
 import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
 import net.minecraft.server.level.ChunkTrackingView;
 import net.minecraft.world.level.ChunkPos;
@@ -10,17 +11,14 @@ import net.minecraft.world.level.ChunkPos;
 public final class ChunkViewUnion {
   private ChunkViewUnion() {}
 
-  public static LongOpenHashSet collect(LongCollection centers, int radius) {
-    if (centers.isEmpty()) return new LongOpenHashSet();
+  public static LongOpenHashSet collect(Long2IntMap regions) {
+    if (regions.isEmpty()) return new LongOpenHashSet();
     var rows = new Int2ObjectOpenHashMap<LongArrayList>();
-    int[] widths = new int[radius + 2];
-    int width = radius + 1;
-    for (int z = 0; z < widths.length; z++) {
-      while (width >= 0 && !ChunkTrackingView.isWithinDistance(0, 0, radius, width, z, true))
-        width--;
-      widths[z] = width;
-    }
-    for (long center : centers) {
+    var widthsByRadius = new Int2ObjectOpenHashMap<int[]>();
+    for (var region : Long2IntMaps.fastIterable(regions)) {
+      long center = region.getLongKey();
+      int radius = region.getIntValue();
+      int[] widths = widthsByRadius.computeIfAbsent(radius, ChunkViewUnion::rowWidths);
       int x = ChunkPos.getX(center), z = ChunkPos.getZ(center);
       for (int dz = -radius - 1; dz <= radius + 1; dz++) {
         int extent = widths[Math.abs(dz)];
@@ -56,6 +54,17 @@ public final class ChunkViewUnion {
       for (long interval : row.getValue())
         addRow(chunks, row.getIntKey(), ChunkPos.getX(interval), ChunkPos.getZ(interval));
     return chunks;
+  }
+
+  private static int[] rowWidths(int radius) {
+    int[] widths = new int[radius + 2];
+    int width = radius + 1;
+    for (int z = 0; z < widths.length; z++) {
+      while (width >= 0 && !ChunkTrackingView.isWithinDistance(0, 0, radius, width, z, true))
+        width--;
+      widths[z] = width;
+    }
+    return widths;
   }
 
   private static void addRow(LongOpenHashSet chunks, int z, int start, int end) {

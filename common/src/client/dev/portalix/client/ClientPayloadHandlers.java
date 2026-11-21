@@ -7,6 +7,7 @@ import dev.portalix.network.gun.GunEventPayload;
 import dev.portalix.network.gun.GunShotPayload;
 import dev.portalix.network.gun.GunStatePayload;
 import dev.portalix.network.gun.PortalImpactPayload;
+import dev.portalix.network.portal.PortalOwnedStatePayload;
 import dev.portalix.network.portal.PortalStatePayload;
 import java.util.function.BiConsumer;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
@@ -32,6 +33,9 @@ final class ClientPayloadHandlers {
         (session, impact) -> session.shots.onPortalImpact(impact));
     registerReceiver(registration,
         PortalStatePayload.TYPE,
+        (session, state) -> session.portals.applySnapshot(state));
+    registerReceiver(registration,
+        PortalOwnedStatePayload.TYPE,
         (session, state) -> session.portals.applySnapshot(state));
     registerReceiver(registration, GunStatePayload.TYPE, PortalClientSession::applySnapshot);
     registerReceiver(registration, GunEventPayload.TYPE, PortalClientSession::receiveEvent);

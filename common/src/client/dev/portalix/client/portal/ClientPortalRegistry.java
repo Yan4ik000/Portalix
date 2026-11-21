@@ -9,6 +9,7 @@ import dev.portalix.client.portal.scene.PortalSceneManager;
 import dev.portalix.client.render.ParticleView;
 import dev.portalix.gun.GunPermissions;
 import dev.portalix.item.PortalixIdentity;
+import dev.portalix.network.portal.PortalOwnedStatePayload;
 import dev.portalix.network.portal.PortalStatePayload;
 import dev.portalix.portal.PortalLink;
 import dev.portalix.portal.PortalTopology;
@@ -29,7 +30,7 @@ public final class ClientPortalRegistry {
   private record Key(UUID gun, boolean orange) {}
 
   private final Map<Key, PortalVisual> portals = new HashMap<>();
-  private final Map<UUID, PortalStatePayload> states = new HashMap<>();
+  private final Map<UUID, PortalOwnedStatePayload> states = new HashMap<>();
   private long revision = -1;
   private final List<PortalVisual> closing = new ArrayList<>();
   private final Minecraft client = Minecraft.getInstance();
@@ -54,17 +55,24 @@ public final class ClientPortalRegistry {
   }
 
   public void applySnapshot(PortalStatePayload state) {
+    applySnapshot(new PortalOwnedStatePayload(state, 0));
+  }
+
+  public void applySnapshot(PortalOwnedStatePayload snapshot) {
+    var state = snapshot.state();
     if (client.level == null || state.revision() <= revision) return;
-    var previous = states.get(state.gun());
+    var oldSnapshot = states.get(state.gun());
+    var previous = oldSnapshot == null ? null : oldSnapshot.state();
     boolean wasLinked = previous != null && previous.blue() != null && previous.orange() != null;
     boolean linked = state.blue() != null && state.orange() != null;
     if (state.blue() == null && state.orange() == null) states.remove(state.gun());
-    else states.put(state.gun(), state);
+    else states.put(state.gun(), snapshot);
     if (wasLinked != linked || linked
         && (!state.blue().equals(previous.blue()) || !state.orange().equals(previous.orange()))) {
       PortalTopology.updateLinks(
           client.level,
           states.values().stream()
+              .map(PortalOwnedStatePayload::state)
               .flatMap(pair -> PortalTopology.linkPair(pair.gun(), pair.blue(), pair.orange()).stream())
               .filter(link -> link.entrance().endpoint().dimension().equals(client.level.dimension()))
               .toList());
@@ -91,15 +99,26 @@ public final class ClientPortalRegistry {
     return PortalTopology.links(client.level);
   }
 
+  public boolean ownsEntrance(PortalLink link) {
+    var snapshot = states.get(link.gun());
+    if (snapshot == null) return false;
+    var state = snapshot.state();
+    return ((snapshot.ownedMask() & 1) != 0 && link.entrance().equals(state.blue()))
+        || ((snapshot.ownedMask() & 2) != 0 && link.entrance().equals(state.orange()));
+  }
+
   public int activeMask(UUID gun) {
-    var state = states.get(gun);
-    return state == null ? 0 : (state.blue() == null ? 0 : 1) | (state.orange() == null ? 0 : 2);
+    var snapshot = states.get(gun);
+    if (snapshot == null) return 0;
+    var state = snapshot.state();
+    return (state.blue() == null ? 0 : 1) | (state.orange() == null ? 0 : 2);
   }
 
   public boolean secondaryActive(UUID gun) {
-    var state = states.get(gun);
-    return state != null
-        && state.orange() != null
+    var snapshot = states.get(gun);
+    if (snapshot == null) return false;
+    var state = snapshot.state();
+    return state.orange() != null
         && (state.blue() == null || state.orange().identity() > state.blue().identity());
   }
 
@@ -172,8 +191,12 @@ public final class ClientPortalRegistry {
     for (PortalVisual portal : closing) portal.submit(now, view, collection, null, false);
   }
 
-  public void clear() {
+  public void stopAmbient() {
     for (PortalVisual portal : portals.values()) portal.stopAmbient();
+  }
+
+  public void clear() {
+    stopAmbient();
     portals.clear();
     states.clear();
     closing.clear();

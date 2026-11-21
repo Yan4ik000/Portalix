@@ -47,6 +47,8 @@ class PayloadCodecsTest {
     packets.add(new Packet<>(PortalViewDemandPayload.CODEC,
         new PortalViewDemandPayload(List.of(reference), List.of(List.of(reference.inverse()), List.of(reference, reference.inverse())))));
     packets.add(new Packet<>(PortalViewDemandPayload.CODEC, new PortalViewDemandPayload(List.of(), List.of())));
+    packets.add(new Packet<>(PortalViewSettingsPayload.CODEC,
+        new PortalViewSettingsPayload(PortalViewLimits.MIN_PREVIEW_RADIUS, PortalViewLimits.MAX_PREVIEW_RADIUS)));
     packets.add(new Packet<>(PortalViewReadyPayload.CODEC, new PortalViewReadyPayload(sequence, sequence)));
     packets.add(new Packet<>(ProjectileStatePayload.CODEC, new ProjectileStatePayload(128, entity, sequence, sequence, position, velocity, -179.75f, 89.5f)));
     packets.add(new Packet<>(EntityPortalInitPayload.CODEC, new EntityPortalInitPayload(
@@ -63,8 +65,10 @@ class PayloadCodecsTest {
       packets.add(new Packet<>(GunStatePayload.CODEC, new GunStatePayload(1024, owner, flag ? 128 : -1, entity, 127, flag ? 3 : 0, flag)));
     }
     for (int mask = 0; mask < 4; mask++) {
-      packets.add(new Packet<>(PortalStatePayload.CODEC, new PortalStatePayload(owner, sequence, sequence,
-          (mask & 1) != 0 ? link.entrance() : null, (mask & 2) != 0 ? link.exit() : null, true)));
+      var state = new PortalStatePayload(owner, sequence, sequence,
+          (mask & 1) != 0 ? link.entrance() : null, (mask & 2) != 0 ? link.exit() : null, true);
+      packets.add(new Packet<>(PortalStatePayload.CODEC, state));
+      packets.add(new Packet<>(PortalOwnedStatePayload.CODEC, new PortalOwnedStatePayload(state, mask)));
     }
     for (PortalixVariant variant : PortalixVariant.values()) {
       packets.add(new Packet<>(GunShotPayload.CODEC, new GunShotPayload(128, position, velocity, new Vec3(0, 1, 0), false, new Vec3(0, 0, -1), sequence, 128, sequence, variant)));
@@ -119,6 +123,8 @@ class PayloadCodecsTest {
 
   @Test
   void rejectsInvalidPortalViewSizes() {
+    assertThrows(IllegalArgumentException.class, () -> new PortalViewSettingsPayload(3, 8));
+    assertThrows(IllegalArgumentException.class, () -> new PortalViewSettingsPayload(8, 65));
     var buffer = new RegistryFriendlyByteBuf(Unpooled.buffer(), RegistryAccess.EMPTY);
     try {
       for (int[] sizes : List.of(new int[] {PortalViewLimits.CAMERA_DEPTH + 1},

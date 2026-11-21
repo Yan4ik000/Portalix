@@ -12,7 +12,9 @@ import dev.portalix.client.portal.ClientPortalRegistry;
 import dev.portalix.client.portal.PortalViewReadiness;
 import dev.portalix.client.portal.audio.PortalAudioRouter;
 import dev.portalix.client.portal.camera.PortalCameraController;
+import dev.portalix.portal.PortalLink;
 import dev.portalix.portal.PortalTopology;
+import dev.portalix.portal.PortalViewLimits;
 import dev.portalix.portal.traversal.PortalPassagePose;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientLevel;
@@ -44,6 +46,10 @@ public final class PortalixClient {
 
   public static ClientPortalRegistry portals() {
     return current.portals;
+  }
+
+  public static int portalPreviewRadius(PortalLink view, int limit) {
+    return current == null ? PortalViewLimits.preview(limit) : current.previewRadius(view, limit);
   }
 
   static PortalClientSession session() {

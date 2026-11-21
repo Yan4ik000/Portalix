@@ -161,20 +161,21 @@ public final class PortalSceneCamera extends Camera {
     var access = (CameraAccessor) (Object) this;
     var window = Minecraft.getInstance().getWindow();
     float fov = (float) Math.toDegrees(2 * Math.atan(1 / Math.abs(projection.m11())));
+    float portalFar = PortalViewHorizon.farPlane(exit, position, terrainRadius, far);
+    boolean zeroToOne = RenderSystem.getDevice().getDeviceInfo().isZZeroToOne();
     access
         .portalix$projection()
-        .setupPerspective(near, far, fov, window.getWidth(), window.getHeight());
+        .setupPerspective(near, portalFar, fov, window.getWidth(), window.getHeight());
     orientation.transform(new Vector3f(0, 0, -1), forward);
     orientation.transform(new Vector3f(0, 1, 0), up);
     orientation.transform(new Vector3f(-1, 0, 0), left);
     view.rotation(new Quaternionf(orientation).conjugate());
     if (viewEffects != null) view.mulLocal(viewEffects);
     this.projection.set(projection);
-    this.far = far;
+    if (portalFar > far) PortalSceneViewport.setProjectionDepth(this.projection, portalFar, near, zeroToOne);
+    this.far = portalFar;
 
-    Matrix4f cull =
-        PortalSceneViewport.cullingProjection(
-            projection, near, far, RenderSystem.getDevice().getDeviceInfo().isZZeroToOne());
+    Matrix4f cull = PortalSceneViewport.cullingProjection(projection, near, portalFar, zeroToOne);
     var raster = viewport == null ? new Matrix4f(cull) : viewport.projection(cull);
     rasterCulling.set(raster);
     var windowDirection = new Vector3f(raster.m20() / raster.m00(), raster.m21() / raster.m11(), -1);

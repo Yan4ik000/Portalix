@@ -1,4 +1,15 @@
 {
+  "message.portalix.access.denied": "На цьому сервері ви не маєте права користуватися портальною гарматою.",
+  "commands.portalix.access.unavailable": "Налаштування доступу до портальної гармати недоступні.",
+  "commands.portalix.access.save_failed": "Не вдалося зберегти налаштування доступу до портальної гармати. Перевірте журнал сервера.",
+  "commands.portalix.access.not_trusted": "Цього гравця немає в білому списку портальної гармати.",
+  "commands.portalix.access.ambiguous": "У білому списку є кілька гравців із таким іменем. Укажіть UUID гравця.",
+  "commands.portalix.access.mode.restricted": "Портальною гарматою можуть користуватися лише оператори та гравці з білого списку.",
+  "commands.portalix.access.mode.all": "Усі гравці можуть користуватися портальною гарматою.",
+  "commands.portalix.access.empty": "Білий список портальної гармати порожній.",
+  "commands.portalix.access.list": "Білий список портальної гармати (%s): %s",
+  "commands.portalix.access.added": "Оновлено записів у білому списку портальної гармати: %s",
+  "commands.portalix.access.removed": "Гравця %s вилучено з білого списку портальної гармати.",
   "item.portalix.potato_portalix": "Портальна гармата",
   "key.category.portalix.controls": "Portalix",
   "key.portalix.grab": "Взяти / відпустити об’єкт",
@@ -25,5 +36,12 @@
   "item.portalix.miniature_black_hole": "Мініатюрна чорна діра",
   "item.portalix.cooling_unit": "Блок охолодження",
   "item.portalix.ai_module": "Модуль ШІ",
-  "item.portalix.potatos": "Potatos"
+  "item.portalix.potatos": "Potatos",
+  "options.portalix.title": "Налаштування Portalix",
+  "options.portalix.crosshair": "Приціл Portalix",
+  "options.portalix.own_portal_distance": "Дальність огляду крізь свої портали (чанки)",
+  "options.portalix.other_portal_distance": "Дальність огляду крізь чужі портали (чанки)",
+  "options.portalix.distance_warning": "Значення понад 16 чанків можуть спричиняти сильні підвисання під час відкриття порталів.",
+  "options.portalix.portal_ambient_sound": "Постійний шум порталів",
+  "options.portalix.save_error": "Не вдалося зберегти файл налаштувань Portalix."
 }

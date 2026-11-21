@@ -77,7 +77,7 @@ final class PerformanceWorldFixture {
     panel(source.exit(), Blocks.AIR.defaultBlockState());
     panel(destination.entrance(), Blocks.AIR.defaultBlockState());
     panel(destination.exit(), Blocks.QUARTZ_BLOCK.defaultBlockState());
-    check(registry.apply(player, gun, PortalColor.ORANGE, destination.exit(), PortalixVariant.STANDARD),
+    check(registry.apply(player, gun, PortalColor.ORANGE, destination.exit(), PortalixVariant.STANDARD, () -> true),
         "Cannot store the distant performance destination");
     if (hop == 0) {
       var stack = new ItemStack(ModItems.gun(PortalixVariant.STANDARD));

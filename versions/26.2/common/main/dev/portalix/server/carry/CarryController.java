@@ -31,6 +31,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.function.Predicate;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
@@ -58,9 +59,11 @@ public final class CarryController {
   private static final UUID ZERO_UUID = GunStatePayload.EMPTY_TARGET;
 
   private final GunStateBroadcaster broadcast;
+  private final Predicate<ServerPlayer> gunAllowed;
 
-  public CarryController(GunStateBroadcaster broadcast) {
+  public CarryController(GunStateBroadcaster broadcast, Predicate<ServerPlayer> gunAllowed) {
     this.broadcast = broadcast;
+    this.gunAllowed = gunAllowed;
   }
 
   private final Map<UUID, Hold> heldByOwner = new HashMap<>();
@@ -105,7 +108,7 @@ public final class CarryController {
       requestRelease(player, false);
       return;
     }
-    if (!GunPermissions.canCarry(player)) {
+    if (!GunPermissions.canCarry(player) || !gunAllowed.test(player)) {
       broadcast.sendEvent(player, GunEventKind.GRAB_FAILED);
       return;
     }
@@ -136,7 +139,7 @@ public final class CarryController {
         || target.level() != level || level.getEntity(target.getId()) != target
         || !player.position().equals(ownerPosition) || !target.getBoundingBox().equals(targetBounds)
         || PortalTopology.links(level) != topology
-        || !GunPermissions.canCarry(player) || player.getMainHandItem() != gun
+        || !GunPermissions.canCarry(player) || !gunAllowed.test(player) || player.getMainHandItem() != gun
         || player.getInventory().getSelectedSlot() != slot
         || isHolding(player.getUUID()) || !canCarry(target) || isCarried(target)) {
       broadcast.sendEvent(player, GunEventKind.GRAB_FAILED);
@@ -183,6 +186,7 @@ public final class CarryController {
     return heldByOwner.get(hold.owner) == hold
         && heldByEntity.get(entity.getUUID()) == hold
         && hold.hasEquippedGun(player)
+        && gunAllowed.test(player)
         && entity.level() == hold.level
         && player.level() == hold.level
         && hold.level.getEntity(entity.getId()) == entity

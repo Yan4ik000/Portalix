@@ -134,6 +134,20 @@ class PortalScenePlannerTest {
   }
 
   @Test
+  void nestedViewUsesTheRadiusOfThePortalItIsSeenThrough() {
+    var first = link(1, -4, -400, Direction.SOUTH);
+    var second = link(2, -500, -800, Direction.SOUTH);
+    var camera = root();
+    for (int radius : new int[] {4, 8}) {
+      var plans = PortalScenePlanner.plan(first.entrance().endpoint().dimension(), camera,
+          camera.projectionMatrix, camera.viewRotationMatrix, (position, distance) -> List.of(first, second),
+          128, entrance -> true, 1920, 1080, PortalViewLimits.ROUTES, camera.pos, null,
+          link -> link.equals(first) ? radius : 16);
+      assertEquals(radius == 8, plans.stream().anyMatch(plan -> plan.path().equals(List.of(first, second))));
+    }
+  }
+
+  @Test
   void skipsNestedEntranceAboveTheDestinationTerrainWindow() {
     var entrance = ClientPortalFixtures.endpoint(new Vec3(0, 0, -4), Direction.SOUTH);
     var floor = ClientPortalFixtures.endpoint(new Vec3(1000, 0, 0), Direction.UP);
@@ -188,7 +202,8 @@ class PortalScenePlannerTest {
       List<PortalLink> links, double range, Predicate<PortalEndpoint> primaryVisible) {
     return PortalScenePlanner.plan(dimension, root, projection, modelView,
         (position, distance) -> links, range, primaryVisible,
-        1920, 1080, PortalViewLimits.ROUTES, root.pos, false);
+        1920, 1080, PortalViewLimits.ROUTES, root.pos, null,
+        link -> PortalViewLimits.preview((int) Math.ceil(range / 16)));
   }
 
   private static CameraRenderState root() {

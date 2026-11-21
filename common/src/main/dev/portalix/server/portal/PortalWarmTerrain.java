@@ -1,6 +1,5 @@
 package dev.portalix.server.portal;
 
-import dev.portalix.portal.PortalViewLimits;
 import dev.portalix.portal.PortalViewTransition;
 import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
 import it.unimi.dsi.fastutil.longs.LongLinkedOpenHashSet;
@@ -24,17 +23,18 @@ final class PortalWarmTerrain {
     return columns.containsKey(column);
   }
 
-  void crossed(ChunkPos source, ChunkPos target, ChunkTrackingView primary, int limit, long tick,
+  void crossed(ChunkPos source, ChunkPos target, ChunkTrackingView primary, int limit,
+      int sourceRadius, int returnRadius, int arrivalRadius, long tick,
       LongSet delivered, LongPredicate current, LongConsumer acquire) {
     // On the first distant crossing, every acquired column belongs to the disjoint departure view.
     boolean revisit = !columns.isEmpty() || source.getChessboardDistance(target) <= 2 * (limit + 1);
-    capture(source, primary, limit, tick, delivered, current, acquire);
+    capture(source, primary, limit, sourceRadius, returnRadius, tick, delivered, current, acquire);
     if (revisit && !source.equals(target) && !columns.isEmpty())
-      capture(target, ChunkTrackingView.EMPTY, limit, tick, columns.keySet(), current, acquire);
+      capture(target, ChunkTrackingView.EMPTY, limit, arrivalRadius, arrivalRadius, tick, columns.keySet(), current, acquire);
   }
 
-  private void capture(ChunkPos center, ChunkTrackingView primary, int limit, long tick, LongSet delivered,
-      LongPredicate current, LongConsumer acquire) {
+  private void capture(ChunkPos center, ChunkTrackingView primary, int limit, int sourceRadius, int previewRadius,
+      long tick, LongSet delivered, LongPredicate current, LongConsumer acquire) {
     Departure departure = null;
     for (var existing : departures)
       if (existing.center.equals(center)) {
@@ -44,9 +44,9 @@ final class PortalWarmTerrain {
     if (departure == null) departure = new Departure(center);
     departure.tick = tick;
     departure.radius = departure.remaining;
+    departure.previewRadius = previewRadius;
     // A chain of crossings shares the capacity of one extra primary view.
     int width = 2 * limit + 3;
-    int preview = PortalViewLimits.preview(limit);
     var keys = delivered.iterator();
     while (keys.hasNext()) {
       long key = keys.nextLong();
@@ -54,7 +54,7 @@ final class PortalWarmTerrain {
       if (!ChunkTrackingView.isWithinDistance(center.x(), center.z(), limit, x, z, true)) continue;
       var previous = columns.get(key);
       if (previous == null && (columns.size() >= width * width || !primary.contains(x, z)
-          && !ChunkTrackingView.isWithinDistance(center.x(), center.z(), preview, x, z, true))) continue;
+          && !ChunkTrackingView.isWithinDistance(center.x(), center.z(), sourceRadius, x, z, true))) continue;
       if (!current.test(key)) continue;
       if (previous == null) acquire.accept(key);
       else retiring.remove(key);
@@ -77,9 +77,10 @@ final class PortalWarmTerrain {
     while (views.hasNext()) {
       var departure = views.next();
       long elapsed = tick - departure.tick;
+      int preview = Math.min(departure.previewRadius, limit);
       int radius = Math.min(departure.radius, (int) Math.ceil(
-          PortalViewTransition.retainedRadius(departure.radius, elapsed, limit)));
-      if (elapsed >= PortalViewTransition.LOAD_DELAY_TICKS && radius <= PortalViewLimits.preview(limit))
+          PortalViewTransition.retainedRadius(departure.radius, elapsed, preview, limit)));
+      if (elapsed >= PortalViewTransition.LOAD_DELAY_TICKS && radius <= preview)
         radius = 0;
       if (radius >= departure.remaining) continue;
       departure.remaining = radius;
@@ -124,6 +125,7 @@ final class PortalWarmTerrain {
     final LongOpenHashSet columns = new LongOpenHashSet();
     int radius;
     int remaining;
+    int previewRadius;
 
     Departure(ChunkPos center) {
       this.center = center;

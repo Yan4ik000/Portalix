@@ -1,4 +1,15 @@
 {
+  "message.portalix.access.denied": "Du darfst die Portalkanone auf diesem Server nicht benutzen.",
+  "commands.portalix.access.unavailable": "Die Zugriffsregeln für die Portalkanone sind nicht verfügbar.",
+  "commands.portalix.access.save_failed": "Die Zugriffsregeln für die Portalkanone konnten nicht gespeichert werden. Siehe Serverprotokoll.",
+  "commands.portalix.access.not_trusted": "Dieser Spieler steht nicht auf der Freigabeliste der Portalkanone.",
+  "commands.portalix.access.ambiguous": "Mehrere Einträge auf der Freigabeliste haben diesen Namen. Verwende die UUID des Spielers.",
+  "commands.portalix.access.mode.restricted": "Nur Operatoren und Spieler auf der Freigabeliste dürfen die Portalkanone benutzen.",
+  "commands.portalix.access.mode.all": "Alle Spieler dürfen die Portalkanone benutzen.",
+  "commands.portalix.access.empty": "Die Freigabeliste der Portalkanone ist leer.",
+  "commands.portalix.access.list": "Freigabeliste der Portalkanone (%s): %s",
+  "commands.portalix.access.added": "Aktualisierte Einträge auf der Freigabeliste der Portalkanone: %s",
+  "commands.portalix.access.removed": "%s wurde von der Freigabeliste der Portalkanone entfernt.",
   "item.portalix.potato_portalix": "Portalkanone",
   "key.category.portalix.controls": "Portalix",
   "key.portalix.grab": "Objekt aufnehmen / loslassen",
@@ -25,5 +36,12 @@
   "item.portalix.miniature_black_hole": "Miniaturschwarzes Loch",
   "item.portalix.cooling_unit": "Kühleinheit",
   "item.portalix.ai_module": "KI-Modul",
-  "item.portalix.potatos": "Potatos"
+  "item.portalix.potatos": "Potatos",
+  "options.portalix.title": "Portalix-Einstellungen",
+  "options.portalix.crosshair": "Portalix-Fadenkreuz",
+  "options.portalix.own_portal_distance": "Sichtweite durch eigene Portale (Chunks)",
+  "options.portalix.other_portal_distance": "Sichtweite durch fremde Portale (Chunks)",
+  "options.portalix.distance_warning": "Werte über 16 Chunks können beim Öffnen von Portalen zu starken Rucklern führen.",
+  "options.portalix.portal_ambient_sound": "Dauerhafter Portalklang",
+  "options.portalix.save_error": "Die Portalix-Einstellungsdatei konnte nicht gespeichert werden."
 }

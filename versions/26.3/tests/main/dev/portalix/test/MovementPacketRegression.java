@@ -143,7 +143,7 @@ final class MovementPacketRegression {
     var connection = player.connection;
     var tracking = PlayerPortalVisibility.of(player);
     for (double dy : new double[] {8, 0}) {
-      tracking.portalCrossed(player.level().getGameTime());
+      tracking.portalCrossed(player.level().getGameTime(), PortalViewLimits.DEFAULT_PREVIEW_RADIUS);
       Vec3 expected = player.position().add(0, dy, 0);
       var change = new PositionMoveRotation(new Vec3(0, dy, 0), new Vec3(.25, .125, 0), 4, -2);
       connection.teleport(change, Relative.ALL);

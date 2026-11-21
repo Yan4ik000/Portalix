@@ -15,11 +15,17 @@ record PortalSceneViewport(int x, int y, int width, int height, int screenWidth,
 
   static Matrix4f cullingProjection(
       Matrix4fc projection, float near, float far, boolean zeroToOne) {
+    var result = new Matrix4f(projection);
+    setProjectionDepth(result, near, far, zeroToOne);
+    return result;
+  }
+
+  static void setProjectionDepth(Matrix4f projection, float near, float far, boolean zeroToOne) {
     float scale = (zeroToOne ? far : far + near) / (far - near);
     float offset = -(zeroToOne ? far : 2 * far) * near / (far - near);
     var depth = projection.getRow(3, new Vector4f()).mul(scale);
     depth.w += offset;
-    return new Matrix4f(projection).setRow(2, depth);
+    projection.setRow(2, depth);
   }
 
   static PortalSceneViewport of(PortalScreenVisibility.Bounds bounds, int width, int height) {

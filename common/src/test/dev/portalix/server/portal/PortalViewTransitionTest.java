@@ -15,7 +15,7 @@ class PortalViewTransitionTest {
       int preview = PortalViewLimits.preview(limit);
       assertEquals(limit, state.trackingDistance(0, limit));
       for (long tick : new long[] {0, 1, 6, 35, 64}) {
-        state.portalCrossed(tick);
+        state.portalCrossed(tick, preview);
         assertEquals(preview, state.trackingDistance(tick, limit));
         assertTrue(state.delayingLoading(tick + 29));
         assertEquals(preview, state.trackingDistance(tick + 29, limit));
@@ -29,10 +29,21 @@ class PortalViewTransitionTest {
         assertFalse(state.loadingTransitionActive(tick + 53));
         assertEquals(limit, state.trackingDistance(tick + 53, limit));
       }
-      state.portalCrossed(95);
+      state.portalCrossed(95, preview);
       state.resumeLoading();
       assertEquals(limit, state.trackingDistance(96, limit));
     }
+  }
+
+  @Test
+  void crossingStartsAtTheChosenPreviewWithinTheCurrentLimit() {
+    var state = new PlayerPortalVisibility();
+    state.portalCrossed(10, 18);
+    assertEquals(18, state.trackingDistance(39, 32));
+    assertEquals(12, state.trackingDistance(39, 12));
+    assertEquals(32, state.trackingDistance(63, 32));
+    state.portalCrossed(75, 4);
+    assertEquals(4, state.trackingDistance(104, 32));
   }
 
   @Test

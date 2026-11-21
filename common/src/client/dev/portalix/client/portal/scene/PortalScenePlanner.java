@@ -10,11 +10,13 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.function.BiFunction;
 import java.util.function.Predicate;
+import java.util.function.ToIntFunction;
 import net.minecraft.client.renderer.state.level.CameraRenderState;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.Vec3;
+import org.jspecify.annotations.Nullable;
 import org.joml.Matrix4f;
 import org.joml.Matrix4fc;
 import org.joml.Quaternionf;
@@ -24,9 +26,9 @@ final class PortalScenePlanner {
   private static final double TRAVERSAL_VIEW_DISTANCE_SQUARED = 16;
 
   private final ResourceKey<Level> dimension;
-  private final int previewRadius;
+  private final ToIntFunction<PortalLink> previewRadius;
   private final Vec3 rootOrigin;
-  private final boolean remoteCamera;
+  private final @Nullable PortalLink cameraView;
   private final BiFunction<Vec3, Double, List<PortalLink>> links;
   private final double range;
   private final Matrix4fc projection;
@@ -42,12 +44,13 @@ final class PortalScenePlanner {
   private PortalScenePlanner(
       ResourceKey<Level> dimension, CameraRenderState root, Matrix4fc projection,
       Matrix4fc modelView, BiFunction<Vec3, Double, List<PortalLink>> links, double range,
-      Predicate<PortalEndpoint> primaryVisible, int width, int height, int maxViews, Vec3 rootOrigin, boolean remoteCamera) {
+      Predicate<PortalEndpoint> primaryVisible, int width, int height, int maxViews,
+      Vec3 rootOrigin, @Nullable PortalLink cameraView, ToIntFunction<PortalLink> previewRadius) {
     this.dimension = dimension;
-    previewRadius = PortalViewLimits.preview((int) Math.ceil(range / 16));
-    this.remoteCamera = remoteCamera;
+    this.previewRadius = previewRadius;
+    this.cameraView = cameraView;
     this.rootOrigin = rootOrigin;
-    if (remoteCamera) regions.add(chunk(rootOrigin));
+    if (cameraView != null) regions.add(chunk(rootOrigin));
     this.links = links;
     this.range = range;
     this.projection = projection;
@@ -64,9 +67,10 @@ final class PortalScenePlanner {
       ResourceKey<Level> dimension, CameraRenderState root, Matrix4fc projection,
       Matrix4fc modelView, BiFunction<Vec3, Double, List<PortalLink>> links, double range,
       Predicate<PortalEndpoint> primaryVisible, int width, int height, int maxViews,
-      Vec3 rootOrigin, boolean remoteCamera) {
+      Vec3 rootOrigin, @Nullable PortalLink cameraView, ToIntFunction<PortalLink> previewRadius) {
     return new PortalScenePlanner(dimension, root, projection, modelView, links, range,
-        primaryVisible, width, height, maxViews, rootOrigin, remoteCamera).plan(root, modelView);
+        primaryVisible, width, height, maxViews, rootOrigin, cameraView, previewRadius)
+        .plan(root, modelView);
   }
 
   private static long chunk(Vec3 point) {
@@ -117,8 +121,9 @@ final class PortalScenePlanner {
       List<PortalLink> path, CameraRenderState parent, Matrix4fc modelView,
       PortalScreenVisibility.Bounds parentBounds, List<Candidate> visible, List<View> hidden) {
     var origin = path.isEmpty() ? rootOrigin : PortalViewLimits.origin(path.getLast().exit().endpoint());
-    boolean primaryRange = path.isEmpty() && !remoteCamera;
-    var candidates = links.apply(origin, primaryRange ? range : previewRadius * 16.0);
+    var viewThrough = path.isEmpty() ? cameraView : path.getLast();
+    int radius = viewThrough == null ? 0 : previewRadius.applyAsInt(viewThrough);
+    var candidates = links.apply(origin, viewThrough == null ? range : radius * 16.0);
     if (candidates.isEmpty()) return;
     var exitPlane = path.isEmpty() ? null : PortalCullPlane.of(path.getLast().exit().endpoint());
     var viewProjection = new Matrix4f(projection).mul(modelView);
@@ -128,9 +133,9 @@ final class PortalScenePlanner {
           || !link.exit().endpoint().dimension().equals(dimension)) continue;
       if (!path.isEmpty() && path.getLast().exit().equals(link.entrance())) continue;
       double distanceSquared = parent.pos.distanceToSqr(entrance.center());
-      if (primaryRange) {
+      if (viewThrough == null) {
         if (distanceSquared > rangeSquared) continue;
-      } else if (!PortalViewLimits.containsEntrance(origin, entrance, previewRadius)) continue;
+      } else if (!PortalViewLimits.containsEntrance(origin, entrance, radius)) continue;
       var bounds = PortalScreenVisibility.project(entrance, parent, viewProjection, parentBounds, exitPlane);
       if (bounds != null && path.isEmpty() && !primaryVisible.test(entrance)) bounds = null;
       if (!path.isEmpty() && bounds == null) continue;

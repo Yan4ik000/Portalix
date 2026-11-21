@@ -29,6 +29,7 @@ dependencies {
     minecraft "com.mojang:minecraft:${rootProject.minecraft_version}"
     implementation "net.fabricmc:fabric-loader:${rootProject.loader_version}"
     implementation "net.fabricmc.fabric-api:fabric-api:${rootProject.fabric_api_version}"
+    clientCompileOnly "maven.modrinth:modmenu:${rootProject.modmenu_version}"
     clientCompileOnly "maven.modrinth:sodium:${rootProject.sodium_version}"
     clientCompileOnly "maven.modrinth:iris:${rootProject.iris_version}"
 }

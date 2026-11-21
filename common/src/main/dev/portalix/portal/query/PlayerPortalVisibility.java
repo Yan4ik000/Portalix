@@ -22,7 +22,6 @@ public final class PlayerPortalVisibility {
   private LongOpenHashSet chunks = new LongOpenHashSet();
   private List<Vec3> eyes = List.of();
   private List<Observer> observers = List.of();
-  private int viewRadius;
   private LongOpenHashSet simulationChunks = new LongOpenHashSet();
   private PortalChunkObservers priorities;
   private ChunkTrackingView priorityView;
@@ -31,8 +30,10 @@ public final class PlayerPortalVisibility {
   private final Long2ObjectOpenHashMap<Ready> ready = new Long2ObjectOpenHashMap<>();
 
   private long resumeLoadingAt;
+  private int arrivalRadius;
 
-  public void portalCrossed(long tick) {
+  public void portalCrossed(long tick, int radius) {
+    arrivalRadius = radius;
     resumeLoadingAt = tick + PortalViewTransition.LOAD_DELAY_TICKS;
   }
 
@@ -54,7 +55,7 @@ public final class PlayerPortalVisibility {
 
   public int loadingRadius(long tick, int playerDistance, int limit) {
     return resumeLoadingAt == 0 ? limit : PortalViewTransition.loadingRadius(
-        tick - resumeLoadingAt, PortalViewLimits.preview(playerDistance), limit);
+        tick - resumeLoadingAt, Math.min(arrivalRadius, Math.min(playerDistance, limit)), limit);
   }
 
   public int trackingDistance(long tick, int distance) {
@@ -148,10 +149,6 @@ public final class PlayerPortalVisibility {
     return observers;
   }
 
-  public int viewRadius() {
-    return viewRadius;
-  }
-
   public PortalChunkObservers chunkPriorities(ServerPlayer player) {
     var view = player.getChunkTrackingView();
     var center = player.chunkPosition();
@@ -176,13 +173,11 @@ public final class PlayerPortalVisibility {
     this.eyes = List.of();
     this.observers = List.of();
     this.simulationChunks = new LongOpenHashSet();
-    this.viewRadius = 0;
     this.priorities = null;
   }
 
   public void observe(
-      LongOpenHashSet chunks, List<Observer> observers,
-      LongOpenHashSet simulationChunks, int viewRadius) {
+      LongOpenHashSet chunks, List<Observer> observers, LongOpenHashSet simulationChunks) {
     this.chunks = chunks;
     if (this.observers != observers) {
       this.observers = List.copyOf(observers);
@@ -195,9 +190,7 @@ public final class PlayerPortalVisibility {
       }
       this.priorities = null;
     }
-    if (this.viewRadius != viewRadius) this.priorities = null;
     this.simulationChunks = simulationChunks;
-    this.viewRadius = viewRadius;
   }
 
   public boolean eyeWithinHorizontalRange(Vec3 source, double rangeSquared) {
@@ -212,7 +205,7 @@ public final class PlayerPortalVisibility {
     PlayerPortalVisibility portalix$observation();
   }
 
-  public record Observer(Vec3 eye, PortalEndpoint exit, boolean arrival) {}
+  public record Observer(Vec3 eye, PortalEndpoint exit, boolean arrival, int radius) {}
 
   private static final class Ready {
     final long generation;

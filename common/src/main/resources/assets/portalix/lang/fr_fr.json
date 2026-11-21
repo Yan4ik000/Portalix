@@ -1,4 +1,15 @@
 {
+  "message.portalix.access.denied": "Vous ne pouvez pas utiliser le pistolet à portails sur ce serveur.",
+  "commands.portalix.access.unavailable": "Les paramètres d’accès au pistolet à portails sont indisponibles.",
+  "commands.portalix.access.save_failed": "Impossible d’enregistrer les paramètres d’accès au pistolet à portails. Consultez le journal du serveur.",
+  "commands.portalix.access.not_trusted": "Ce joueur ne figure pas sur la liste des joueurs autorisés à utiliser le pistolet à portails.",
+  "commands.portalix.access.ambiguous": "Plusieurs joueurs autorisés portent ce nom. Utilisez l’UUID du joueur.",
+  "commands.portalix.access.mode.restricted": "Seuls les opérateurs et les joueurs autorisés peuvent utiliser le pistolet à portails.",
+  "commands.portalix.access.mode.all": "Tous les joueurs peuvent utiliser le pistolet à portails.",
+  "commands.portalix.access.empty": "La liste des joueurs autorisés à utiliser le pistolet à portails est vide.",
+  "commands.portalix.access.list": "Joueurs autorisés à utiliser le pistolet à portails (%s) : %s",
+  "commands.portalix.access.added": "Nombre d’entrées mises à jour dans la liste des joueurs autorisés : %s",
+  "commands.portalix.access.removed": "Le joueur %s a été retiré de la liste des joueurs autorisés à utiliser le pistolet à portails.",
   "item.portalix.potato_portalix": "Pistolet à portails",
   "key.category.portalix.controls": "Portalix",
   "key.portalix.grab": "Saisir / lâcher un objet",
@@ -25,5 +36,12 @@
   "item.portalix.miniature_black_hole": "Trou noir miniature",
   "item.portalix.cooling_unit": "Module de refroidissement",
   "item.portalix.ai_module": "Module d’IA",
-  "item.portalix.potatos": "Potatos"
+  "item.portalix.potatos": "Potatos",
+  "options.portalix.title": "Paramètres de Portalix",
+  "options.portalix.crosshair": "Réticule de Portalix",
+  "options.portalix.own_portal_distance": "Distance de vue par vos portails (chunks)",
+  "options.portalix.other_portal_distance": "Distance de vue par les portails des autres (chunks)",
+  "options.portalix.distance_warning": "Au-delà de 16 chunks, l’ouverture des portails peut provoquer de fortes saccades.",
+  "options.portalix.portal_ambient_sound": "Son continu des portails",
+  "options.portalix.save_error": "Impossible d’enregistrer le fichier de paramètres de Portalix."
 }

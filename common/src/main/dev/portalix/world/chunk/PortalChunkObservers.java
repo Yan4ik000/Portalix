@@ -25,13 +25,12 @@ public final class PortalChunkObservers {
   private final LongOpenHashSet core;
   private final List<Demand> demands;
   private final ChunkTrackingView primaryView;
-  private final int radius;
   private final int minY;
   private final int maxY;
 
   private PortalChunkObservers(
       List<ChunkPos> positions, List<ChunkPos> critical, List<Demand> demands,
-      ChunkTrackingView primaryView, int radius, int minY, int maxY) {
+      ChunkTrackingView primaryView, int minY, int maxY) {
     this.positions = positions;
     this.critical = critical;
     this.core = new LongOpenHashSet();
@@ -40,7 +39,6 @@ public final class PortalChunkObservers {
         for (int dz = -1; dz <= 1; dz++) core.add(ChunkPos.pack(center.x() + dx, center.z() + dz));
     this.demands = demands;
     this.primaryView = primaryView;
-    this.radius = radius;
     this.minY = minY;
     this.maxY = maxY;
   }
@@ -62,11 +60,11 @@ public final class PortalChunkObservers {
       var center = PortalViewLimits.frontColumn(exit);
       positions.add(center);
       critical.add(center);
-      demands.add(new Demand(center, observer.arrival(),
+      demands.add(new Demand(center, observer.arrival(), observer.radius(),
           cone(observer.eye(), exit)));
     }
     return new PortalChunkObservers(List.copyOf(positions), List.copyOf(critical), demands, player.getChunkTrackingView(),
-        visibility.viewRadius(), player.level().getMinY(), player.level().getMaxY());
+        player.level().getMinY(), player.level().getMaxY());
   }
 
   public static LongToIntFunction loadingPriorities(List<PortalChunkObservers> observers) {
@@ -97,7 +95,7 @@ public final class PortalChunkObservers {
       else observer.primaryView.forEach(position -> occupied.add(region(position.x(), position.z())));
       for (var critical : observer.critical) addRegions(occupied, critical, 1);
       for (var demand : observer.demands) {
-        addRegions(occupied, demand.exit, observer.radius + 1);
+        addRegions(occupied, demand.exit, demand.radius + 1);
       }
       for (long region : occupied)
         regions.computeIfAbsent(region, ignored -> new ArrayList<>()).add(observer);
@@ -130,7 +128,8 @@ public final class PortalChunkObservers {
     if (primaryView.contains(x, z)) return 1;
     int priority = 3;
     for (var demand : demands) {
-      if ((demand.cone == null && !demand.arrival) || !within(demand.exit, x, z)) continue;
+      if ((demand.cone == null && !demand.arrival) || !ChunkTrackingView.isWithinDistance(
+          demand.exit.x(), demand.exit.z(), demand.radius, x, z, true)) continue;
       if (demand.cone != null && intersects(demand.cone, x, z)) return 1 + portalOffset;
       if (demand.arrival) priority = 2;
     }
@@ -139,7 +138,7 @@ public final class PortalChunkObservers {
 
   public boolean samePriority(PortalChunkObservers other) {
     if (this == other) return true;
-    if (radius != other.radius || minY != other.minY || maxY != other.maxY
+    if (minY != other.minY || maxY != other.maxY
         || !positions.equals(other.positions) || !critical.equals(other.critical)
         || !primaryView.equals(other.primaryView) || demands.size() != other.demands.size())
       return false;
@@ -147,13 +146,9 @@ public final class PortalChunkObservers {
       var left = demands.get(i);
       var right = other.demands.get(i);
       if (!left.exit.equals(right.exit)
-          || left.arrival != right.arrival || !Arrays.equals(left.cone, right.cone)) return false;
+          || left.arrival != right.arrival || left.radius != right.radius || !Arrays.equals(left.cone, right.cone)) return false;
     }
     return true;
-  }
-
-  private boolean within(ChunkPos center, int x, int z) {
-    return ChunkTrackingView.isWithinDistance(center.x(), center.z(), radius, x, z, true);
   }
 
   private boolean intersects(Plane[] cone, int x, int z) {
@@ -200,7 +195,7 @@ public final class PortalChunkObservers {
     return distance;
   }
 
-  private record Demand(ChunkPos exit, boolean arrival, Plane[] cone) {}
+  private record Demand(ChunkPos exit, boolean arrival, int radius, Plane[] cone) {}
 
   private record Plane(Vec3 normal, double offset) {}
 }

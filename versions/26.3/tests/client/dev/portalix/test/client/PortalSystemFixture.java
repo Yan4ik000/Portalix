@@ -183,8 +183,8 @@ final class PortalSystemFixture implements AutoCloseable {
         marker(exit, 0, .5, DyeColor.BLUE, FrameCapture.Material.BLUE));
     paintPlane(exit.center().add(exit.normal().scale(6)), exit, Blocks.CONCRETE.pick(DyeColor.GRAY).defaultBlockState());
     lightLandmarks(exit, markers);
-    if (!registry.apply(player, gunId, PortalColor.BLUE, entry, PortalixVariant.STANDARD)
-        || !registry.apply(player, gunId, PortalColor.ORANGE, exit, PortalixVariant.STANDARD))
+    if (!registry.apply(player, gunId, PortalColor.BLUE, entry, PortalixVariant.STANDARD, () -> true)
+        || !registry.apply(player, gunId, PortalColor.ORANGE, exit, PortalixVariant.STANDARD, () -> true))
       throw new AssertionError("Authored portal surfaces did not pass the real placement validation");
     Vec3 eye = entry.center().add(entry.normal().scale(eyeDistance));
     if (entryFace.getAxis() != Direction.Axis.Y) eye = eye.add(0, player.getEyeHeight() - 1, 0);
@@ -226,8 +226,8 @@ final class PortalSystemFixture implements AutoCloseable {
   }
 
   void openRangeCourse() {
-    if (!registry.apply(player, gunId, PortalColor.BLUE, current.entrance(), PortalixVariant.STANDARD)
-        || !registry.apply(player, gunId, PortalColor.ORANGE, current.exit(), PortalixVariant.STANDARD))
+    if (!registry.apply(player, gunId, PortalColor.BLUE, current.entrance(), PortalixVariant.STANDARD, () -> true)
+        || !registry.apply(player, gunId, PortalColor.ORANGE, current.exit(), PortalixVariant.STANDARD, () -> true))
       throw new AssertionError("Could not reopen the prepared range course");
   }
 
@@ -241,8 +241,8 @@ final class PortalSystemFixture implements AutoCloseable {
       var entry = endpoint(new Vec3(originX + .5 + (i - 1.5) * 1.5, 101, originZ + 8), Direction.NORTH, 0);
       var exit = endpoint(new Vec3(originX + (i + 2) * spacing + .5, 101, originZ), Direction.SOUTH, 0);
       panel(entry); panel(exit);
-      if (!registry.apply(player, backgroundGun, PortalColor.BLUE, entry, PortalixVariant.STANDARD)
-          || !registry.apply(player, backgroundGun, PortalColor.ORANGE, exit, PortalixVariant.STANDARD))
+      if (!registry.apply(player, backgroundGun, PortalColor.BLUE, entry, PortalixVariant.STANDARD, () -> true)
+          || !registry.apply(player, backgroundGun, PortalColor.ORANGE, exit, PortalixVariant.STANDARD, () -> true))
         throw new AssertionError("A competing hidden portal pair failed placement validation");
     }
     return visible;
@@ -294,7 +294,7 @@ final class PortalSystemFixture implements AutoCloseable {
         new BlockPos(originX + 20, 108, originZ + 96), Blocks.AIR.defaultBlockState());
     fill(new BlockPos(originX + 13, 99, originZ),
         new BlockPos(originX + 20, 99, originZ + 96), Blocks.QUARTZ_BLOCK.defaultBlockState());
-    if (!registry.apply(player, gunId, PortalColor.ORANGE, exit, PortalixVariant.STANDARD))
+    if (!registry.apply(player, gunId, PortalColor.ORANGE, exit, PortalixVariant.STANDARD, () -> true))
       throw new AssertionError("The elevated wall exit failed placement validation");
     Vec3 feet = base.entrance.center().add(0, .1, -.5);
     Vec3 aim = feet.add(0, -2, 0);
@@ -357,8 +357,8 @@ final class PortalSystemFixture implements AutoCloseable {
         marker(exit, 0, .5, DyeColor.LIME, FrameCapture.Material.GREEN));
     paintPlane(exit.center().add(exit.normal().scale(6)), exit, Blocks.CONCRETE.pick(DyeColor.GRAY).defaultBlockState());
     lightLandmarks(exit, markers);
-    if (!registry.apply(player, nestedGun, PortalColor.BLUE, entry, PortalixVariant.STANDARD)
-        || !registry.apply(player, nestedGun, PortalColor.ORANGE, exit, PortalixVariant.STANDARD))
+    if (!registry.apply(player, nestedGun, PortalColor.BLUE, entry, PortalixVariant.STANDARD, () -> true)
+        || !registry.apply(player, nestedGun, PortalColor.ORANGE, exit, PortalixVariant.STANDARD, () -> true))
       throw new AssertionError("The second real portal pair failed placement validation");
     long generation = PortalTopology.links(level).stream().filter(link -> link.gun().equals(nestedGun))
         .findFirst().orElseThrow().generation();

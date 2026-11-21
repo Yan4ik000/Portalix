@@ -4,9 +4,11 @@ import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
 import com.llamalad7.mixinextras.sugar.Share;
 import com.llamalad7.mixinextras.sugar.ref.LocalRef;
+import dev.portalix.client.PortalixClient;
 import dev.portalix.client.portal.camera.CameraOrientationAccess;
 import dev.portalix.client.portal.camera.PortalCameraController;
 import dev.portalix.client.portal.camera.PortalCameraEnvironment;
+import dev.portalix.client.portal.scene.PortalViewHorizon;
 import dev.portalix.portal.PortalLink;
 import dev.portalix.portal.camera.PortalEyePose;
 import dev.portalix.portal.camera.PortalLookAngles;
@@ -14,6 +16,7 @@ import dev.portalix.portal.traversal.EntityPortalState;
 import java.util.List;
 import net.minecraft.client.Camera;
 import net.minecraft.client.DeltaTracker;
+import net.minecraft.client.Minecraft;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.util.Mth;
 import net.minecraft.world.entity.Entity;
@@ -38,6 +41,7 @@ abstract class CameraTransitionMixin implements CameraOrientationAccess {
   @Shadow @Final private Vector3f left;
   @Shadow private float eyeHeight;
   @Shadow private float eyeHeightOld;
+  @Shadow private float depthFar;
 
   @Shadow
   protected abstract void setPosition(Vec3 position);
@@ -71,6 +75,19 @@ abstract class CameraTransitionMixin implements CameraOrientationAccess {
   @Inject(method = "update", at = @At("HEAD"))
   private void portalix$frameTime(DeltaTracker tracker, CallbackInfo ci) {
     portalix$frameSeconds = tracker.getGameTimeDeltaTicks() / 20;
+  }
+
+  @Inject(method = "update", at = @At(value = "INVOKE",
+      target = "Lnet/minecraft/client/Camera;createProjectionMatrixForCulling()Lorg/joml/Matrix4f;"))
+  private void portalix$portalFarPlane(DeltaTracker tracker, CallbackInfo ci) {
+    var client = Minecraft.getInstance();
+    if ((Object) this != client.gameRenderer.mainCamera()) return;
+    var view = PortalCameraController.currentView();
+    if (view == null || view.spacePath().isEmpty()) return;
+    var link = view.spacePath().getLast();
+    var camera = (Camera) (Object) this;
+    int radius = PortalixClient.portalPreviewRadius(link, client.options.getEffectiveRenderDistance());
+    depthFar = PortalViewHorizon.farPlane(link.exit().endpoint(), camera.position(), radius, depthFar);
   }
 
   @WrapOperation(

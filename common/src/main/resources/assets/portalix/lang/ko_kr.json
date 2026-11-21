@@ -1,4 +1,15 @@
 {
+  "message.portalix.access.denied": "이 서버에서는 포털 건을 사용할 수 없습니다.",
+  "commands.portalix.access.unavailable": "포털 건 사용 권한 설정을 불러올 수 없습니다.",
+  "commands.portalix.access.save_failed": "포털 건 사용 권한 설정을 저장하지 못했습니다. 서버 로그를 확인하세요.",
+  "commands.portalix.access.not_trusted": "해당 플레이어는 포털 건 사용 허용 목록에 없습니다.",
+  "commands.portalix.access.ambiguous": "허용 목록에 같은 이름의 플레이어가 여러 명 있습니다. 플레이어의 UUID를 사용하세요.",
+  "commands.portalix.access.mode.restricted": "서버 운영자와 허용 목록에 있는 플레이어만 포털 건을 사용할 수 있습니다.",
+  "commands.portalix.access.mode.all": "모든 플레이어가 포털 건을 사용할 수 있습니다.",
+  "commands.portalix.access.empty": "포털 건 사용 허용 목록이 비어 있습니다.",
+  "commands.portalix.access.list": "포털 건 사용 허용 목록 (%s명): %s",
+  "commands.portalix.access.added": "업데이트된 포털 건 사용 허용 목록 항목 수: %s",
+  "commands.portalix.access.removed": "포털 건 사용 허용 목록에서 %s 님을 제거했습니다.",
   "item.portalix.potato_portalix": "포털 건",
   "key.category.portalix.controls": "Portalix",
   "key.portalix.grab": "물체 잡기 / 놓기",
@@ -25,5 +36,12 @@
   "item.portalix.miniature_black_hole": "소형 블랙홀",
   "item.portalix.cooling_unit": "냉각 장치",
   "item.portalix.ai_module": "AI 모듈",
-  "item.portalix.potatos": "Potatos"
+  "item.portalix.potatos": "Potatos",
+  "options.portalix.title": "Portalix 설정",
+  "options.portalix.crosshair": "Portalix 조준선",
+  "options.portalix.own_portal_distance": "내 포털 너머의 렌더 거리 (청크)",
+  "options.portalix.other_portal_distance": "다른 플레이어의 포털 너머 렌더 거리 (청크)",
+  "options.portalix.distance_warning": "16청크를 초과하면 포털이 열릴 때 화면이 심하게 끊길 수 있습니다.",
+  "options.portalix.portal_ambient_sound": "지속적인 포털 소리",
+  "options.portalix.save_error": "Portalix 설정 파일을 저장하지 못했습니다."
 }

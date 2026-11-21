@@ -17,6 +17,9 @@
     ],
     "client": [
       "dev.portalix.fabric.client.PortalixFabricClient"
+    ],
+    "modmenu": [
+      "dev.portalix.fabric.client.PortalixModMenu"
     ]
   },
   "mixins": [

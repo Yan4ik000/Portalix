@@ -19,18 +19,18 @@ class PortalWarmTerrainTest {
     long untouched = ChunkPos.pack(12, 0);
     var received = new LongOpenHashSet(new long[] {outer, stale, a.pack(), b.pack(), c.pack()});
     var pins = new LongOpenHashSet();
-    warm.crossed(a, b, ChunkTrackingView.of(a, 32), 32, 0, received, key -> key != stale,
+    warm.crossed(a, b, ChunkTrackingView.of(a, 32), 32, 8, 8, 8, 0, received, key -> key != stale,
         key -> assertTrue(pins.add(key)));
     assertEquals(new LongOpenHashSet(new long[] {a.pack(), outer}), pins);
     assertFalse(warm.contains(untouched));
     assertFalse(warm.contains(stale));
 
-    warm.crossed(b, c, ChunkTrackingView.of(b, 8), 32, 20, received, key -> true,
+    warm.crossed(b, c, ChunkTrackingView.of(b, 8), 32, 8, 8, 8, 20, received, key -> true,
         key -> assertTrue(pins.add(key)));
     assertTrue(warm.contains(outer));
     assertTrue(warm.contains(b.pack()));
     assertFalse(warm.contains(c.pack()));
-    warm.crossed(c, a, ChunkTrackingView.of(c, 8), 32, 28, received, key -> true,
+    warm.crossed(c, a, ChunkTrackingView.of(c, 8), 32, 8, 8, 8, 28, received, key -> true,
         key -> assertTrue(pins.add(key)));
     for (int tick = 29; tick <= 57; tick++) {
       warm.advance(tick, 32, key -> true, key -> assertTrue(pins.remove(key)));
@@ -56,8 +56,8 @@ class PortalWarmTerrainTest {
     long unrelated = ChunkPos.pack(24, 0);
     var present = new LongOpenHashSet(new long[] {a.pack(), b.pack(), preview, unrelated});
     var held = new LongOpenHashSet();
-    warm.crossed(a, b, primary, 32, 10, present, key -> true, key -> assertTrue(held.add(key)));
-    warm.crossed(b, c, primary, 32, 10, present, key -> true, key -> assertTrue(held.add(key)));
+    warm.crossed(a, b, primary, 32, 8, 8, 8, 10, present, key -> true, key -> assertTrue(held.add(key)));
+    warm.crossed(b, c, primary, 32, 8, 8, 8, 10, present, key -> true, key -> assertTrue(held.add(key)));
     assertEquals(new LongOpenHashSet(new long[] {a.pack(), b.pack(), preview}), held);
   }
 
@@ -70,9 +70,9 @@ class PortalWarmTerrainTest {
     var delivered = new LongOpenHashSet();
     primary.forEach(pos -> delivered.add(pos.pack()));
     var pins = new LongOpenHashSet();
-    warm.crossed(a, b, primary, 32, 0, delivered, key -> true, key -> assertTrue(pins.add(key)));
+    warm.crossed(a, b, primary, 32, 8, 8, 8, 0, delivered, key -> true, key -> assertTrue(pins.add(key)));
     assertEquals(delivered, pins);
-    warm.crossed(b, a, ChunkTrackingView.of(b, 8), 32, 1, delivered, key -> true,
+    warm.crossed(b, a, ChunkTrackingView.of(b, 8), 32, 8, 8, 8, 1, delivered, key -> true,
         key -> assertTrue(pins.add(key)));
     int total = pins.size();
     for (int tick = 2; tick <= 500; tick++) {

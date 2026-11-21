@@ -1,6 +1,7 @@
 package dev.portalix.client.gun.render;
 
 import dev.portalix.client.PortalixClient;
+import dev.portalix.client.config.PortalixClientSettings;
 import dev.portalix.client.platform.ClientPlatform;
 import dev.portalix.client.render.ParticleView;
 import dev.portalix.gun.GunPermissions;
@@ -31,7 +32,8 @@ public final class GunRenderEvents {
 
   public static void renderCrosshair(GuiGraphicsExtractor graphics) {
     Minecraft client = Minecraft.getInstance();
-    if (GunPermissions.canUse(client.player) && client.options.getCameraType().isFirstPerson()) {
+    if (PortalixClientSettings.get().showPortalCrosshair()
+        && GunPermissions.canUse(client.player) && client.options.getCameraType().isFirstPerson()) {
       PortalixHud.render(graphics);
     }
   }

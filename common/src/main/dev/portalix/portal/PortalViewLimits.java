@@ -12,6 +12,9 @@ import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 
 public final class PortalViewLimits {
+  public static final int MIN_PREVIEW_RADIUS = 4;
+  public static final int DEFAULT_PREVIEW_RADIUS = 8;
+  public static final int MAX_PREVIEW_RADIUS = 64;
   public static final int CORE_RADIUS = 1;
   public static final int ROUTES = 8;
   public static final int REGIONS = 4;
@@ -23,7 +26,7 @@ public final class PortalViewLimits {
   }
 
   public static int preview(int primary) {
-    return Math.min(8, primary);
+    return Math.min(DEFAULT_PREVIEW_RADIUS, primary);
   }
 
   public static Vec3 origin(PortalEndpoint exit) {

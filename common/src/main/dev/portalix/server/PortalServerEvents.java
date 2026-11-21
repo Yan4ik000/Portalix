@@ -1,16 +1,19 @@
 package dev.portalix.server;
 
+import com.mojang.brigadier.CommandDispatcher;
 import dev.portalix.carry.CarryBindings;
 import dev.portalix.network.gun.GunCommand;
 import dev.portalix.network.portal.PortalViewReadyPayload;
 import dev.portalix.network.portal.PortalCameraViewDemandPayload;
 import dev.portalix.network.portal.PortalViewDemandPayload;
+import dev.portalix.network.portal.PortalViewSettingsPayload;
 import dev.portalix.portal.PortalLink;
 import dev.portalix.portal.PortalLinkId;
 import dev.portalix.portal.traversal.PortalCrossingSync;
 import dev.portalix.portal.traversal.ProjectileStateSync;
 import java.util.List;
 import java.util.UUID;
+import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
@@ -21,6 +24,18 @@ public final class PortalServerEvents {
   private static PortalServerSession session;
 
   private PortalServerEvents() {}
+
+  public static void registerCommands(CommandDispatcher<CommandSourceStack> dispatcher) {
+    GunAccessCommands.register(dispatcher);
+  }
+
+  static GunAccess gunAccess(MinecraftServer server) {
+    return session == null ? null : session.gunAccess(server);
+  }
+
+  static void gunAccessChanged(MinecraftServer server) {
+    if (session != null) session.gunAccessChanged(server);
+  }
 
   public static void receiveGunCommand(ServerPlayer player, GunCommand command) {
     if (session != null) session.handle(player, command);
@@ -73,6 +88,10 @@ public final class PortalServerEvents {
 
   public static void requestViews(ServerPlayer player, PortalViewDemandPayload payload) {
     if (session != null) session.requestViews(player, payload);
+  }
+
+  public static void requestViewSettings(ServerPlayer player, PortalViewSettingsPayload payload) {
+    if (session != null) session.requestViewSettings(player, payload);
   }
 
   public static void requestCameraViews(ServerPlayer player, PortalCameraViewDemandPayload payload) {
