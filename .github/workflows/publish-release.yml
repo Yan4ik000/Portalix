@@ -1,0 +1,75 @@
+name: Publish release to mod platforms
+
+on:
+    release:
+        types: [published]
+
+permissions:
+    contents: read
+
+concurrency:
+    group: publish-release-${{ github.event.release.id }}
+    cancel-in-progress: false
+
+env:
+    RELEASE_TAG: ${{ github.event.release.tag_name }}
+
+jobs:
+    prepare:
+        runs-on: ubuntu-latest
+        timeout-minutes: 10
+        outputs:
+            assets: ${{ steps.plan.outputs.assets }}
+        steps:
+            - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+              with:
+                  ref: ${{ github.sha }}
+                  persist-credentials: false
+
+            - name: Validate release JARs
+              id: plan
+              env:
+                  GH_TOKEN: ${{ github.token }}
+              run: |
+                  gh release download "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" \
+                      --pattern 'Portalix-*.jar' --dir "$RUNNER_TEMP/portalix"
+                  assets=$(python3 .github/scripts/publish_release.py plan "$RUNNER_TEMP/portalix")
+                  echo "assets=$assets" >> "$GITHUB_OUTPUT"
+
+    publish:
+        name: ${{ matrix.platform }} / ${{ matrix.asset }}
+        needs: prepare
+        runs-on: ubuntu-latest
+        timeout-minutes: 10
+        strategy:
+            fail-fast: false
+            matrix:
+                platform: [CurseForge, Modrinth]
+                asset: ${{ fromJSON(needs.prepare.outputs.assets) }}
+        env:
+            ASSET_NAME: ${{ matrix.asset }}
+        steps:
+            - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+              with:
+                  ref: ${{ github.sha }}
+                  persist-credentials: false
+
+            - name: Download release JAR
+              env:
+                  GH_TOKEN: ${{ github.token }}
+              run: |
+                  gh release download "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" \
+                      --pattern "$ASSET_NAME" --dir "$RUNNER_TEMP/portalix"
+
+            - name: Upload to CurseForge
+              if: matrix.platform == 'CurseForge'
+              env:
+                  CURSEFORGE_TOKEN: ${{ secrets.CURSEFORGE_TOKEN }}
+              run: python3 .github/scripts/publish_release.py curseforge "$RUNNER_TEMP/portalix/$ASSET_NAME"
+
+            - name: Upload to Modrinth
+              if: matrix.platform == 'Modrinth'
+              env:
+                  MODRINTH_PROJECT_ID: ${{ vars.MODRINTH_PROJECT_ID }}
+                  MODRINTH_TOKEN: ${{ secrets.MODRINTH_TOKEN }}
+              run: python3 .github/scripts/publish_release.py modrinth "$RUNNER_TEMP/portalix/$ASSET_NAME"
