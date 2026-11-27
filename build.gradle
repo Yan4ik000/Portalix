@@ -1,3 +1,6 @@
+import java.nio.file.Files
+import java.nio.file.StandardCopyOption
+
 plugins {
     id 'base'
     id 'net.fabricmc.fabric-loom' version "${loom_version}" apply false
@@ -79,6 +82,42 @@ subprojects {
 }
 
 apply from: 'gradle/testing/regression.gradle'
+
+tasks.named('wrapper', Wrapper) {
+    def unixLauncher = layout.projectDirectory.file('gradlew').asFile
+    def windowsLauncher = layout.projectDirectory.file('gradlew.bat').asFile
+    def launcherSource = layout.projectDirectory.file('gradle/wrapper/PortalixGradle.java').asFile
+
+    // Keep the working launchers until both generated scripts have been adapted.
+    scriptFile = new File(temporaryDir, unixLauncher.name)
+    outputs.files(unixLauncher, windowsLauncher)
+
+    doLast {
+        def adaptLauncher = { File generated, String appHome, String pathSeparator, String argumentSeparator ->
+            def argument = { File directory, File file ->
+                def relative = directory.toPath().relativize(file.toPath()).toString().replace(File.separator, pathSeparator)
+                "\"${appHome}${relative}\""
+            }
+            String original = "-jar ${argument(generated.parentFile, jarFile)}"
+            String script = Files.readString(generated.toPath())
+            if (script.count(original) != 1) {
+                throw new GradleException("Cannot adapt generated wrapper script ${generated.name}: expected one ${original} invocation.")
+            }
+            String replacement = [
+                '--enable-native-access=ALL-UNNAMED',
+                "-classpath ${argument(unixLauncher.parentFile, jarFile)}",
+                argument(unixLauncher.parentFile, launcherSource)
+            ].join(argumentSeparator)
+            Files.writeString(generated.toPath(), script.replace(original, replacement))
+        }
+
+        adaptLauncher(scriptFile, '$APP_HOME/', '/', " \\\n        ")
+        adaptLauncher(batchScript, '%APP_HOME%\\', '\\', ' ')
+        Files.copy(scriptFile.toPath(), unixLauncher.toPath(), StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.COPY_ATTRIBUTES)
+        // cmd.exe may still be running the batch file during regeneration.
+        Files.write(windowsLauncher.toPath(), Files.readAllBytes(batchScript.toPath()))
+    }
+}
 
 tasks.named('build') {
     dependsOn ':common:classes', ':common:clientClasses', ':fabric:build', ':neoforge:build'

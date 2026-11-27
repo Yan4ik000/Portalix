@@ -3,6 +3,10 @@ plugins { id 'groovy' }
 group = 'dev.portalix.build'
 version = '1'
 
+if (gradle.parent != null) {
+    layout.buildDirectory = layout.projectDirectory.dir("build/${gradle.parent.rootProject.minecraft_version}")
+}
+
 repositories { mavenCentral() }
 dependencies {
     implementation gradleApi()

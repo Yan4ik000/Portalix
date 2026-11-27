@@ -20,9 +20,15 @@ if (versionDirectory == null) {
     throw new GradleException("Unsupported Minecraft version '${minecraftVersion}'. Set -PmcVersion to one of: ${supported}")
 }
 
-// Loom stores generated launch arguments in Gradle's project cache.
-def cacheDirectory = gradle.startParameter.projectCacheDir ?: new File(settingsDir, '.gradle')
-gradle.startParameter.projectCacheDir = new File(cacheDirectory, minecraftVersion)
+def cacheDirectory = gradle.startParameter.projectCacheDir?.canonicalFile
+if (cacheDirectory == null) {
+    throw new GradleException("Use the Portalix Gradle wrapper or set --project-cache-dir to a directory reserved for Minecraft ${minecraftVersion}.")
+}
+def wrapperCacheRoot = new File(settingsDir, '.gradle/minecraft').canonicalFile
+if (cacheDirectory.parentFile == wrapperCacheRoot && cacheDirectory.name != minecraftVersion) {
+    throw new GradleException("Project cache '${cacheDirectory}' does not match Minecraft ${minecraftVersion}.")
+}
+
 gradle.rootProject { project ->
     project.ext.minecraft_version = minecraftVersion
     project.ext.minecraftSourcesDir = versionDirectory

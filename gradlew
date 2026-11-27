@@ -210,7 +210,9 @@ DEFAULT_JVM_OPTS='"-Xmx64m" "-Xms64m"'
 
 set -- \
         "-Dorg.gradle.appname=$APP_BASE_NAME" \
-        -jar "$APP_HOME/gradle/wrapper/gradle-wrapper.jar" \
+        --enable-native-access=ALL-UNNAMED \
+        -classpath "$APP_HOME/gradle/wrapper/gradle-wrapper.jar" \
+        "$APP_HOME/gradle/wrapper/PortalixGradle.java" \
         "$@"
 
 # Stop when "xargs" is not available.
