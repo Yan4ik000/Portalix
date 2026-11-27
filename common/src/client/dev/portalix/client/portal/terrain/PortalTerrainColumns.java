@@ -1,6 +1,9 @@
 package dev.portalix.client.portal.terrain;
 
+import dev.portalix.client.world.RetainedChunkAccess;
 import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
+import net.minecraft.client.Minecraft;
+import net.minecraft.core.SectionPos;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.chunk.LevelChunkSection;
 
@@ -12,6 +15,15 @@ public final class PortalTerrainColumns {
   public PortalTerrainColumns(int minY, int height) {
     this.minY = minY;
     this.height = height;
+  }
+
+  public static PortalTerrainColumns current() {
+    return ((RetainedChunkAccess) Minecraft.getInstance().level.getChunkSource()).portalix$terrainColumns();
+  }
+
+  public boolean isMissingAt(SectionPos center) {
+    int y = center.y() - minY;
+    return y >= 0 && y < height && get(center.x(), center.z()) == null;
   }
 
   public int minY() {

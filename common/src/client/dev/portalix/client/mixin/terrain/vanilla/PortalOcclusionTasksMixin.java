@@ -102,7 +102,7 @@ abstract class PortalOcclusionTasksMixin {
       Executor executor,
       Operation<CompletableFuture<Void>> original,
       @Local(argsOnly = true) CameraRenderState camera) {
-    var snapshot = new PortalOcclusionContext.Snapshot(camera.pos, viewArea.getViewDistance(), camera.smartCull);
+    var snapshot = PortalOcclusionContext.capture(camera.pos, viewArea.getViewDistance(), camera.smartCull);
     return original.call(
         (Runnable) () -> PortalOcclusionContext.run(snapshot, task),
         SharedOcclusionExecutor.executor());

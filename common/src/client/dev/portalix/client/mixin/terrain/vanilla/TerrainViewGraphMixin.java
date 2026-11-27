@@ -6,7 +6,7 @@ import dev.portalix.client.portal.terrain.PortalOcclusionContext;
 import dev.portalix.client.portal.terrain.PortalTerrainGraphAccess;
 import dev.portalix.client.portal.terrain.PortalRenderSections;
 import dev.portalix.client.mixin.terrain.ViewAreaAccessor;
-import dev.portalix.client.world.RetainedChunkAccess;
+import dev.portalix.client.portal.terrain.PortalTerrainColumns;
 import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
 import it.unimi.dsi.fastutil.longs.LongSet;
 import java.util.List;
@@ -14,7 +14,6 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.Future;
-import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.SectionOcclusionGraph;
 import net.minecraft.client.renderer.ViewArea;
 import net.minecraft.client.renderer.chunk.SectionRenderDispatcher;
@@ -62,9 +61,7 @@ abstract class TerrainViewGraphMixin implements PortalTerrainGraphAccess {
       Frustum frustum,
       List<RenderSection> visible,
       List<RenderSection> nearby) {
-    var level = Minecraft.getInstance().level;
-    var terrain = ((RetainedChunkAccess) level.getChunkSource()).portalix$terrainColumns();
-    portalix$initial.collect(viewArea, terrain, camera, frustum, visible, nearby);
+    portalix$initial.collect(viewArea, PortalTerrainColumns.current(), camera, frustum, visible, nearby);
   }
 
   @Override
@@ -91,7 +88,8 @@ abstract class TerrainViewGraphMixin implements PortalTerrainGraphAccess {
   @Override
   public boolean portalix$ready(Vec3 camera) {
     var snapshot = portalix$visibility();
-    return snapshot != null && snapshot.center().equals(SectionPos.of(PortalSceneManager.terrainOrigin(camera)));
+    return snapshot != null && viewArea != null
+        && snapshot.matchesView(PortalSceneManager.terrainOrigin(camera), viewArea.getViewDistance());
   }
 
   @Override
@@ -100,8 +98,8 @@ abstract class TerrainViewGraphMixin implements PortalTerrainGraphAccess {
         || needsFrustumUpdate.get() || nextSectionsToPropagateFrom != null) return false;
     var state = (TerrainGraphStateAccessor) currentGraph.get();
     var snapshot = portalix$snapshot(state);
-    return snapshot != null && snapshot.radius() == viewArea.getViewDistance()
-        && snapshot.center().equals(SectionPos.of(PortalSceneManager.terrainOrigin(camera)))
+    return snapshot != null
+        && snapshot.matchesView(PortalSceneManager.terrainOrigin(camera), viewArea.getViewDistance())
         && state.portalix$propagation().isEmpty();
   }
 

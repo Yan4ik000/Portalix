@@ -26,6 +26,7 @@ public final class PortalInitialTerrainVisibility {
   private static final byte IN_FRUSTUM = 2;
   private static final byte REACHED = 3;
   private static final Direction[] DIRECTIONS = Direction.values();
+  private static final long[] UNLOADED_COLUMN = new long[0];
   private byte[] states = new byte[0];
   private byte[] incomingDirections = new byte[0];
   private byte[] pathDirections = new byte[0];
@@ -48,6 +49,23 @@ public final class PortalInitialTerrainVisibility {
     int minZ = center.z() - radius;
     int minY = area.minSectionY();
     int columnCount = diameter * diameter;
+    int cameraY = center.y() - minY;
+    boolean cameraColumnMissing = terrain.isMissingAt(center);
+    if (columns.length < columnCount) columns = new long[columnCount][];
+    boolean hasLoadedColumns = false;
+    for (int x = 0; x < diameter; x++) {
+      for (int z = 0; z < diameter; z++) {
+        long[] occupied = null;
+        if (ChunkTrackingView.isInViewDistance(center.x(), center.z(), radius, minX + x, minZ + z)) {
+          occupied = terrain.get(minX + x, minZ + z);
+          if (occupied != null) hasLoadedColumns = true;
+          else if (cameraColumnMissing) occupied = UNLOADED_COLUMN;
+        }
+        columns[x * diameter + z] = occupied;
+      }
+    }
+    if (!hasLoadedColumns) return;
+
     int count = columnCount * height;
     if (states.length < count) {
       states = new byte[count];
@@ -55,13 +73,6 @@ public final class PortalInitialTerrainVisibility {
       pathDirections = new byte[count];
       queue = new int[count];
     } else Arrays.fill(states, 0, count, UNSEEN);
-    if (columns.length < columnCount) columns = new long[columnCount][];
-    for (int x = 0; x < diameter; x++)
-      for (int z = 0; z < diameter; z++)
-        columns[x * diameter + z] =
-            ChunkTrackingView.isInViewDistance(center.x(), center.z(), radius, minX + x, minZ + z)
-                ? terrain.get(minX + x, minZ + z)
-                : null;
 
     var cull = new Frustum(frustum).offsetToFullyIncludeCameraCube(8);
     var window = new Frustum(cull);
@@ -69,15 +80,15 @@ public final class PortalInitialTerrainVisibility {
     var tree = new Octree(center, radius, height, area.minY());
     var sections = ((ViewAreaAccessor) area).portalix$sections();
     int tail = 0;
-    int cameraColumn = radius * diameter + radius;
-    if (center.y() >= minY && center.y() <= area.maxSectionY() && columns[cameraColumn] != null) {
-      int index = cameraColumn * height + center.y() - minY;
+    if (cameraY >= 0 && cameraY < height) {
+      int cameraColumn = radius * diameter + radius;
+      int index = cameraColumn * height + cameraY;
       states[index] = REACHED;
       incomingDirections[index] = 0;
       pathDirections[index] = 0;
       queue[tail++] = index;
     } else {
-      boolean below = center.y() < minY;
+      boolean below = cameraY < 0;
       int y = below ? 0 : height - 1;
       var source = below ? Direction.UP : Direction.DOWN;
       for (int x = 0; x < diameter; x++)
@@ -115,7 +126,8 @@ public final class PortalInitialTerrainVisibility {
       int y = index % height;
       long[] occupied = columns[column];
       int sectionIndex = minY + y - terrain.minY();
-      boolean empty = (occupied[sectionIndex / Long.SIZE] & 1L << (sectionIndex % Long.SIZE)) == 0;
+      boolean empty = occupied == UNLOADED_COLUMN
+          || (occupied[sectionIndex / Long.SIZE] & 1L << (sectionIndex % Long.SIZE)) == 0;
       SectionMesh mesh = null;
       boolean open = empty;
       if (!empty) {
