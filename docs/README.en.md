@@ -85,9 +85,9 @@ Rules are stored in `portalix-access.json` in the world folder. Every player can
 | --- | --- |
 | <img src="media/carry.gif" width="400" alt="The gun lifts a chicken and throws it into the air"> | <img src="media/rails.gif" width="400" alt="A player rides a minecart through a portal"> |
 
-### Have fun!
+### Well, have fun)
 
-You hold the key to the portals. What you do with it is up to you.
+The portal gun is useful in many different scenarios, so use your imagination and do whatever you want
 
 <p align="center">
   <img src="media/have-fun.gif" width="640" alt="Jumping from a height, launching out of a portal and landing with a water bucket">
