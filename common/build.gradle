@@ -13,6 +13,7 @@ dependencies {
     compileOnly 'io.github.llamalad7:mixinextras-common:0.5.5'
     clientCompileOnly "maven.modrinth:sodium:${rootProject.sodium_version}"
     clientCompileOnly "maven.modrinth:iris:${rootProject.iris_version}"
+    clientCompileOnly "maven.modrinth:asyncparticles:${rootProject.asyncparticles_version}"
 }
 
 rootProject.addMinecraftSources(sourceSets.client, 'common/src/compat')

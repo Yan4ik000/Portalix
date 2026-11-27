@@ -15,6 +15,8 @@
     "interaction.PortalPickingMixin",
     "world.PortalClientWorldEffectsMixin",
     "scene.PortalParticleExtractionMixin",
+    "compat.asyncparticles.AsyncParticleGpuPassMixin",
+    "compat.asyncparticles.AsyncParticleExtractionMixin",
     "scene.PortalParticleDistanceMixin",
     "camera.CameraTransitionMixin",
     "camera.PortalCameraCorrectionMixin",

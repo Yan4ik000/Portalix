@@ -53,6 +53,7 @@ neoForge {
 dependencies {
     sodiumCompileArtifact "maven.modrinth:sodium:${rootProject.sodium_neoforge_version}"
     clientCompileOnly "maven.modrinth:iris:${rootProject.iris_neoforge_version}"
+    clientCompileOnly "maven.modrinth:asyncparticles:${rootProject.asyncparticles_version}"
 }
 
 def sodiumCompileJar = tasks.register('extractSodiumCompileJar', Sync) {

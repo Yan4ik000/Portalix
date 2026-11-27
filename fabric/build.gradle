@@ -32,6 +32,7 @@ dependencies {
     clientCompileOnly "maven.modrinth:modmenu:${rootProject.modmenu_version}"
     clientCompileOnly "maven.modrinth:sodium:${rootProject.sodium_version}"
     clientCompileOnly "maven.modrinth:iris:${rootProject.iris_version}"
+    clientCompileOnly "maven.modrinth:asyncparticles:${rootProject.asyncparticles_version}"
 }
 
 tasks.named('jar', Jar) {

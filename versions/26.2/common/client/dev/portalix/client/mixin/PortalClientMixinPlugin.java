@@ -1,5 +1,6 @@
 package dev.portalix.client.mixin;
 
+import dev.portalix.client.compat.asyncparticles.AsyncParticlesCompatibility;
 import dev.portalix.platform.ModPresence;
 import java.util.List;
 import java.util.Set;
@@ -10,6 +11,9 @@ import org.spongepowered.asm.mixin.extensibility.IMixinInfo;
 public final class PortalClientMixinPlugin implements IMixinConfigPlugin {
   @Override
   public boolean shouldApplyMixin(String targetClassName, String mixinClassName) {
+    if (mixinClassName.startsWith("dev.portalix.client.mixin.compat.asyncparticles.")) {
+      return AsyncParticlesCompatibility.isSupported();
+    }
     if (mixinClassName.startsWith("dev.portalix.client.mixin.compat.iris.")) {
       return ModPresence.INSTANCE.isLoaded("iris");
     }
