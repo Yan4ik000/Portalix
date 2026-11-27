@@ -103,7 +103,7 @@ Portalix изменяет работу многих подсистем Minecraft
 ./gradlew build -PmcVersion=26.1.2
 ```
 
-JAR лежат в `fabric/build/<mc>/libs/` и `neoforge/build/<mc>/libs/`. Для одного загрузчика используйте `:fabric:build` или `:neoforge:build`.
+JAR лежат в `common/build/libs/`. Для одного загрузчика используйте `:fabric:build` или `:neoforge:build`.
 
 `clean` очищает сборку выбранной версии.
 

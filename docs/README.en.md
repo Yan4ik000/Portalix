@@ -103,7 +103,7 @@ Use JDK 25 and run `gradlew.bat` on Windows. The `build` task covers both loader
 ./gradlew build -PmcVersion=26.1.2
 ```
 
-JARs go to `fabric/build/<mc>/libs/` and `neoforge/build/<mc>/libs/`. To build for one loader, use `:fabric:build` or `:neoforge:build`.
+JARs go to `common/build/libs/`. To build for one loader, use `:fabric:build` or `:neoforge:build`.
 
 `clean` removes the selected version's build output.
 

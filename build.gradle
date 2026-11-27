@@ -131,6 +131,37 @@ tasks.named('wrapper', Wrapper) {
     }
 }
 
+def releaseDirectory = layout.projectDirectory.dir('common/build/libs')
+[project(':fabric'), project(':neoforge')].each { loader ->
+    def releaseJars = fileTree(releaseDirectory) {
+        include "${loader.base.archivesName.get()}-*.jar"
+    }
+
+    // Append the copy after the loader's packaging and signing actions.
+    loader.afterEvaluate {
+        loader.tasks.named('jar', Jar) {
+            def releaseCopy = archiveFileName.map { releaseDirectory.file(it) }
+            def obsoleteJars = releaseJars - files(releaseCopy)
+            outputs.file(releaseCopy).withPropertyName('releaseCopy')
+            outputs.upToDateWhen { obsoleteJars.isEmpty() }
+
+            doLast {
+                def destination = releaseCopy.get().asFile.toPath()
+                Files.createDirectories(destination.parent)
+                Files.copy(archiveFile.get().asFile.toPath(), destination, StandardCopyOption.REPLACE_EXISTING)
+                obsoleteJars.each { Files.deleteIfExists(it.toPath()) }
+            }
+        }
+    }
+
+    loader.tasks.named('clean', Delete) { delete releaseJars }
+    tasks.named('clean', Delete) { delete releaseJars }
+}
+
+tasks.named('assemble') {
+    dependsOn ':fabric:jar', ':neoforge:jar'
+}
+
 tasks.named('build') {
     dependsOn ':common:classes', ':common:clientClasses', ':fabric:build', ':neoforge:build'
 }
