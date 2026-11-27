@@ -36,7 +36,6 @@ public final class RemotePortalInterpolation {
   private float pitch;
   private float scale;
   private double steps;
-  private boolean playingArrival;
   private boolean forwarding;
 
   public RemotePortalInterpolation(Entity entity) {
@@ -109,8 +108,10 @@ public final class RemotePortalInterpolation {
 
   public void receive(EntityPortalCrossingPayload packet, List<Crossing> crossings) {
     var interpolation = entity.getInterpolation();
-    boolean continueArrival = playingArrival && interpolation.hasActiveInterpolation();
-    if (!active() && !continueArrival) interpolation.cancel();
+    // Let vanilla finish the current step, including its fractional progress and rotation.
+    boolean playingNativeSteps = !driving() && interpolation instanceof SteppedInterpolationHandler
+        && interpolation.hasActiveInterpolation();
+    if (!active() && !playingNativeSteps) interpolation.cancel();
     int length =
         interpolation instanceof Access access
             ? access.portalix$length()
@@ -119,7 +120,7 @@ public final class RemotePortalInterpolation {
     if (interpolation instanceof SteppedInterpolationHandler) {
       var arrival = new Arrival(packet, crossings, length);
       arrivals.addLast(arrival);
-      if (arrivals.size() == 1 && !continueArrival) start(arrival);
+      if (arrivals.size() == 1 && !playingNativeSteps) start(arrival);
     } else {
       path.append(crossings);
       scale = packet.poseScale();
@@ -141,7 +142,6 @@ public final class RemotePortalInterpolation {
   }
 
   private void start(Arrival arrival) {
-    playingArrival = false;
     path.append(arrival.crossings);
     var landing = arrival.landing;
     target(landing.position(), landing.yRot(), landing.xRot(), arrival.length);
@@ -182,13 +182,10 @@ public final class RemotePortalInterpolation {
   }
 
   public void cancel() {
-    if (forwarding || !active() && !playingArrival) return;
-    if (active()) {
-      PortalPassagePose.set(entity, arrivals.isEmpty() ? scale : arrivals.getLast().scale);
-      resetMinecart();
-    }
+    if (forwarding || !active()) return;
+    PortalPassagePose.set(entity, arrivals.isEmpty() ? scale : arrivals.getLast().scale);
+    resetMinecart();
     steps = 0;
-    playingArrival = false;
     path.clear();
     arrivals.clear();
     vehicleCrossings.clear();
@@ -196,14 +193,12 @@ public final class RemotePortalInterpolation {
 
   public void tick() {
     if (!driving()) {
-      if (!playingArrival && arrivals.isEmpty()) return;
+      if (arrivals.isEmpty()) return;
       var interpolation = entity.getInterpolation();
       if (interpolation.hasActiveInterpolation()) {
-        if (arrivals.isEmpty() || vehicleCrossings.isEmpty()) return;
+        if (vehicleCrossings.isEmpty()) return;
         finishRiderPlayback(interpolation);
       }
-      playingArrival = false;
-      if (arrivals.isEmpty()) return;
       start(arrivals.getFirst());
       if (vehicleCrossings.isEmpty()) return;
     }
@@ -272,11 +267,10 @@ public final class RemotePortalInterpolation {
     try {
       for (var update : arrival.updates)
         interpolation.interpolateTo(update.position, update.yaw, update.pitch, update.hasRotation);
-      playingArrival = interpolation.hasActiveInterpolation();
     } finally {
       forwarding = false;
     }
-    if (!playingArrival && !arrivals.isEmpty()) start(arrivals.getFirst());
+    if (!arrivals.isEmpty() && !interpolation.hasActiveInterpolation()) start(arrivals.getFirst());
   }
 
   private void finishRiderPlayback(InterpolationHandler interpolation) {
@@ -289,7 +283,6 @@ public final class RemotePortalInterpolation {
         entity.setXRot(target.xRot());
       }
       interpolation.cancel();
-      playingArrival = false;
     } finally {
       forwarding = false;
     }
