@@ -4,18 +4,22 @@ import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
 import dev.portalix.client.compat.PortalTerrainBackend;
 import dev.portalix.client.compat.minecraft.SceneExtractorAccess;
+import dev.portalix.client.compat.minecraft.SceneTransientBlocks;
 import dev.portalix.client.portal.PortalMousePicking;
 import dev.portalix.client.portal.entity.PortalEntityScenes;
 import dev.portalix.client.portal.scene.PortalSceneManager;
+import java.util.Deque;
 import net.minecraft.client.Camera;
 import net.minecraft.client.DeltaTracker;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.SectionUpdateTracker;
 import net.minecraft.client.multiplayer.ClientChunkCache;
 import net.minecraft.client.multiplayer.ClientLevel;
+import net.minecraft.client.renderer.LevelRenderer;
 import net.minecraft.client.renderer.SectionOcclusionGraph;
 import net.minecraft.client.renderer.culling.Frustum;
 import net.minecraft.client.renderer.extract.LevelExtractor;
+import net.minecraft.client.renderer.extract.TransientBlock;
 import net.minecraft.client.renderer.state.level.LevelRenderState;
 import net.minecraft.client.renderer.state.level.PlayerRenderState;
 import net.minecraft.core.SectionPos;
@@ -67,6 +71,8 @@ public abstract class PortalLevelExtractorMixin {
   }
 
   @Shadow @Final private LevelRenderState levelRenderState;
+  @Shadow @Final private LevelRenderer levelRenderer;
+  @Shadow @Final private Deque<TransientBlock> transientBlockQueue;
   @Unique private float portalix$previousRoll;
 
   @WrapOperation(
@@ -162,6 +168,18 @@ public abstract class PortalLevelExtractorMixin {
 
   @Inject(method = "onResourceManagerReload", at = @At("HEAD"))
   private void portalix$reload(ResourceManager resources, CallbackInfo ci) {
+    portalix$clearTransientBlocks();
     PortalSceneManager.clear();
+  }
+
+  @Inject(method = "setLevel", at = @At("HEAD"))
+  private void portalix$clearTransientBlocks(ClientLevel level, CallbackInfo ci) {
+    portalix$clearTransientBlocks();
+  }
+
+  @Unique
+  private void portalix$clearTransientBlocks() {
+    transientBlockQueue.clear();
+    ((SceneTransientBlocks) levelRenderer).portalix$clearTransientBlocks();
   }
 }

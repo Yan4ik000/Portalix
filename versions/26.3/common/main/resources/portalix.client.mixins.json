@@ -39,6 +39,7 @@
     "terrain.PortalViewAreaCameraMixin",
     "scene.PortalGameRendererMixin",
     "scene.PortalLevelRendererMixin",
+    "scene.TransientBlockRendererMixin",
     "scene.PortalPostPassMixin",
     "gpu.UniformUploadMixin",
     "gpu.VulkanDescriptorBindingsMixin",

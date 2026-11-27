@@ -88,6 +88,7 @@ public final class MinecraftSceneRenderer implements AutoCloseable {
             1,
             1);
     ((LevelRendererAccessor) renderer).portalix$state(state);
+    ((SceneTransientBlocks) renderer).portalix$transientBlockOwner(terrainOwner);
     extractor = new LevelExtractor(client, state, renderer);
     target = new TextureTarget("Portal", 1, 1, GpuFormat.RGBA8_UNORM, GpuFormat.D32_FLOAT);
   }
