@@ -2,6 +2,7 @@ package dev.portalix.world.chunk;
 
 import static org.junit.jupiter.api.Assertions.*;
 
+import dev.portalix.test.MinecraftTestBootstrap;
 import it.unimi.dsi.fastutil.longs.Long2IntOpenHashMap;
 import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
 import it.unimi.dsi.fastutil.longs.Long2ObjectLinkedOpenHashMap;
@@ -11,6 +12,7 @@ import java.util.List;
 import java.util.Random;
 import java.util.function.LongPredicate;
 import java.util.function.LongUnaryOperator;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import dev.portalix.api.PortalEndpoint;
 import java.util.UUID;
@@ -23,6 +25,11 @@ import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.Vec3;
 
 class ChunkAlgorithmsTest {
+  @BeforeAll
+  static void bootstrapMinecraft() {
+    MinecraftTestBootstrap.initialize();
+  }
+
   @Test
   void nativeLoadingSourcesCoverTheBorderOfAnExtendedPortalView() {
     var center = new ChunkPos(-126, 37);

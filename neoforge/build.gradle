@@ -43,6 +43,11 @@ neoForge {
             sourceSet sourceSets.client
         }
     }
+    unitTest {
+        enable()
+        testedMod = mods.portalix
+        loadedMods = [mods.portalix]
+    }
 }
 
 dependencies {
@@ -71,6 +76,18 @@ tasks.named('jar') {
 
 apply from: rootProject.file('gradle/testing/client-tests.gradle')
 neoForge.addModdingDependenciesTo(sourceSets.clientTest)
+tasks.named('clientTest', Test) {
+    def forgeTest = tasks.named('test', Test).get()
+    dependsOn 'prepareNeoForgeTestFiles'
+    workingDir layout.buildDirectory.dir('run/client-test')
+    doFirst { workingDir.mkdirs() }
+    jvmArgs(forgeTest.jvmArgs)
+    systemProperties(forgeTest.systemProperties)
+    // ModDevGradle's unit-test launcher registers only the default test source set.
+    def modFolders = files(sourceSets.main.output, sourceSets.client.output, sourceSets.clientTest.output)
+        .collect { "portalix%%${it.absolutePath}" }
+    systemProperty('fml.modFolders', modFolders.join(File.pathSeparator))
+}
 apply from: rootProject.file('gradle/testing/neoforge-regression.gradle')
 apply from: rootProject.file('gradle/testing/release-contracts.gradle')
 apply from: rootProject.file('gradle/testing/packaged-regression.gradle')

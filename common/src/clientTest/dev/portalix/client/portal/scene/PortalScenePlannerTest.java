@@ -12,18 +12,27 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 import java.util.function.Predicate;
+import net.minecraft.SharedConstants;
 import net.minecraft.client.renderer.state.level.CameraRenderState;
 import net.minecraft.core.Direction;
 import net.minecraft.core.SectionPos;
 import net.minecraft.resources.ResourceKey;
+import net.minecraft.server.Bootstrap;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.Vec3;
 import org.joml.Matrix4f;
 import org.joml.Matrix4fc;
 import org.joml.Quaternionf;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 class PortalScenePlannerTest {
+  @BeforeAll
+  static void bootstrapMinecraft() {
+    SharedConstants.tryDetectVersion();
+    Bootstrap.bootStrap();
+  }
+
   @Test
   void clippedEntrancesLeaveTheRegionBudgetForTheVisibleDescendant() {
     var root = root();

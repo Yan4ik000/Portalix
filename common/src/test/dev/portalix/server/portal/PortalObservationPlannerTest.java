@@ -9,6 +9,7 @@ import dev.portalix.portal.PortalLink;
 import dev.portalix.portal.PortalLinkId;
 import dev.portalix.portal.PortalViewLimits;
 import dev.portalix.portal.query.PlayerPortalVisibility;
+import dev.portalix.test.MinecraftTestBootstrap;
 import dev.portalix.world.chunk.ChunkViewUnion;
 import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
 import java.util.ArrayList;
@@ -19,9 +20,15 @@ import java.util.function.Function;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.phys.Vec3;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 class PortalObservationPlannerTest {
+  @BeforeAll
+  static void bootstrapMinecraft() {
+    MinecraftTestBootstrap.initialize();
+  }
+
   @Test
   void distantRegionsStayBoundedAndTheApproachingPortalKeepsItsCore() {
     var links = new ArrayList<PortalLink>();

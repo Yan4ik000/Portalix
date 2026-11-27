@@ -2,12 +2,19 @@ package dev.portalix.server.portal;
 
 import static org.junit.jupiter.api.Assertions.*;
 
+import dev.portalix.test.MinecraftTestBootstrap;
 import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
 import net.minecraft.server.level.ChunkTrackingView;
 import net.minecraft.world.level.ChunkPos;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 class PortalWarmTerrainTest {
+  @BeforeAll
+  static void bootstrapMinecraft() {
+    MinecraftTestBootstrap.initialize();
+  }
+
   @Test
   void reversalsAndChainsReuseOnlyDeliveredCurrentColumns() {
     var warm = new PortalWarmTerrain();
