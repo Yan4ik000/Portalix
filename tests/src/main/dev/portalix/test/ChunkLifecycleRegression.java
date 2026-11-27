@@ -7,6 +7,7 @@ import dev.portalix.api.PortalColor;
 import dev.portalix.item.ModItems;
 import dev.portalix.item.PortalixIdentity;
 import dev.portalix.item.PortalixVariant;
+import dev.portalix.mixin.world.tracking.ChunkMapAccessor;
 import dev.portalix.portal.PortalTopology;
 import dev.portalix.portal.traversal.EntityPortalState;
 import dev.portalix.portal.PortalLink;
@@ -192,7 +193,16 @@ final class ChunkLifecycleRegression implements ServerRegressionSuite.Scenario {
     check(now - started < 1000, "Portal terrain did not finish its load and release lifecycle");
     tracker.tick(world.level.getServer());
     if (!released) {
-      if (!world.level.areEntitiesActuallyLoadedAndTicking(destination)) return false;
+      if (!world.level.areEntitiesActuallyLoadedAndTicking(destination)) {
+        var chunks = (ChunkMapAccessor) world.level.getChunkSource().chunkMap;
+        var holder = chunks.portalix$getVisibleChunk(destination.pack());
+        if (holder == null) return false;
+        // GameTest ticks are unpaced. Wait for the work scheduled by the portal's ticket.
+        var ticking = holder.getEntityTickingChunkFuture();
+        world.level.getServer().managedBlock(ticking::isDone);
+        if (!ticking.join().isSuccess() || !world.level.isPositionEntityTicking(marker)) return false;
+        world.level.waitForEntities(destination, 0);
+      }
       check(world.level.getBlockState(marker).is(Blocks.GOLD_BLOCK), "Remote terrain lost its block edit");
       check(!PlayerPortalVisibility.of(world.player).eyes().isEmpty(), "Linked portal did not observe its exit terrain");
       verifySpectatorTickets();
