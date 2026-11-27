@@ -23,6 +23,7 @@ public final class ModResourceReload extends SimplePreparableReloadListener<Void
   private static boolean bundledPortalShaders;
   private static boolean bundledPortalDepthShaders;
   private static boolean bundledParticleShaders;
+  private static boolean bundledPortalRefraction;
 
   private ModResourceReload() {}
 
@@ -48,6 +49,10 @@ public final class ModResourceReload extends SimplePreparableReloadListener<Void
 
   public static boolean bundledParticleShaders() {
     return bundledParticleShaders;
+  }
+
+  public static boolean bundledPortalRefraction() {
+    return bundledPortalRefraction;
   }
 
   private static boolean vanillaShaders(ResourceManager resources, String... paths) {
@@ -90,6 +95,10 @@ public final class ModResourceReload extends SimplePreparableReloadListener<Void
         && vanillaScreenQuad
         && bundledShaders(resources, "shaders/core/source_particle.vsh",
             "shaders/core/source_particle.fsh", "shaders/core/shot_light_composite.fsh");
+    bundledPortalRefraction = sharedShaders
+        && bundledShaders(resources, "shaders/core/portal_particle.vsh",
+            "shaders/core/portal_particle_refract.fsh", "shaders/include/portal_particle_depth.glsl",
+            "shaders/include/portal_particle_output.glsl");
     bundledPortalShaders = sharedShaders
         && bundledShaders(resources, "shaders/core/portal.fsh", "shaders/core/portal.vsh",
             "shaders/include/source_portal.glsl");

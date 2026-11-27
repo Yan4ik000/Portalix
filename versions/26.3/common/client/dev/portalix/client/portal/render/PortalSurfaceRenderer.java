@@ -369,6 +369,7 @@ public final class PortalSurfaceRenderer implements FeatureRenderer<PortalSurfac
     PortalScreenRegion backgroundRegion = null;
     boolean bundledShaders = ModResourceReload.bundledPortalShaders();
     boolean oit = Minecraft.getInstance().gameRenderer.useImprovedTransparency();
+    boolean nativeOit = oit && !IrisShaders.active() && ModResourceReload.bundledPortalRefraction();
     Matrix4f viewProjection = null;
     StagedVertexBuffer staged = context.stagedVertexBuffer();
     List<PreparedDraw> draws = new ArrayList<>();
@@ -517,7 +518,8 @@ public final class PortalSurfaceRenderer implements FeatureRenderer<PortalSurfac
         bindings.add(
             new PreparedRenderType.Texture(
                 "Sampler0", texture.getTextureView(), texture.getSampler()));
-        if (batch.refract()) {
+        boolean postRefraction = batch.refract() && nativeOit;
+        if (batch.refract() && !postRefraction) {
           if (background == null) background = prepareBackground();
           backgroundRegion =
               PortalScreenRegion.full(background.texture.getWidth(0), background.texture.getHeight(0));
@@ -531,7 +533,8 @@ public final class PortalSurfaceRenderer implements FeatureRenderer<PortalSurfac
             : batch.additive() ? TINTED_PARTICLES : TRANSLUCENT_PARTICLES;
         var particles =
             new PreparedRenderType(
-                "Portal particles", pipelines.classic, pipelines.oit,
+                "Portal particles", postRefraction ? OitPortalRefraction.WAVE : pipelines.classic,
+                postRefraction ? null : pipelines.oit,
                 transform,
                 new com.mojang.blaze3d.systems.ScissorState(
                     RenderSystem.getScissorStateForRenderTypeDraws()),
@@ -557,8 +560,9 @@ public final class PortalSurfaceRenderer implements FeatureRenderer<PortalSurfac
   public void finishPrepare(FeatureFrameContext context) {
     if (groups.isEmpty() || !Minecraft.getInstance().gameRenderer.useImprovedTransparency()) return;
     RenderSystem.getSequentialBuffer(PrimitiveTopology.QUADS).resizeToRequestedIndexCount();
-    if (groups.stream().anyMatch(group -> !group.solid
-        && (group.markers != null || group.backgroundRegion != null))) {
+    if (groups.stream().anyMatch(group -> !group.solid && (group.markers != null
+        || group.backgroundRegion != null
+        || group.draws.stream().anyMatch(draw -> draw.renderType.pipeline() == OitPortalRefraction.WAVE)))) {
       PortalLevelDraws.beforeOit(() -> setupOit(context.stagedVertexBuffer()));
     }
   }
@@ -569,8 +573,15 @@ public final class PortalSurfaceRenderer implements FeatureRenderer<PortalSurfac
     var depth = target.getDepthTextureView();
     Background background = null;
     PortalScreenRegion region = null;
+    List<OitPortalRefraction.Wave> waves = new ArrayList<>();
     for (var group : groups) {
       if (group.solid) continue;
+      for (var draw : group.draws) {
+        if (draw.renderType.pipeline() != OitPortalRefraction.WAVE) continue;
+        var geometry = draw.particles == null ? staged.getExecuteInfo(draw.geometry)
+            : particleGeometry.get(draw.particles.persistentKey()).info();
+        if (geometry != null) waves.add(new OitPortalRefraction.Wave(draw.renderType, geometry));
+      }
       var markers = group.markers;
       if (markers != null) {
         for (var draw : group.draws) {
@@ -588,6 +599,7 @@ public final class PortalSurfaceRenderer implements FeatureRenderer<PortalSurfac
       }
     }
     if (region != null) copyBackground(background, color.texture(), region);
+    if (!waves.isEmpty()) PortalLevelDraws.captureRefraction(target, waves);
   }
 
   private ParticleGeometry updateParticleGeometry(PortalParticleMesh.Batch batch) {

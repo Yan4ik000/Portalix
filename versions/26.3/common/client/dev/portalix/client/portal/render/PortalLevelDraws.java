@@ -1,5 +1,7 @@
 package dev.portalix.client.portal.render;
 
+import com.mojang.blaze3d.pipeline.RenderTarget;
+import com.mojang.blaze3d.resource.GraphicsResourceAllocator;
 import com.mojang.renderpearl.api.textures.GpuTextureView;
 import java.util.ArrayList;
 import java.util.List;
@@ -12,8 +14,11 @@ public final class PortalLevelDraws {
   private final List<Runnable> beforeOit = new ArrayList<>();
   private final List<Runnable> afterTerrain = new ArrayList<>();
   private Consumer<OitInputs> oitLight;
+  private OitPortalRefraction oitRefraction;
+  private GraphicsResourceAllocator resources;
 
-  public void render(Runnable render) {
+  public void render(GraphicsResourceAllocator resources, Runnable render) {
+    this.resources = resources;
     try {
       ScopedValue.where(CURRENT, this).run(render);
     } finally {
@@ -21,6 +26,11 @@ public final class PortalLevelDraws {
       beforeOit.clear();
       afterTerrain.clear();
       oitLight = null;
+      if (oitRefraction != null) {
+        oitRefraction.close();
+        oitRefraction = null;
+      }
+      this.resources = null;
     }
   }
 
@@ -51,11 +61,31 @@ public final class PortalLevelDraws {
   public static void drawOitLight(LevelTargetBundle targets) {
     var draws = CURRENT.get();
     if (draws.oitLight == null) return;
-    draws.oitLight.accept(new OitInputs(
-        targets.main.get().getDepthTextureView(),
-        targets.depthBoundsCulled.get().getColorTextureView(),
-        targets.transmittance.stream().map(handle -> handle.get().getColorTextureView()).toList()));
+    draws.oitLight.accept(oitInputs(targets));
     draws.oitLight = null;
+  }
+
+  static void captureRefraction(RenderTarget target, List<OitPortalRefraction.Wave> waves) {
+    var draws = CURRENT.get();
+    draws.oitRefraction = new OitPortalRefraction(draws.resources, target, waves);
+    draws.oitRefraction.captureOpaque();
+  }
+
+  public static void drawOitRefraction(LevelTargetBundle targets) {
+    var draws = CURRENT.get();
+    var refraction = draws.oitRefraction;
+    if (refraction == null) return;
+    draws.oitRefraction = null;
+    try (refraction) {
+      var inputs = oitInputs(targets);
+      refraction.draw(inputs.depthBounds(), inputs.transmittance());
+    }
+  }
+
+  private static OitInputs oitInputs(LevelTargetBundle targets) {
+    return new OitInputs(targets.main.get().getDepthTextureView(),
+        targets.depthBoundsCulled.get().getColorTextureView(),
+        targets.transmittance.stream().map(handle -> handle.get().getColorTextureView()).toList());
   }
 
   public record OitInputs(

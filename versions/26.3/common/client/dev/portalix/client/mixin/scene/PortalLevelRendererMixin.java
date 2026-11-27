@@ -56,7 +56,7 @@ abstract class PortalLevelRendererMixin {
     if (!PortalSceneManager.isPortalView())
       PortalSceneManager.render(Minecraft.getInstance().getDeltaTracker(), camera.viewRotationMatrix);
     var shaders = ShaderBackend.INSTANCE;
-    portalix$draws.render(() -> {
+    portalix$draws.render(resources, () -> {
       Runnable render = () -> original.call(resources, outline, camera, fog, fogColor, sky, consistentDepth);
       if (shaders == null) render.run();
       else shaders.renderLevel(render);
@@ -116,6 +116,11 @@ abstract class PortalLevelRendererMixin {
       GpuTextureView depth, OptionalDouble clearDepth, Operation<RenderPass> original) {
     PortalLevelDraws.drawOitLight(targets);
     return original.call(encoder, name, color, clear, depth, clearDepth);
+  }
+
+  @Inject(method = "executeOit", at = @At("TAIL"))
+  private void portalix$afterOitComposite(CallbackInfo ci) {
+    PortalLevelDraws.drawOitRefraction(targets);
   }
 
   @WrapMethod(method = "executeClassicTransparency")
