@@ -3,6 +3,7 @@ package dev.portalix.test.client;
 import com.google.gson.GsonBuilder;
 import com.mojang.blaze3d.pipeline.RenderTarget;
 import com.mojang.blaze3d.systems.RenderSystem;
+import dev.portalix.client.compat.minecraft.MinecraftRenderAccess;
 import java.awt.image.BufferedImage;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -97,7 +98,7 @@ public final class FrameCapture {
   private static CameraSnapshot cameraSnapshot(Matrix4fc projection, CameraRenderState camera) {
     return new CameraSnapshot(camera.pos, camera.xRot, camera.yRot,
         new Matrix4f(projection), new Matrix4f(camera.viewRotationMatrix),
-        RenderSystem.getDevice().getDeviceInfo().isZZeroToOne());
+        MinecraftRenderAccess.zeroToOneDepth());
   }
 
   private static void read(RenderTarget target, Request request, CameraSnapshot camera, String source) {

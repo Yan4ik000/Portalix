@@ -2,6 +2,7 @@ package dev.portalix.test.client;
 
 import static dev.portalix.test.client.ClientAssertions.check;
 
+import dev.portalix.client.compat.minecraft.MinecraftRenderAccess;
 import dev.portalix.api.PortalEndpoint;
 import dev.portalix.portal.geometry.PortalAperture;
 import java.util.ArrayList;
@@ -174,7 +175,9 @@ final class PortalSceneAssertions {
       for (float element : elements) check(Float.isFinite(element), "The actual camera matrix is nonfinite");
     }
     var projection = (float[]) metadata.get("worldProjectionColumnMajor");
-    check(projection[0] > 0 && projection[5] > 0 && projection[14] > 0,
+    boolean nearPlane = MinecraftRenderAccess.reversedDepth()
+        ? projection[14] > 0 : projection[14] < 0;
+    check(projection[0] > 0 && projection[5] > 0 && nearPlane,
         "The actual perspective/near plane is degenerate");
     frame.assertNotBlack(new FrameCapture.Region(frame.width() / 10, frame.height() / 10,
         frame.width() * 4 / 5, frame.height() * 3 / 5));

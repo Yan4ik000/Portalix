@@ -24,7 +24,7 @@ final class GunGlowRenderer {
     }
     Matrix4f modelToView =
         mesh.isWorld()
-            ? RenderSystem.getModelViewMatrixCopy().mul(pose.last().pose())
+            ? new Matrix4f(RenderSystem.getModelViewStack()).mul(pose.last().pose())
             : new Matrix4f(pose.last().pose());
     BillboardOrientation facing = new BillboardOrientation(modelToView);
     Minecraft mc = Minecraft.getInstance();

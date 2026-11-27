@@ -20,7 +20,6 @@ import net.minecraft.network.protocol.game.ClientboundSetHeldSlotPacket;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.EntitySpawnReason;
-import net.minecraft.world.entity.EntityTypes;
 import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.entity.monster.zombie.Zombie;
 import net.minecraft.world.entity.vehicle.minecart.Minecart;
@@ -240,7 +239,7 @@ public final class WorldScenarioFixture implements AutoCloseable {
   }
 
   private void buildCourse() {
-    BlockState black = Blocks.CONCRETE.pick(DyeColor.BLACK).defaultBlockState();
+    BlockState black = TestContent.concrete(DyeColor.BLACK).defaultBlockState();
     if (area == Area.VEHICLE) {
       for (int x = 2; x <= 3; x++) for (int z = 0; z <= 2; z++) level.getChunk(x, z);
       buildVehicleStation(black);
@@ -272,7 +271,7 @@ public final class WorldScenarioFixture implements AutoCloseable {
     block(new BlockPos(33, 101, 14), Blocks.SEA_LANTERN.defaultBlockState());
 
     // Husks keep a stable health baseline in daylight; the chestplate identifies their portal image.
-    combatTarget = EntityTypes.HUSK.create(level, EntitySpawnReason.COMMAND);
+    combatTarget = TestEntityTypes.HUSK.create(level, EntitySpawnReason.COMMAND);
     if (combatTarget == null) throw new IllegalStateException("Could not create the combat target");
     var chestplate = new ItemStack(Items.LEATHER_CHESTPLATE);
     chestplate.set(DataComponents.DYED_COLOR, new DyedItemColor(0x00ff00));
@@ -308,7 +307,7 @@ public final class WorldScenarioFixture implements AutoCloseable {
     block(VEHICLE_COURSE.lever(), Blocks.LEVER.defaultBlockState()
         .setValue(BlockStateProperties.ATTACH_FACE, AttachFace.FLOOR)
         .setValue(BlockStateProperties.HORIZONTAL_FACING, Direction.NORTH));
-    vehicleCart = EntityTypes.MINECART.create(level, EntitySpawnReason.COMMAND);
+    vehicleCart = TestEntityTypes.MINECART.create(level, EntitySpawnReason.COMMAND);
     if (vehicleCart == null) throw new IllegalStateException("Could not create the station minecart");
     vehicleCart.snapTo(VEHICLE_COURSE.cartStart(), 0, 0);
     vehicleCart.setCustomName(Component.literal("Portal passenger transport"));

@@ -13,7 +13,7 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/Minecraft-26.2%20%2F%2026.3-0aa8e8?style=flat-square" alt="Minecraft 26.2 / 26.3">
+  <img src="https://img.shields.io/badge/Minecraft-26.1.2%20%2F%2026.2%20%2F%2026.3-0aa8e8?style=flat-square" alt="Minecraft 26.1.2 / 26.2 / 26.3">
   <img src="https://img.shields.io/badge/Fabric%20%2B%20NeoForge-ff6a00?style=flat-square" alt="Fabric + NeoForge">
   <img src="https://img.shields.io/badge/Статус-Release-34C924?style=flat-square" alt="Release">
 </p>
@@ -40,7 +40,7 @@
 
 Portalix изменяет работу многих подсистем Minecraft, поэтому совместимость с модами для оптимизации не гарантируется. Если вы столкнулись с ошибкой или несовместимостью с другим модом, создайте issue в GitHub-репозитории Portalix.
 
-Поддерживаются Sodium **0.9.2** и Iris на OpenGL (**1.11.4** для Minecraft 26.2, **1.11.7** для 26.3).
+Поддерживаются Sodium **0.9.2** и Iris на OpenGL (**1.11.4** для Minecraft 26.1.2 и 26.2, **1.11.7** для 26.3).
 
 ## Установка
 
@@ -48,6 +48,7 @@ Portalix изменяет работу многих подсистем Minecraft
 
 | Minecraft | Fabric Loader | Fabric API | NeoForge |
 | --- | --- | --- | --- |
+| 26.1.2 | 0.19.5+ | 0.155.3+26.1.2 | 26.1.2.129+ |
 | 26.2 | 0.19.5+ | 0.161.0+26.2 | 26.2.0.93+ |
 | 26.3 | 0.20.1+ | 0.166.2+26.3 | 26.3.0.115+ |
 
@@ -99,6 +100,7 @@ Portalix изменяет работу многих подсистем Minecraft
 ```sh
 ./gradlew build
 ./gradlew build -PmcVersion=26.2
+./gradlew build -PmcVersion=26.1.2
 ```
 
 JAR лежат в `fabric/build/<mc>/libs/` и `neoforge/build/<mc>/libs/`. Для одного загрузчика используйте `:fabric:build` или `:neoforge:build`.

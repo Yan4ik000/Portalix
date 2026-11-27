@@ -12,6 +12,10 @@ public interface TerrainIntegration {
   void restorePrimary();
   void exchangePrimary(LevelRenderer renderer);
   boolean meshesReady(LevelRenderer renderer, CameraRenderState camera);
+  static boolean usesOcclusionCulling(CameraRenderState camera) {
+    return camera.smartCull;
+  }
+
   boolean primaryOccludes(CameraRenderState camera, AABB bounds);
   void retarget(LevelRenderer renderer);
   void invalidateOcclusion(LevelRenderer renderer);

@@ -15,7 +15,7 @@
 | `./gradlew :testInfrastructure` | Работа запуска и проверки результатов |
 | `./gradlew build` | Сборка, JUnit и состав выпускаемых JAR |
 
-По умолчанию тесты запускаются на Minecraft 26.3. Для 26.2 добавьте `-PmcVersion=26.2` к Gradle или `--mc-version=26.2` к скрипту матрицы.
+По умолчанию тесты запускаются на Minecraft 26.3. Для 26.1.2 и 26.2 укажите нужную версию через `-PmcVersion` в Gradle или `--mc-version` в скрипте матрицы.
 
 Профиль по умолчанию - `fabric-native-opengl`. Список выводит `./gradlew :listTestProfiles`.
 
@@ -30,7 +30,7 @@
 python3 tests/test_matrix.py --packaged
 ```
 
-Матрица включает native, Sodium и Sodium + Iris на OpenGL, а также native и Sodium на Vulkan для обоих загрузчиков. Iris-профили используют Complementary Unbound с настройками HIGH.
+Матрица каждого загрузчика включает native, Sodium и Sodium + Iris на OpenGL. Версии 26.2 и 26.3 также проверяются с native и Sodium на Vulkan. Iris-профили используют Complementary Unbound с настройками HIGH (r5.8.1 на Minecraft 26.1.2, r5.9.3 на 26.2 и 26.3).
 
 Если Minecraft 26.2 зависает под Xwayland, запустите тесты через Wayland.
 

@@ -1,0 +1,47 @@
+package dev.portalix.client.platform;
+
+import com.mojang.blaze3d.pipeline.RenderPipeline;
+import dev.portalix.client.compat.minecraft.PipelineVariant;
+import dev.portalix.client.render.PortalRenderQueue;
+import java.util.ServiceLoader;
+import java.util.function.Supplier;
+import net.minecraft.client.KeyMapping;
+import net.minecraft.client.renderer.OrderedSubmitNodeCollector;
+import net.minecraft.client.resources.model.geometry.QuadCollection;
+import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
+import net.minecraft.resources.Identifier;
+import net.minecraft.server.packs.resources.PreparableReloadListener;
+import org.joml.Vector3fc;
+
+public interface ClientPlatform {
+  ClientPlatform INSTANCE =
+      ServiceLoader.load(ClientPlatform.class, ClientPlatform.class.getClassLoader())
+          .findFirst()
+          .orElseThrow();
+
+  enum Phase {
+    SOLID,
+    AFTER_TERRAIN,
+    TRANSLUCENT_CUSTOM_GEOMETRY
+  }
+
+  void registerReloadListener(Identifier id, PreparableReloadListener listener);
+
+  KeyMapping.Category registerKeyCategory(Identifier id);
+
+  void registerKeyMapping(KeyMapping mapping);
+
+  boolean canServerReceive(CustomPacketPayload.Type<?> type);
+
+  default void submit(OrderedSubmitNodeCollector collector, Phase phase, PortalRenderQueue.Submission node) {
+    node.enqueue(PortalRenderQueue.of(collector), phase);
+  }
+
+  void registerRenderEvents();
+
+  RenderPipeline pipeline(PipelineVariant variant);
+
+  default Supplier<Vector3fc[]> itemExtents(QuadCollection quads, Supplier<Vector3fc[]> original) {
+    return original;
+  }
+}

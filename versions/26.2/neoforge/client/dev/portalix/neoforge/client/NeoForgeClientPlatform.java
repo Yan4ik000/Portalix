@@ -28,8 +28,7 @@ import net.neoforged.neoforge.client.submit.RenderPhaseKeys;
 import net.neoforged.neoforge.common.NeoForge;
 
 public final class NeoForgeClientPlatform implements ClientPlatform {
-  @Override
-  public void registerFeatures() {
+  private void registerFeatures() {
     NeoForge.EVENT_BUS.addListener((RegisterFeatureRenderersEvent event) -> {
       event.register(GunMeshFeatureRenderer.TYPE, new GunMeshFeatureRenderer());
       event.register(PortalSurfaceRenderer.TYPE, new PortalSurfaceRenderer());
@@ -79,6 +78,7 @@ public final class NeoForgeClientPlatform implements ClientPlatform {
 
   @Override
   public void registerRenderEvents() {
+    registerFeatures();
     NeoForge.EVENT_BUS.addListener((SubmitCustomGeometryEvent event) ->
         GunRenderEvents.collect(event.getSubmitNodeCollector(), event.getLevelRenderState()));
     NeoForge.EVENT_BUS.addListener((RenderGuiLayerEvent.Post event) -> {

@@ -17,7 +17,6 @@ import net.minecraft.core.Direction;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.EntitySpawnReason;
-import net.minecraft.world.entity.EntityTypes;
 import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.entity.monster.zombie.Zombie;
 import net.minecraft.world.item.ItemStack;
@@ -268,7 +267,7 @@ final class CombatRegression implements ServerRegressionSuite.Scenario {
   }
 
   private Zombie zombie(Vec3 feet) {
-    var entity = EntityTypes.HUSK.create(world.level, EntitySpawnReason.COMMAND);
+    var entity = TestEntityTypes.HUSK.create(world.level, EntitySpawnReason.COMMAND);
     check(entity != null, "Could not create the combat target");
     entity.setPos(feet);
     entity.setNoAi(true);

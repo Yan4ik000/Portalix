@@ -1,6 +1,7 @@
 package dev.portalix.test.client;
 
 import com.google.gson.GsonBuilder;
+import dev.portalix.client.compat.minecraft.GuiAccess;
 import dev.portalix.client.portal.scene.PortalSceneManager;
 import dev.portalix.client.render.ParticleView;
 import dev.portalix.network.gun.GunShotPayload;
@@ -109,7 +110,7 @@ public final class VisualShotProbe {
 
   public static VisualShotProbe arm(FrameCapture.Frame baseline, Spec spec) {
     if (active != null) throw new IllegalStateException("A visual shot probe is already armed");
-    if (!Minecraft.getInstance().gui.hud.isHidden())
+    if (!GuiAccess.hidden(Minecraft.getInstance()))
       throw new IllegalStateException("Capture the shot baseline in normal F1 view: HUD and hand must be hidden");
     active = new VisualShotProbe(Objects.requireNonNull(baseline), Objects.requireNonNull(spec));
     return active;
@@ -196,7 +197,7 @@ public final class VisualShotProbe {
       throw new IllegalArgumentException("The effect ticket and captured frame describe different game ticks");
     if (frame.id() <= baseline.id()) throw new IllegalArgumentException("The sample predates its baseline");
     if (samples.size() >= 11) throw new IllegalStateException("Visual shot sample budget exceeded");
-    if (!Minecraft.getInstance().gui.hud.isHidden()) violations.add("HUD/hand became visible during the particle-only observation");
+    if (!GuiAccess.hidden(Minecraft.getInstance())) violations.add("HUD/hand became visible during the particle-only observation");
     boolean stable = frame.cameraPosition().distanceTo(baseline.cameraPosition()) <= .02
         && Math.abs(Mth.wrapDegrees(frame.cameraYaw() - baseline.cameraYaw())) <= .1
         && Math.abs(frame.cameraPitch() - baseline.cameraPitch()) <= .1;

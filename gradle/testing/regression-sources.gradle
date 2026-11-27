@@ -48,6 +48,9 @@ ext.benchmarkReportDirectory = rootProject.layout.buildDirectory.dir("reports/be
         moduleName = project.name
         backend = profile.backend
         shaders = profile.renderer == 'sodium-iris'
+        shaderPackName = rootProject.regressionShaderPack.name
+        shaderPackUrl = rootProject.regressionShaderPack.url
+        shaderPackHash = rootProject.regressionShaderPack.sha512
         supported = profile.supported
         runDirectory = benchmark ? benchmarkRunDirectory : regressionRunDirectory
         reportDirectory = benchmark ? benchmarkReportDirectory : regressionReportDirectory

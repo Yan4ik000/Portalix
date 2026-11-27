@@ -22,15 +22,20 @@ abstract class PrepareRegressionRun extends DefaultTask {
     @Input abstract Property<String> getModuleName()
     @Input abstract Property<String> getBackend()
     @Input abstract Property<Boolean> getShaders()
+    @Input abstract Property<String> getShaderPackName()
+    @Input abstract Property<String> getShaderPackUrl()
+    @Input abstract Property<String> getShaderPackHash()
     @Input abstract Property<Boolean> getSupported()
     @Internal abstract DirectoryProperty getRunDirectory()
     @Internal abstract DirectoryProperty getReportDirectory()
     @Internal abstract DirectoryProperty getShaderCacheDirectory()
     @InputFiles @PathSensitive(PathSensitivity.NONE) abstract ConfigurableFileCollection getMinecraftClasspath()
 
-    static final String SHADER = 'ComplementaryUnbound_r5.9.3.zip'
-    static final String SHADER_URL = 'https://cdn.modrinth.com/data/R6NEzAwj/versions/B1kyfoUZ/' + SHADER
-    static final String SHADER_HASH = 'a085d1d8cda67cd17a2b414eeba48bbd809da069f269bab46246235ec8fe714a275013c70d0504527b0987d810deddddba4564332414ab3b3bd7435932ff808c'
+    static final Map DEFAULT_SHADER_PACK = [
+        name: 'ComplementaryUnbound_r5.9.3.zip',
+        url: 'https://cdn.modrinth.com/data/R6NEzAwj/versions/B1kyfoUZ/ComplementaryUnbound_r5.9.3.zip',
+        sha512: 'a085d1d8cda67cd17a2b414eeba48bbd809da069f269bab46246235ec8fe714a275013c70d0504527b0987d810deddddba4564332414ab3b3bd7435932ff808c'
+    ].asImmutable()
     static final String IRIS_VULKAN_REASON = 'The reviewed Iris version disables shader support on the native Vulkan backend. OpenGL substitution is forbidden.'
 
     @TaskAction void prepare() {
@@ -103,26 +108,28 @@ mipmapLevels:4
 guiScale:2
 ''' + "preferredGraphicsBackend:\"${backend.get()}\"\n", 'UTF-8')
         if (shaders.get()) {
-            File cached = new File(shaderCacheDirectory.get().asFile, SHADER)
+            String pack = shaderPackName.get()
+            String hash = shaderPackHash.get()
+            File cached = new File(shaderCacheDirectory.get().asFile, pack)
             if (!cached.exists()) {
                 cached.parentFile.mkdirs()
-                File temporary = new File(cached.parentFile, SHADER + '.part')
-                def connection = URI.create(SHADER_URL).toURL().openConnection()
+                File temporary = new File(cached.parentFile, pack + '.part')
+                def connection = URI.create(shaderPackUrl.get()).toURL().openConnection()
                 connection.connectTimeout = 30000
                 connection.readTimeout = 60000
                 connection.setRequestProperty('User-Agent', 'Portalix-regression-tests/1')
                 connection.inputStream.withCloseable { input -> temporary.withOutputStream { it << input } }
-                verifyShader(temporary)
+                verifyShader(temporary, hash)
                 java.nio.file.Files.move(temporary.toPath(), cached.toPath(), java.nio.file.StandardCopyOption.REPLACE_EXISTING)
             }
-            verifyShader(cached)
-            File shader = new File(run, 'shaderpacks/' + SHADER)
+            verifyShader(cached, hash)
+            File shader = new File(run, 'shaderpacks/' + pack)
             shader.parentFile.mkdirs()
             java.nio.file.Files.copy(cached.toPath(), shader.toPath(), java.nio.file.StandardCopyOption.REPLACE_EXISTING)
             File config = new File(run, 'config/iris.properties')
             config.parentFile.mkdirs()
-            config.setText("enableShaders=true\nshaderPack=${SHADER}\ndisableUpdateMessage=true\n", 'UTF-8')
-            java.nio.file.Files.deleteIfExists(new File(run, 'shaderpacks/' + SHADER + '.txt').toPath())
+            config.setText("enableShaders=true\nshaderPack=${pack}\ndisableUpdateMessage=true\n", 'UTF-8')
+            java.nio.file.Files.deleteIfExists(new File(run, 'shaderpacks/' + pack + '.txt').toPath())
         }
         new File(report, 'launch-start.json').setText(JsonOutput.toJson(
             [profile: profileName.get(), clientTest: clientTestSelection.get(), startedAt: System.currentTimeMillis()]), 'UTF-8')
@@ -150,14 +157,14 @@ guiScale:2
         })
     }
 
-    private static void verifyShader(File file) {
+    private static void verifyShader(File file, String hash) {
         def digest = MessageDigest.getInstance('SHA-512')
         file.withInputStream { input ->
             byte[] buffer = new byte[65536]
             int count
             while ((count = input.read(buffer)) != -1) digest.update(buffer, 0, count)
         }
-        if (digest.digest().encodeHex().toString() != SHADER_HASH)
+        if (digest.digest().encodeHex().toString() != hash)
             throw new GradleException("Complementary Unbound checksum mismatch: ${file}")
     }
 }

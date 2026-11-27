@@ -2,6 +2,8 @@ package dev.portalix.test.client;
 
 import static dev.portalix.test.client.ClientAssertions.check;
 
+import dev.portalix.client.compat.minecraft.GuiAccess;
+import dev.portalix.client.compat.minecraft.MinecraftRenderAccess;
 import dev.portalix.client.portal.camera.PortalCameraController;
 import dev.portalix.client.portal.scene.PortalSceneManager;
 import dev.portalix.platform.ModPresence;
@@ -89,7 +91,7 @@ final class CameraSystemScene implements ClientSystemScene {
     input = new ScenarioInput(client);
     originalFov = client.options.fov().get();
     originalPerspective = client.options.getCameraType();
-    originalHidden = client.gui.hud.isHidden();
+    originalHidden = GuiAccess.hidden(client);
     if (ModPresence.INSTANCE.isLoaded("neoforge"))
       cases.addFirst(new Case("neoforge-detached-distance-event", Kind.EXTENDED_BOOM,
           Direction.SOUTH, Direction.SOUTH, 0, 10, 70, CameraType.THIRD_PERSON_FRONT));
@@ -112,7 +114,7 @@ final class CameraSystemScene implements ClientSystemScene {
     var path = new ArrayList<>(bodyCameraPath);
     if (view != null) path.addAll(view.spacePath());
     Vec3 position = camera.position();
-    var rotation = new Quaternionf(client.gameRenderer.mainCamera().rotation());
+    var rotation = new Quaternionf(MinecraftRenderAccess.camera(client).rotation());
     for (var link : path.reversed()) {
       position = link.inverse().transform().point(position);
       rotation.premul(link.inverse().transform().rotation());
@@ -147,7 +149,7 @@ final class CameraSystemScene implements ClientSystemScene {
     if (phase == Phase.DONE) return true;
     if (phase == Phase.ACTION) observeBodyCrossing();
     if (++age >= 700) throw timeout();
-    client.gui.hud.setOverlayMessage(Component.literal("Camera system: " + spec().id), false);
+    GuiAccess.setOverlayMessage(client, Component.literal("Camera system: " + spec().id), false);
     switch (phase) {
       case SETUP -> {
         if (!frames.pause()) return false;
@@ -155,7 +157,7 @@ final class CameraSystemScene implements ClientSystemScene {
         if (setup == null) {
           client.options.setCameraType(CameraType.FIRST_PERSON);
           client.options.fov().set(spec().fov);
-          if (client.gui.hud.isHidden()) client.gui.hud.toggle();
+          if (GuiAccess.hidden(client)) GuiAccess.toggleHud(client);
           var player = client.player.getUUID();
           var server = client.getSingleplayerServer();
           setup = server.submit(() -> {
@@ -314,7 +316,7 @@ final class CameraSystemScene implements ClientSystemScene {
       if (client.player.tickCount - exitMotionTick < 12) return;
       input.stop();
       check(after.dot(mouseBefore) < .9995, "Native mouse input did not affect the post-portal look direction");
-      if (!upright(client.gameRenderer.mainCamera().rotation()) || PortalPassagePose.scale(client.player) < .999) return;
+      if (!upright(MinecraftRenderAccess.camera(client).rotation()) || PortalPassagePose.scale(client.player) < .999) return;
       authoritative = client.getSingleplayerServer().submit(fixture::crossedEntrance);
       action = 5;
     }
@@ -480,7 +482,7 @@ final class CameraSystemScene implements ClientSystemScene {
   }
 
   private Pose snapshot() {
-    var camera = client.gameRenderer.mainCamera();
+    var camera = MinecraftRenderAccess.camera(client);
     var view = PortalCameraController.currentView();
     return new Pose(client.player.position(), client.player.getBoundingBox(), PortalPassagePose.scale(client.player),
         client.player.getEyeHeight(), camera.position(), new Quaternionf(camera.rotation()),
@@ -500,7 +502,7 @@ final class CameraSystemScene implements ClientSystemScene {
     ClientRegressionRunner.setDetachedCameraDistance(Float.NaN);
     client.options.fov().set(originalFov);
     client.options.setCameraType(originalPerspective);
-    if (client.gui.hud.isHidden() != originalHidden) client.gui.hud.toggle();
+    if (GuiAccess.hidden(client) != originalHidden) GuiAccess.toggleHud(client);
     CompletableFuture<Void> pending = CompletableFuture.allOf(Stream.of(setup, mutation, readiness, authoritative)
         .filter(Objects::nonNull).toArray(CompletableFuture<?>[]::new));
     return pending.handle((ignored, failure) -> null).thenCompose(ignored -> client.getSingleplayerServer().submit(() -> {

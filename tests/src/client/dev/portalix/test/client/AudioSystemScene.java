@@ -3,6 +3,7 @@ package dev.portalix.test.client;
 import static dev.portalix.test.client.ClientAssertions.check;
 
 import com.google.gson.GsonBuilder;
+import dev.portalix.client.compat.minecraft.MinecraftRenderAccess;
 import dev.portalix.client.gun.sound.SourcePositionalSound;
 import dev.portalix.client.portal.audio.PortalAudioChannelAccess;
 import dev.portalix.portal.PortalTopology;
@@ -63,7 +64,7 @@ final class AudioSystemScene extends PortalPreparedScene {
       case PLAY -> {
         Vec3 remote = arrangement.exit().center().add(arrangement.exit().normal().scale(3))
             .add(0, client.player.getEyeHeight() - 1, 0);
-        Vec3 listener = client.gameRenderer.mainCamera().position();
+        Vec3 listener = MinecraftRenderAccess.camera(client).position();
         for (int i = 0; i < SOURCE_COUNT; i++) {
           boolean throughPortal = i % 2 == 0;
           Vec3 emitter = throughPortal ? remote.add(arrangement.exit().right().scale(i * .01))

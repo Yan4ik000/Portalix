@@ -15,7 +15,7 @@ The suite includes JUnit tests for mod logic and gameplay scenarios on Fabric an
 | `./gradlew :testInfrastructure` | Launching tests and checking results |
 | `./gradlew build` | Build, JUnit and contents of release JARs |
 
-Tests default to Minecraft 26.3. For 26.2, add `-PmcVersion=26.2` to Gradle or `--mc-version=26.2` to the matrix script.
+Tests default to Minecraft 26.3. For 26.1.2 or 26.2, select the version with Gradle’s `-PmcVersion` or the matrix script’s `--mc-version`.
 
 The default profile is `fabric-native-opengl`. Run `./gradlew :listTestProfiles` to list profiles.
 
@@ -30,7 +30,7 @@ Run all supported graphics profiles with the built JARs.
 python3 tests/test_matrix.py --packaged
 ```
 
-The matrix includes native, Sodium and Sodium + Iris on OpenGL, as well as native and Sodium on Vulkan, for both loaders. Iris profiles use Complementary Unbound with HIGH settings.
+The matrix covers native, Sodium and Sodium + Iris on OpenGL for both loaders. The 26.2 and 26.3 matrices also cover native and Sodium on Vulkan. Iris profiles use Complementary Unbound with HIGH settings (r5.8.1 on Minecraft 26.1.2, r5.9.3 on 26.2 and 26.3).
 
 If Minecraft 26.2 hangs under Xwayland, run the tests on Wayland.
 

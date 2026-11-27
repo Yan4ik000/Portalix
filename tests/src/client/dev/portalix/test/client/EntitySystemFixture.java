@@ -13,6 +13,8 @@ import dev.portalix.portal.placement.PortalSurface;
 import dev.portalix.portal.traversal.EntityPortalState;
 import dev.portalix.portal.traversal.PortalItemRotation;
 import dev.portalix.server.portal.GunPortalRegistry;
+import dev.portalix.test.TestContent;
+import dev.portalix.test.TestEntityTypes;
 import dev.portalix.test.mixin.PortalServerSessionAccessor;
 import dev.portalix.test.mixin.PortalServerEventsAccessor;
 import java.util.ArrayList;
@@ -26,7 +28,6 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntitySpawnReason;
-import net.minecraft.world.entity.EntityTypes;
 import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.entity.Mob;
 import net.minecraft.world.entity.item.ItemEntity;
@@ -79,7 +80,7 @@ final class EntitySystemFixture implements AutoCloseable {
       for (int x = 8; x <= 10; x++) for (int z = 31; z <= 32; z++) level.getChunk(x, z);
       for (BlockPos pos : BlockPos.betweenClosed(new BlockPos(136, 99, 497), new BlockPos(168, 105, 521)))
         block(pos, pos.getY() == 99 ? Blocks.QUARTZ_BLOCK.defaultBlockState() : Blocks.AIR.defaultBlockState());
-      var backdrop = Blocks.CONCRETE.pick(DyeColor.GRAY).defaultBlockState();
+      var backdrop = TestContent.concrete(DyeColor.GRAY).defaultBlockState();
       for (int x : new int[] {144, 160})
         for (BlockPos pos : BlockPos.betweenClosed(new BlockPos(x - 2, 100, 496), new BlockPos(x + 2, 105, 496)))
           block(pos, backdrop);
@@ -117,11 +118,11 @@ final class EntitySystemFixture implements AutoCloseable {
   private Entity createEntity(Kind kind, Vec3 center) {
     return switch (kind) {
       case ITEM -> new ItemEntity(level, center.x, center.y, center.z, new ItemStack(Items.DIAMOND_BLOCK, 7));
-      case CHICKEN -> EntityTypes.CHICKEN.create(level, EntitySpawnReason.COMMAND);
-      case PIG -> EntityTypes.PIG.create(level, EntitySpawnReason.COMMAND);
-      case SNOWBALL -> EntityTypes.SNOWBALL.create(level, EntitySpawnReason.COMMAND);
-      case ARROW -> EntityTypes.ARROW.create(level, EntitySpawnReason.COMMAND);
-      case TRIDENT -> EntityTypes.TRIDENT.create(level, EntitySpawnReason.COMMAND);
+      case CHICKEN -> TestEntityTypes.CHICKEN.create(level, EntitySpawnReason.COMMAND);
+      case PIG -> TestEntityTypes.PIG.create(level, EntitySpawnReason.COMMAND);
+      case SNOWBALL -> TestEntityTypes.SNOWBALL.create(level, EntitySpawnReason.COMMAND);
+      case ARROW -> TestEntityTypes.ARROW.create(level, EntitySpawnReason.COMMAND);
+      case TRIDENT -> TestEntityTypes.TRIDENT.create(level, EntitySpawnReason.COMMAND);
     };
   }
 
@@ -148,8 +149,11 @@ final class EntitySystemFixture implements AutoCloseable {
     var actor = entity(ref);
     actor.setNoGravity(false);
     if (actor instanceof Mob mob) mob.setNoAi(false);
-    if (actor instanceof Projectile projectile) projectile.shoot(0, 0, 1, 1, 0);
-    else actor.setDeltaMovement(0, 0, .7);
+    if (actor instanceof Projectile projectile) {
+      // Show the arrow shaft in both frame axes even when a shader pack antialiases its edges.
+      double rise = ref.kind() == Kind.ARROW ? .35 : 0;
+      projectile.shoot(0, rise, 1, 1, 0);
+    } else actor.setDeltaMovement(0, 0, .7);
   }
 
   Observation observe(Ref ref) {

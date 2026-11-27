@@ -25,7 +25,6 @@ import net.minecraft.network.protocol.game.ClientboundBundlePacket;
 import net.minecraft.network.protocol.game.ClientboundPlayerPositionPacket;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntitySpawnReason;
-import net.minecraft.world.entity.EntityTypes;
 import net.minecraft.world.entity.Mob;
 import net.minecraft.world.entity.MoverType;
 import net.minecraft.world.entity.item.ItemEntity;
@@ -78,8 +77,8 @@ final class NativeEntityRegression {
     var link = world.link(entrance, exit);
     world.publish(link);
     PlayerPortalVisibility.of(world.player).ready(link);
-    var boat = world.add(EntityTypes.OAK_BOAT.create(world.level, EntitySpawnReason.COMMAND));
-    var passenger = world.add(EntityTypes.CHICKEN.create(world.level, EntitySpawnReason.COMMAND));
+    var boat = world.add(TestEntityTypes.OAK_BOAT.create(world.level, EntitySpawnReason.COMMAND));
+    var passenger = world.add(TestEntityTypes.CHICKEN.create(world.level, EntitySpawnReason.COMMAND));
     boat.setPos(entrance.center().add(0, .1 - boat.getBbHeight() / 2, 0));
     check(world.player.startRiding(boat, true, false) && passenger.startRiding(boat, true, false)
             && boat.getControllingPassenger() == world.player, "Could not seat both boat passengers");
@@ -128,7 +127,7 @@ final class NativeEntityRegression {
     world.publish(link);
     PlayerPortalVisibility.of(world.player).ready(link);
     PlayerPortalVisibility.of(world.player).ready(link.inverse());
-    var boat = EntityTypes.OAK_BOAT.create(world.level, EntitySpawnReason.COMMAND);
+    var boat = TestEntityTypes.OAK_BOAT.create(world.level, EntitySpawnReason.COMMAND);
     check(boat != null, "Boat factory failed");
     world.add(boat);
     Vec3 start = new Vec3(192.5, 104.43884155832265, 145.68968187003136);
@@ -175,9 +174,9 @@ final class NativeEntityRegression {
   }
 
   private static void nestedPassengerGeometry(RegressionWorld world) {
-    var vehicle = EntityTypes.OAK_BOAT.create(world.level, EntitySpawnReason.COMMAND);
-    var passenger = EntityTypes.PIG.create(world.level, EntitySpawnReason.COMMAND);
-    var nested = EntityTypes.CHICKEN.create(world.level, EntitySpawnReason.COMMAND);
+    var vehicle = TestEntityTypes.OAK_BOAT.create(world.level, EntitySpawnReason.COMMAND);
+    var passenger = TestEntityTypes.PIG.create(world.level, EntitySpawnReason.COMMAND);
+    var nested = TestEntityTypes.CHICKEN.create(world.level, EntitySpawnReason.COMMAND);
     check(vehicle != null && passenger != null && nested != null, "Nested passenger factory failed");
     world.add(vehicle);
     world.add(passenger);
@@ -222,7 +221,7 @@ final class NativeEntityRegression {
       world.block(pos, Blocks.RAIL.defaultBlockState()
           .setValue(BlockStateProperties.RAIL_SHAPE, RailShape.EAST_WEST));
     }
-    Minecart cart = EntityTypes.MINECART.create(world.level, EntitySpawnReason.COMMAND);
+    Minecart cart = TestEntityTypes.MINECART.create(world.level, EntitySpawnReason.COMMAND);
     check(cart != null, "Minecart factory failed");
     if (improved)
       ((RegressionMinecartBehaviorAccessor) cart).portalix$behavior(new NewMinecartBehavior(cart));
@@ -273,7 +272,7 @@ final class NativeEntityRegression {
             .setValue(BlockStateProperties.RAIL_SHAPE, RailShape.NORTH_SOUTH));
       }
     }
-    Minecart cart = EntityTypes.MINECART.create(world.level, EntitySpawnReason.COMMAND);
+    Minecart cart = TestEntityTypes.MINECART.create(world.level, EntitySpawnReason.COMMAND);
     check(cart != null, "Minecart factory failed");
     if (improved)
       ((RegressionMinecartBehaviorAccessor) cart).portalix$behavior(new NewMinecartBehavior(cart));
@@ -373,8 +372,8 @@ final class NativeEntityRegression {
 
   private static void animal(RegressionWorld world, boolean withPassenger) {
     PortalLink link = portals(world, Direction.EAST);
-    Mob animal = withPassenger ? EntityTypes.PIG.create(world.level, EntitySpawnReason.COMMAND)
-        : EntityTypes.CHICKEN.create(world.level, EntitySpawnReason.COMMAND);
+    Mob animal = withPassenger ? TestEntityTypes.PIG.create(world.level, EntitySpawnReason.COMMAND)
+        : TestEntityTypes.CHICKEN.create(world.level, EntitySpawnReason.COMMAND);
     check(animal != null, "Animal factory failed");
     world.add(animal);
     animal.setNoAi(false);
@@ -382,7 +381,7 @@ final class NativeEntityRegression {
     animal.setDeltaMovement(0, 0, 1.6);
     Mob passenger = null;
     if (withPassenger) {
-      passenger = EntityTypes.CHICKEN.create(world.level, EntitySpawnReason.COMMAND);
+      passenger = TestEntityTypes.CHICKEN.create(world.level, EntitySpawnReason.COMMAND);
       check(passenger != null, "Passenger factory failed");
       world.add(passenger);
       passenger.setNoAi(true);
@@ -423,7 +422,7 @@ final class NativeEntityRegression {
 
   private static void leash(RegressionWorld world) {
     PortalLink link = portals(world, Direction.SOUTH);
-    var pig = EntityTypes.PIG.create(world.level, EntitySpawnReason.COMMAND);
+    var pig = TestEntityTypes.PIG.create(world.level, EntitySpawnReason.COMMAND);
     check(pig != null, "Leash animal factory failed");
     world.add(pig);
     pig.setNoAi(false);

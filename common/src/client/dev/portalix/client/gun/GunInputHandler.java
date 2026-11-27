@@ -4,6 +4,7 @@ import dev.portalix.PortalixMod;
 import dev.portalix.client.ClientNetworking;
 import dev.portalix.client.PortalixClient;
 import dev.portalix.client.carry.CarryOwnerState;
+import dev.portalix.client.compat.minecraft.GuiAccess;
 import dev.portalix.client.platform.ClientPlatform;
 import dev.portalix.gun.GunFireTiming;
 import dev.portalix.gun.GunPermissions;
@@ -50,7 +51,7 @@ public final class GunInputHandler {
   }
 
   public void tick(Minecraft mc, boolean equipped) {
-    if (equipped && mc.gui.screen() == null && !mc.isPaused()) {
+    if (equipped && GuiAccess.screen(mc) == null && !mc.isPaused()) {
       while (grabKey.consumeClick()) {
         send(GunCommand.TOGGLE_GRAB);
       }
@@ -82,7 +83,7 @@ public final class GunInputHandler {
     if (command == null || command == GunCommand.SYNC_STATE) return;
     Minecraft client = Minecraft.getInstance();
     if (!GunPermissions.canUse(client.player)
-        || client.gui.screen() != null
+        || GuiAccess.screen(client) != null
         || client.isPaused()
         || !ClientNetworking.canServerReceive(GunCommandPayload.TYPE)) return;
     var animation = PortalixClient.localAnimation();

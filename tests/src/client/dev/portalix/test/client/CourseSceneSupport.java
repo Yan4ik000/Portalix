@@ -1,5 +1,6 @@
 package dev.portalix.test.client;
 
+import dev.portalix.client.compat.minecraft.GuiAccess;
 import dev.portalix.test.WorldScenarioFixture;
 import dev.portalix.test.mixin.PortalServerSessionAccessor;
 import dev.portalix.test.mixin.PortalServerEventsAccessor;
@@ -85,7 +86,7 @@ abstract class CourseSceneSupport implements ClientSystemScene {
     }
     if (!preparation.isDone()) return false;
     fixture = preparation.join();
-    if (client.player.position().distanceTo(feet) > .1 || client.gui.overlay() != null
+    if (client.player.position().distanceTo(feet) > .1 || GuiAccess.overlay(client) != null
         || !client.levelRenderer.hasRenderedAllSections()) return false;
     return true;
   }

@@ -4,6 +4,7 @@ import static dev.portalix.test.client.ClientAssertions.check;
 
 import com.google.gson.GsonBuilder;
 import dev.portalix.client.PortalixClient;
+import dev.portalix.client.compat.minecraft.GuiAccess;
 import dev.portalix.item.PortalixIdentity;
 import dev.portalix.item.PortalixVariant;
 import dev.portalix.test.WorldScenarioFixture;
@@ -64,7 +65,7 @@ final class GunVariantsScenario {
     position = client.player.position();
     originalAim = client.player.getEyePosition().add(client.player.getLookAngle().scale(5));
     floorAim = client.player.getEyePosition().add(5, -2, 0);
-    check(client.options.getCameraType() == CameraType.FIRST_PERSON && !client.gui.hud.isHidden(),
+    check(client.options.getCameraType() == CameraType.FIRST_PERSON && !GuiAccess.hidden(client),
         "Gun variants require the normal visible first-person camera");
     check(client.player.getInventory().getSelectedSlot() == 0
         && fixture.gunId().equals(PortalixIdentity.get(client.player.getMainHandItem())),
@@ -88,10 +89,10 @@ final class GunVariantsScenario {
     if (step == Step.DONE) return true;
     check(++age < 400, "Gun variant scenario timed out during " + title());
     check(client.player.position().distanceTo(position) < .05, "Gun variant evidence must not reposition the player");
-    check(client.options.getCameraType() == CameraType.FIRST_PERSON && !client.gui.hud.isHidden(),
+    check(client.options.getCameraType() == CameraType.FIRST_PERSON && !GuiAccess.hidden(client),
         "Gun variant evidence lost the real first-person hand view");
     // Identical text prevents a changed stage caption from contributing to paired hand differences.
-    client.gui.hud.setOverlayMessage(CAPTION, false);
+    GuiAccess.setOverlayMessage(client, CAPTION, false);
     switch (step) {
       case PREPARE_VIEW -> {
         if (!frames.pause()) return false;

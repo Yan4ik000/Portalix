@@ -4,6 +4,7 @@ import static dev.portalix.portal.PortalViewLimits.MAX_PREVIEW_RADIUS;
 import static dev.portalix.portal.PortalViewLimits.MIN_PREVIEW_RADIUS;
 
 import dev.portalix.client.PortalixClient;
+import dev.portalix.client.compat.minecraft.GuiAccess;
 import java.util.function.IntConsumer;
 import net.minecraft.client.gui.components.AbstractSliderButton;
 import net.minecraft.client.gui.components.Button;
@@ -20,7 +21,7 @@ import net.minecraft.util.CommonColors;
 
 public final class PortalixSettingsScreen extends Screen {
   private final Screen parent;
-  private final HeaderAndFooterLayout layout = new HeaderAndFooterLayout(this);
+  private HeaderAndFooterLayout layout;
   private boolean showCrosshair;
   private int ownDistance;
   private int otherDistance;
@@ -38,7 +39,7 @@ public final class PortalixSettingsScreen extends Screen {
 
   @Override
   protected void init() {
-    layout.removeChildren();
+    layout = new HeaderAndFooterLayout(this);
     layout.addTitleHeader(title, font);
     int controlWidth = Math.min(310, width - 24);
     var options = layout.addToContents(LinearLayout.vertical().spacing(4));
@@ -67,13 +68,13 @@ public final class PortalixSettingsScreen extends Screen {
 
   @Override
   public void onClose() {
-    minecraft.gui.setScreen(parent);
+    GuiAccess.setScreen(minecraft, parent);
   }
 
   private void save() {
     var settings = new PortalixClientSettings(showCrosshair, ownDistance, otherDistance, ambientSound);
     if (!PortalixClientSettings.save(settings)) {
-      minecraft.gui.setScreen(new AlertScreen(() -> minecraft.gui.setScreen(this),
+      GuiAccess.setScreen(minecraft, new AlertScreen(() -> GuiAccess.setScreen(minecraft, this),
           title, Component.translatable("options.portalix.save_error"), CommonComponents.GUI_BACK, false));
       return;
     }

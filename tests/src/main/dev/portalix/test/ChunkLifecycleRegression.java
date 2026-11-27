@@ -35,7 +35,6 @@ import net.minecraft.network.protocol.game.ClientboundSoundEntityPacket;
 import net.minecraft.network.protocol.game.ClientboundSoundPacket;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
-import net.minecraft.world.entity.EntityTypes;
 import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.entity.animal.chicken.Chicken;
 import net.minecraft.world.item.ItemStack;
@@ -272,7 +271,7 @@ final class ChunkLifecycleRegression implements ServerRegressionSuite.Scenario {
     var observers = visibility.observers();
     var simulation = visibility.simulationChunks();
     visibility.resetObservation(new LongOpenHashSet());
-    var chicken = new Chicken(EntityTypes.CHICKEN, world.level);
+    var chicken = new Chicken(TestEntityTypes.CHICKEN, world.level);
     chicken.setPos(source);
     world.add(chicken);
     world.channel.flushOutbound();

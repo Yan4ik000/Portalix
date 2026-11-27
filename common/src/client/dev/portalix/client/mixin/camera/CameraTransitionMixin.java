@@ -4,6 +4,7 @@ import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
 import com.llamalad7.mixinextras.sugar.Share;
 import com.llamalad7.mixinextras.sugar.ref.LocalRef;
+import dev.portalix.client.compat.minecraft.MinecraftRenderAccess;
 import dev.portalix.client.PortalixClient;
 import dev.portalix.client.portal.camera.CameraOrientationAccess;
 import dev.portalix.client.portal.camera.PortalCameraController;
@@ -81,7 +82,7 @@ abstract class CameraTransitionMixin implements CameraOrientationAccess {
       target = "Lnet/minecraft/client/Camera;createProjectionMatrixForCulling()Lorg/joml/Matrix4f;"))
   private void portalix$portalFarPlane(DeltaTracker tracker, CallbackInfo ci) {
     var client = Minecraft.getInstance();
-    if ((Object) this != client.gameRenderer.mainCamera()) return;
+    if ((Object) this != MinecraftRenderAccess.camera(client)) return;
     var view = PortalCameraController.currentView();
     if (view == null || view.spacePath().isEmpty()) return;
     var link = view.spacePath().getLast();

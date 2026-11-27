@@ -25,8 +25,6 @@ public interface ClientPlatform {
     TRANSLUCENT_CUSTOM_GEOMETRY
   }
 
-  void registerFeatures();
-
   void registerReloadListener(Identifier id, PreparableReloadListener listener);
 
   KeyMapping.Category registerKeyCategory(Identifier id);

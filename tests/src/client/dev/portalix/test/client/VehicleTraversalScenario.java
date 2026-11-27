@@ -4,6 +4,7 @@ import static dev.portalix.test.client.ClientAssertions.check;
 
 import com.google.gson.GsonBuilder;
 import dev.portalix.client.PortalixClient;
+import dev.portalix.client.compat.minecraft.GuiAccess;
 import dev.portalix.client.portal.scene.PortalSceneManager;
 import dev.portalix.item.PortalixIdentity;
 import dev.portalix.portal.PortalTopology;
@@ -71,7 +72,7 @@ final class VehicleTraversalScenario {
         + client.player.position() + ", observed=" + server);
     observe();
     if (step == Step.BOARD_TARGET || step == Step.SPAWN_CART || step == Step.CART_VISIBLE || step == Step.CART_PROOF)
-      client.gui.hud.setOverlayMessage(STATION_CAPTION, false);
+      GuiAccess.setOverlayMessage(client, STATION_CAPTION, false);
     switch (step) {
       case BLUE_AIM -> {
         if (age == 0) input.slot(0);

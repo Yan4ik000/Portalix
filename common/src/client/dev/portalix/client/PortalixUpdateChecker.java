@@ -4,6 +4,7 @@ import com.google.gson.Gson;
 import com.google.gson.JsonParseException;
 import com.google.gson.annotations.SerializedName;
 import com.mojang.logging.LogUtils;
+import dev.portalix.client.compat.minecraft.GuiAccess;
 import java.io.IOException;
 import java.net.URI;
 import java.net.http.HttpClient;
@@ -40,7 +41,7 @@ public final class PortalixUpdateChecker {
         client.execute(() -> {
           var listener = client.getConnection();
           if (listener != null && listener.getConnection() == connection && connection.isConnected()) {
-            client.gui.hud.getChat().addClientSystemMessage(Component.translatable(
+            GuiAccess.addChatMessage(client, Component.translatable(
                 "message.portalix.update.available", "v" + current, "v" + latest));
           }
         });

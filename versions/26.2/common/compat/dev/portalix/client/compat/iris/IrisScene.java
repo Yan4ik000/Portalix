@@ -7,6 +7,7 @@ import dev.portalix.client.compat.RenderScope;
 import dev.portalix.client.compat.ShaderBackend;
 import dev.portalix.client.mixin.compat.iris.IrisRenderingPipelineAccessor;
 import dev.portalix.client.mixin.compat.iris.PipelineManagerAccessor;
+import dev.portalix.client.mixin.scene.GameRendererAccessor;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -15,6 +16,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import net.irisshaders.iris.Iris;
+import net.irisshaders.iris.gl.image.GlImage;
 import net.irisshaders.iris.pipeline.IrisRenderingPipeline;
 import net.irisshaders.iris.pipeline.PipelineManager;
 import net.irisshaders.iris.pipeline.WorldRenderingPipeline;
@@ -70,6 +72,18 @@ public final class IrisScene implements ShaderBackend.Scene {
 
   public static boolean prewarming() {
     return creation == Creation.PREWARM;
+  }
+
+  public static RenderTarget mainTarget() {
+    return Minecraft.getInstance().gameRenderer.mainRenderTarget();
+  }
+
+  public static RenderTarget primaryTarget() {
+    return ((GameRendererAccessor) Minecraft.getInstance().gameRenderer).portalix$mainTarget();
+  }
+
+  public static void clearImage(GlImage image) {
+    image.clear();
   }
 
   public static RenderTarget prewarmTarget() {

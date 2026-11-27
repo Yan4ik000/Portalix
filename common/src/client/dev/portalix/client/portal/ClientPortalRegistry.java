@@ -2,6 +2,8 @@ package dev.portalix.client.portal;
 
 import dev.portalix.api.PortalEndpoint;
 import dev.portalix.api.PortalInstance;
+import dev.portalix.client.compat.minecraft.GuiAccess;
+import dev.portalix.client.compat.minecraft.MinecraftRenderAccess;
 import dev.portalix.client.gun.sound.SoundVoiceLimiter;
 import dev.portalix.client.portal.render.PortalMarker;
 import dev.portalix.client.portal.render.PortalOpeningAnimation;
@@ -166,7 +168,7 @@ public final class ClientPortalRegistry {
 
   public void tick() {
     double now = time();
-    Vec3 camera = client.gameRenderer.mainCamera().position();
+    Vec3 camera = MinecraftRenderAccess.camera(client).position();
     for (PortalVisual portal : portals.values()) {
       boolean ready =
           links().stream()
@@ -183,7 +185,7 @@ public final class ClientPortalRegistry {
   public void submit(ParticleView view, OrderedSubmitNodeCollector collection) {
     double now = time();
     UUID heldGun = null;
-    if (!PortalSceneManager.isPortalView() && !client.gui.hud.isHidden() && GunPermissions.canUse(client.player))
+    if (!PortalSceneManager.isPortalView() && !GuiAccess.hidden(client) && GunPermissions.canUse(client.player))
       heldGun = PortalixIdentity.get(client.player.getMainHandItem());
     var markers = heldGun == null ? null : new PortalMarker.Frame();
     for (var entry : portals.entrySet())

@@ -1,0 +1,11 @@
+{
+  "loaders": ["fabric", "neoforge"],
+  "renderers": ["native", "sodium", "sodium-iris"],
+  "backends": ["opengl"],
+  "unsupported": [],
+  "shaderPack": {
+    "name": "ComplementaryUnbound_r5.8.1.zip",
+    "url": "https://cdn.modrinth.com/data/R6NEzAwj/versions/VMHXIk50/ComplementaryUnbound_r5.8.1.zip",
+    "sha512": "9098dd9e0c18b80f7aba2839cea33ce9a614d97665bbfcac87ccce6e4771667c41602d99088852cb1642ccab20b2ceff9b98af8f2e795bd0d3b90b7c9cbab914"
+  }
+}

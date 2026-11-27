@@ -31,8 +31,7 @@ import net.minecraft.server.packs.resources.PreparableReloadListener;
 import org.joml.Vector3fc;
 
 public final class FabricClientPlatform implements ClientPlatform {
-  @Override
-  public void registerFeatures() {
+  private void registerFeatures() {
     FeatureRendererRegistry.register(GunMeshFeatureRenderer.TYPE, GunMeshFeatureRenderer::new);
     FeatureRendererRegistry.register(PortalSurfaceRenderer.TYPE, PortalSurfaceRenderer::new);
     FeatureRendererRegistry.register(LinearParticleRenderer.TYPE, LinearParticleRenderer::new);
@@ -72,6 +71,7 @@ public final class FabricClientPlatform implements ClientPlatform {
 
   @Override
   public void registerRenderEvents() {
+    registerFeatures();
     LevelRenderEvents.COLLECT_SUBMITS.register(
         context -> GunRenderEvents.collect(context.submitNodeCollector(), context.levelState()));
     HudElementRegistry.replaceElement(VanillaHudElements.CROSSHAIR, original ->

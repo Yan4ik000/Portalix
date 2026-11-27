@@ -18,6 +18,7 @@ neoForge {
             systemProperty 'portalix.test.profile', rootProject.regressionProfileId
             systemProperty 'portalix.test.clientTest', rootProject.regressionClientTestSelection
             systemProperty 'portalix.test.diagnostics', rootProject.regressionDiagnostics
+            systemProperty 'portalix.test.shaderPack', rootProject.regressionShaderPack.name
             systemProperty 'portalix.test.reportDir', regressionReportDirectory.get().asFile.absolutePath
             rootProject.regressionEnvironmentProperties.each { name, value -> systemProperty name, value }
             jvmArgument '-Xmx6G'
@@ -32,6 +33,7 @@ neoForge {
             systemProperty 'portalix.test.profile', rootProject.regressionProfileId
             systemProperty 'portalix.test.clientTest', rootProject.regressionBenchmarkSelection
             systemProperty 'portalix.test.diagnostics', rootProject.regressionDiagnostics
+            systemProperty 'portalix.test.shaderPack', rootProject.regressionShaderPack.name
             systemProperty 'portalix.test.reportDir', benchmarkReportDirectory.get().asFile.absolutePath
             ['benchmarkRenderDistance', 'pregeneratedRegions'].each { name ->
                 def value = rootProject.providers.gradleProperty(name).orNull

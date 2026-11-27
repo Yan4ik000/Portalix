@@ -15,7 +15,6 @@ import net.minecraft.core.Direction;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntitySpawnReason;
-import net.minecraft.world.entity.EntityTypes;
 import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.entity.projectile.Projectile;
 import net.minecraft.world.item.Item;
@@ -112,16 +111,16 @@ final class NativeProjectileRegression {
 
   private static Projectile create(Kind kind, RegressionWorld world) {
     Projectile result = switch (kind) {
-      case SNOWBALL -> EntityTypes.SNOWBALL.create(world.level, EntitySpawnReason.COMMAND);
-      case ARROW -> EntityTypes.ARROW.create(world.level, EntitySpawnReason.COMMAND);
-      case TRIDENT -> EntityTypes.TRIDENT.create(world.level, EntitySpawnReason.COMMAND);
+      case SNOWBALL -> TestEntityTypes.SNOWBALL.create(world.level, EntitySpawnReason.COMMAND);
+      case ARROW -> TestEntityTypes.ARROW.create(world.level, EntitySpawnReason.COMMAND);
+      case TRIDENT -> TestEntityTypes.TRIDENT.create(world.level, EntitySpawnReason.COMMAND);
     };
     check(result != null, "Native projectile factory failed: " + kind);
     return result;
   }
 
   private static void entityHit(RegressionWorld world, Projectile projectile, PortalLink link, Kind kind, String context) {
-    var target = EntityTypes.BLAZE.create(world.level, EntitySpawnReason.COMMAND);
+    var target = TestEntityTypes.BLAZE.create(world.level, EntitySpawnReason.COMMAND);
     check(target != null, "Blaze factory failed");
     world.add(target);
     target.setNoAi(true);

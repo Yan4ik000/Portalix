@@ -2,10 +2,12 @@ buildscript {
     dependencies { classpath 'dev.portalix.build:test-infrastructure:1' }
 }
 
+import PrepareRegressionRun
 import VerifyRegressionReport
 
 def profiles = [:]
 def profileCatalog = new groovy.json.JsonSlurper().parse(new File(minecraftSourcesDir, 'tests/test-profiles.json'), 'UTF-8')
+ext.regressionShaderPack = profileCatalog.shaderPack ?: PrepareRegressionRun.DEFAULT_SHADER_PACK
 profileCatalog.loaders.each { loader ->
     profileCatalog.backends.each { backend ->
         profileCatalog.renderers.each { renderer ->

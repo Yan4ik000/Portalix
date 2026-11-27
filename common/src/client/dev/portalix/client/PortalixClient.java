@@ -7,7 +7,6 @@ import dev.portalix.client.gun.GunInputHandler;
 import dev.portalix.client.gun.animation.GunAnimator;
 import dev.portalix.client.gun.render.GunRenderEvents;
 import dev.portalix.client.particle.GunShotEffects;
-import dev.portalix.client.platform.ClientPlatform;
 import dev.portalix.client.portal.ClientPortalRegistry;
 import dev.portalix.client.portal.PortalViewReadiness;
 import dev.portalix.client.portal.audio.PortalAudioRouter;
@@ -76,7 +75,6 @@ public final class PortalixClient {
   }
 
   public static void register() {
-    ClientPlatform.INSTANCE.registerFeatures();
     GunRenderEvents.register();
     ModResourceReload.register();
     GunInputHandler.initialize();

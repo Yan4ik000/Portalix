@@ -8,6 +8,8 @@ import dev.portalix.portal.PortalTopology;
 import dev.portalix.portal.query.PlayerPortalVisibility;
 import dev.portalix.test.ChunkAttachmentTestHooks;
 import dev.portalix.test.ChunkAttachmentTestHooks.Key;
+import dev.portalix.test.TestContent;
+import dev.portalix.test.TestEntityTypes;
 import dev.portalix.world.chunk.ChunkDeliveryAccess;
 import java.io.IOException;
 import java.io.UncheckedIOException;
@@ -23,7 +25,6 @@ import java.util.function.Consumer;
 import net.minecraft.client.Minecraft;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.entity.EntitySpawnReason;
-import net.minecraft.world.entity.EntityTypes;
 import net.minecraft.world.entity.animal.sheep.Sheep;
 import net.minecraft.world.item.DyeColor;
 import net.minecraft.world.level.ChunkPos;
@@ -138,8 +139,8 @@ final class WorldUpdatesSystemScene extends PortalPreparedScene {
           image.assertMaterial(region, FrameCapture.Material.RED, .05, 1);
           red = image;
         })) return false;
-        observeTerrain(new AABB(marker), Map.of(marker, Blocks.CONCRETE.pick(DyeColor.LIME).defaultBlockState()));
-        mutation = originalServer.submit(() -> fixture.block(marker, Blocks.CONCRETE.pick(DyeColor.LIME).defaultBlockState()));
+        observeTerrain(new AABB(marker), Map.of(marker, TestContent.concrete(DyeColor.LIME).defaultBlockState()));
+        mutation = originalServer.submit(() -> fixture.block(marker, TestContent.concrete(DyeColor.LIME).defaultBlockState()));
         next(Step.REPLACE);
       }
       case REPLACE -> {
@@ -333,7 +334,7 @@ final class WorldUpdatesSystemScene extends PortalPreparedScene {
 
   private void buildLightRoom() {
     var center = BlockPos.containing(arrangement.exit().center());
-    var black = Blocks.CONCRETE.pick(DyeColor.BLACK).defaultBlockState();
+    var black = TestContent.concrete(DyeColor.BLACK).defaultBlockState();
     fixture.fill(center.offset(-3, -1, 1), center.offset(3, 2, 7), Blocks.AIR.defaultBlockState());
     fixture.fill(center.offset(-4, -2, 1), center.offset(4, -2, 8), black);
     fixture.fill(center.offset(-4, 3, 0), center.offset(4, 3, 8), black);
@@ -359,7 +360,7 @@ final class WorldUpdatesSystemScene extends PortalPreparedScene {
   }
 
   private Actor spawnActor() {
-    actor = EntityTypes.SHEEP.create(originalServer.overworld(), EntitySpawnReason.COMMAND);
+    actor = TestEntityTypes.SHEEP.create(originalServer.overworld(), EntitySpawnReason.COMMAND);
     check(actor != null, "The native sheep factory rejected the remote update actor");
     var position = arrangement.exit().center().add(arrangement.exit().normal().scale(4)).add(0, -1, 0);
     actor.setPos(position.x, position.y, position.z);

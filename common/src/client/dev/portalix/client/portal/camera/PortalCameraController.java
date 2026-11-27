@@ -2,6 +2,7 @@ package dev.portalix.client.portal.camera;
 
 import com.mojang.blaze3d.vertex.PoseStack;
 import dev.portalix.client.compat.iris.IrisShaders;
+import dev.portalix.client.compat.minecraft.MinecraftRenderAccess;
 import dev.portalix.client.mixin.scene.GameRendererAccessor;
 import dev.portalix.portal.PortalLink;
 import dev.portalix.portal.PortalRoutes;
@@ -100,7 +101,7 @@ public final class PortalCameraController {
       long eventId, PortalLink link, float previousYaw, float previousPitch) {
     LocalPlayer player = Minecraft.getInstance().player;
     if (player == null) return;
-    var camera = Minecraft.getInstance().gameRenderer.mainCamera();
+    var camera = MinecraftRenderAccess.camera(Minecraft.getInstance());
     trackCameraSpaceOwner(camera.entity());
     if (trackedPlayer != null && trackedPlayer != player) clearTracking();
     if (eventId <= lastCrossing) return;
@@ -142,7 +143,7 @@ public final class PortalCameraController {
 
   public static PortalLookAngles mouse(LocalPlayer player, double horizontal, double vertical) {
     if ((!tracking && !ORBIT.active()) || trackedPlayer != player) return null;
-    if (Minecraft.getInstance().gameRenderer.mainCamera().entity() != player) return null;
+    if (MinecraftRenderAccess.camera(Minecraft.getInstance()).entity() != player) return null;
     followExternalLook(player);
     if (ORBIT.active()) {
       ORBIT.mouse(horizontal * .15, vertical * .15);
@@ -211,7 +212,7 @@ public final class PortalCameraController {
   public static void update(Camera camera, float partialTick) {
     Minecraft minecraft = Minecraft.getInstance();
     if (camera.entity() != minecraft.player) {
-      if (camera == minecraft.gameRenderer.mainCamera()) view = null;
+      if (camera == MinecraftRenderAccess.camera(minecraft)) view = null;
       return;
     }
     if (camera.isDetached()) return;
@@ -235,7 +236,7 @@ public final class PortalCameraController {
   /** Consumed once after resolving the main camera, before extracting its render view. */
   public static List<PortalLink> consumeCameraTransitions() {
     var minecraft = Minecraft.getInstance();
-    trackCameraSpaceOwner(minecraft.gameRenderer.mainCamera().entity());
+    trackCameraSpaceOwner(MinecraftRenderAccess.camera(minecraft).entity());
     var path =
         minecraft.player != null && cameraSpaceOwner == minecraft.player && view != null
             ? view.spacePath()
@@ -509,7 +510,7 @@ public final class PortalCameraController {
         if (clipped < near && PortalEntityMovement.canTraverse(player, link)) near = clipped;
       }
     }
-    // Iris converts reversed depth to a legacy projection; keep its far plane representable.
+    // Iris reconstructs its far plane from projection coefficients; keep it representable.
     return IrisShaders.active()
         ? Math.min(ordinary, Math.max(near, far * Math.ulp(1.0F)))
         : near;

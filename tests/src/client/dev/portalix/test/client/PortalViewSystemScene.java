@@ -1,5 +1,8 @@
 package dev.portalix.test.client;
 
+import dev.portalix.client.compat.minecraft.GuiAccess;
+import dev.portalix.client.compat.minecraft.MinecraftRenderAccess;
+import dev.portalix.test.TestContent;
 import net.minecraft.world.level.chunk.LevelChunk;
 import dev.portalix.portal.traversal.EntityPortalState;
 import dev.portalix.portal.PortalViewLimits;
@@ -126,7 +129,7 @@ final class PortalViewSystemScene implements ClientSystemScene {
     this.client = client; this.frames = frames;
     input = new ScenarioInput(client);
     previousPerspective = client.options.getCameraType(); previousFov = client.options.fov().get();
-    previousHidden = client.gui.hud.isHidden();
+    previousHidden = GuiAccess.hidden(client);
   }
 
   @Override public List<String> passed() { return List.copyOf(passed); }
@@ -144,7 +147,7 @@ final class PortalViewSystemScene implements ClientSystemScene {
   private boolean advance() {
     if (phase == Phase.DONE) return true;
     check(++age < 700, "Portal view case timed out: " + spec().id + "/" + phase + "/" + action);
-    client.gui.hud.setOverlayMessage(Component.literal("Portal view system: " + spec().id), false);
+    GuiAccess.setOverlayMessage(client, Component.literal("Portal view system: " + spec().id), false);
     switch (phase) {
       case SETUP -> {
         if (!frames.pause()) return false;
@@ -157,7 +160,7 @@ final class PortalViewSystemScene implements ClientSystemScene {
           return false;
         }
         input.stop();
-        if (!client.gui.hud.isHidden()) { input.click(client.options.keyToggleGui); return false; }
+        if (!GuiAccess.hidden(client)) { input.click(client.options.keyToggleGui); return false; }
         if (setup == null) {
           client.options.setCameraType(CameraType.FIRST_PERSON); client.options.fov().set(70);
           var owner = client.player.getUUID();
@@ -190,7 +193,7 @@ final class PortalViewSystemScene implements ClientSystemScene {
             && link.generation() == scene.generation() && link.entrance().endpoint().equals(scene.entrance()))
             .findFirst().orElse(null);
         boolean ready = client.player.position().distanceTo(scene.feet()) < .12
-            && client.gui.hud.isHidden() && client.gameRenderer.gameRenderState().guiRenderState.isHudHidden
+            && GuiAccess.hidden(client) && GuiAccess.renderedHudHidden(client)
             && client.levelRenderer.hasRenderedAllSections()
             && PortalSystemFixture.markerLightingReady(client.level, scene)
             && sourceLink != null && PortalSceneManager.hasRenderedView(sourceLink)
@@ -351,7 +354,7 @@ final class PortalViewSystemScene implements ClientSystemScene {
     uploads.close();
     var marker = scene.markers().getFirst().bounds();
     var position = BlockPos.containing(marker.getCenter());
-    var state = Blocks.CONCRETE.pick(color).defaultBlockState();
+    var state = TestContent.concrete(color).defaultBlockState();
     expectedMaterial.put(position, state);
     uploads = new PortalTerrainUploadProbe(marker);
     mutation = client.getSingleplayerServer().submit(() -> fixture.block(position, state));
@@ -532,7 +535,7 @@ final class PortalViewSystemScene implements ClientSystemScene {
   private void viewBudget() {
     int radius = client.options.getEffectiveRenderDistance();
     if (action == 0) {
-      var eye = client.gameRenderer.mainCamera().position();
+      var eye = MinecraftRenderAccess.camera(client).position();
       check(eye.distanceTo(scene.entrance().center()) > 4, "The visible view must be outside arrival prefetch range");
       var hidden = PortalTopology.links(client.level).stream()
           .filter(link -> !link.gun().equals(fixture.gunId()) && eye.distanceTo(link.entrance().endpoint().center()) < 4).toList();
@@ -667,7 +670,7 @@ final class PortalViewSystemScene implements ClientSystemScene {
     if (capture == null) {
       settlingAnchor = null;
       capture = frames.reservedCheckpoint(name(suffix), () -> {
-        if (!client.gui.hud.isHidden() || !client.gameRenderer.gameRenderState().guiRenderState.isHudHidden) return false;
+        if (!GuiAccess.hidden(client) || !GuiAccess.renderedHudHidden(client)) return false;
         if (sentinel != null && !sentinel.ready(client.level)) return false;
         if (!condition.getAsBoolean()) return false;
         capturedPlayer = client.player.position(); capturedState = clientState(); return true;
@@ -732,9 +735,9 @@ final class PortalViewSystemScene implements ClientSystemScene {
   private Map<String, Object> clientState() {
     var state = new LinkedHashMap<String, Object>();
     state.put("player", client.player.position().toString());
-    state.put("camera", client.gameRenderer.mainCamera().position().toString());
-    state.put("hudHidden", client.gui.hud.isHidden());
-    state.put("renderedHudHidden", client.gameRenderer.gameRenderState().guiRenderState.isHudHidden);
+    state.put("camera", MinecraftRenderAccess.camera(client).position().toString());
+    state.put("hudHidden", GuiAccess.hidden(client));
+    state.put("renderedHudHidden", GuiAccess.renderedHudHidden(client));
     state.put("velocity", client.player.getDeltaMovement().toString());
     state.put("flying", client.player.getAbilities().flying);
     state.put("nativeButtons", Map.of("forward", client.options.keyUp.isDown(), "backward", client.options.keyDown.isDown(),
@@ -838,7 +841,7 @@ final class PortalViewSystemScene implements ClientSystemScene {
   @Override public CompletableFuture<Void> cleanup() {
     frames.setTerrainCheck(null);
     input.stop(); client.options.fov().set(previousFov); client.options.setCameraType(previousPerspective);
-    if (client.gui.hud.isHidden() != previousHidden) client.gui.hud.toggle();
+    if (GuiAccess.hidden(client) != previousHidden) GuiAccess.toggleHud(client);
     if (parallax != null) parallax.close();
     if (uploads != null) uploads.close();
     CompletableFuture<Void> pending = CompletableFuture.allOf(Stream.of(setup, blocker, mutation, spawn, actorMove, nestedSetup, diagnostics, settlingSample, previewObservation, arrivalObservation)

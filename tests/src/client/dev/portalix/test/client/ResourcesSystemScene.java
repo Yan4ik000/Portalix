@@ -3,12 +3,13 @@ package dev.portalix.test.client;
 import static dev.portalix.test.client.ClientAssertions.check;
 
 import dev.portalix.client.compat.iris.IrisShaders;
+import dev.portalix.client.compat.minecraft.GuiAccess;
+import dev.portalix.test.TestContent;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import net.minecraft.client.Minecraft;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.item.DyeColor;
-import net.minecraft.world.level.block.Blocks;
 
 final class ResourcesSystemScene extends PortalPreparedScene {
   private enum Step { PREPARE, BEFORE, DRAIN, RELOAD, MUTATE, AFTER, DONE }
@@ -46,7 +47,7 @@ final class ResourcesSystemScene extends PortalPreparedScene {
         next(Step.RELOAD);
       }
       case RELOAD -> {
-        if (!reload.isDone() || client.gui.overlay() != null) return false;
+        if (!reload.isDone() || GuiAccess.overlay(client) != null) return false;
         reload.join();
         if (IrisShaders.active()) {
           var shaders = java.util.ServiceLoader.load(ClientRegressionRunner.ShaderEnvironment.class)
@@ -59,7 +60,7 @@ final class ResourcesSystemScene extends PortalPreparedScene {
           var box = arrangement.markers().getFirst().bounds();
           fixture.fill(BlockPos.containing(box.minX, box.minY, box.minZ),
               BlockPos.containing(box.maxX - .01, box.maxY - .01, box.maxZ - .01),
-              Blocks.CONCRETE.pick(DyeColor.MAGENTA).defaultBlockState());
+              TestContent.concrete(DyeColor.MAGENTA).defaultBlockState());
         });
         next(Step.MUTATE);
       }
@@ -90,7 +91,7 @@ final class ResourcesSystemScene extends PortalPreparedScene {
 
   private boolean terrainReady() {
     var marker = BlockPos.containing(arrangement.markers().getFirst().bounds().getCenter());
-    return client.level.getBlockState(marker).equals(Blocks.CONCRETE.pick(DyeColor.MAGENTA).defaultBlockState())
+    return client.level.getBlockState(marker).equals(TestContent.concrete(DyeColor.MAGENTA).defaultBlockState())
         && openEntrances().anyMatch(link -> uploads.complete(link));
   }
 

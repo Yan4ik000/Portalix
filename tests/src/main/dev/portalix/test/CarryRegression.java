@@ -22,7 +22,6 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.entity.EntitySpawnReason;
-import net.minecraft.world.entity.EntityTypes;
 import net.minecraft.world.entity.Mob;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.item.ItemStack;
@@ -197,7 +196,7 @@ final class CarryRegression implements ServerRegressionSuite.Scenario {
     world.player.setItemSlot(EquipmentSlot.MAINHAND, new ItemStack(ModItems.gun(PortalixVariant.STANDARD)));
     Vec3 start = entrance.center().add(0, 0, -.75);
     if (actorIndex == 1) {
-      var pig = EntityTypes.PIG.create(world.level, EntitySpawnReason.COMMAND);
+      var pig = TestEntityTypes.PIG.create(world.level, EntitySpawnReason.COMMAND);
       check(pig != null, "Portal carry animal factory failed");
       world.add(pig);
       pig.setNoAi(true);
@@ -232,7 +231,7 @@ final class CarryRegression implements ServerRegressionSuite.Scenario {
     world.clear(new Vec3(160, 105, 160), 5);
     player.snapTo(160.5, 104, 160.5, 0, 0);
     player.setItemSlot(EquipmentSlot.MAINHAND, new ItemStack(ModItems.gun(PortalixVariant.STANDARD)));
-    var pig = EntityTypes.PIG.create(world.level, EntitySpawnReason.COMMAND);
+    var pig = TestEntityTypes.PIG.create(world.level, EntitySpawnReason.COMMAND);
     check(pig != null, "Could not create the held mob");
     world.add(pig);
     pig.setPos(player.getEyePosition().add(0, -pig.getBbHeight() / 2, 1.5));
@@ -271,8 +270,8 @@ final class CarryRegression implements ServerRegressionSuite.Scenario {
       world.player.snapTo(160.5, 104, 160.5, 0, 0);
       world.player.setDeltaMovement(Vec3.ZERO);
       world.player.setItemSlot(EquipmentSlot.MAINHAND, new ItemStack(ModItems.gun(PortalixVariant.STANDARD)));
-      Mob animal = noAi ? EntityTypes.CHICKEN.create(world.level, EntitySpawnReason.COMMAND)
-          : EntityTypes.PIG.create(world.level, EntitySpawnReason.COMMAND);
+      Mob animal = noAi ? TestEntityTypes.CHICKEN.create(world.level, EntitySpawnReason.COMMAND)
+          : TestEntityTypes.PIG.create(world.level, EntitySpawnReason.COMMAND);
       check(animal != null, "Carry animal factory failed");
       world.add(animal);
       animal.setNoGravity(false);
@@ -327,8 +326,8 @@ final class CarryRegression implements ServerRegressionSuite.Scenario {
     world.clear(new Vec3(160, 105, 160), 5);
     world.player.snapTo(160.5, 104, 160.5, 0, 0);
     world.player.setItemSlot(EquipmentSlot.MAINHAND, new ItemStack(ModItems.gun(PortalixVariant.STANDARD)));
-    var vehicle = EntityTypes.PIG.create(world.level, EntitySpawnReason.COMMAND);
-    var passenger = EntityTypes.CHICKEN.create(world.level, EntitySpawnReason.COMMAND);
+    var vehicle = TestEntityTypes.PIG.create(world.level, EntitySpawnReason.COMMAND);
+    var passenger = TestEntityTypes.CHICKEN.create(world.level, EntitySpawnReason.COMMAND);
     check(vehicle != null && passenger != null, "Carry passenger fixture factory failed");
     world.add(vehicle);
     world.add(passenger);

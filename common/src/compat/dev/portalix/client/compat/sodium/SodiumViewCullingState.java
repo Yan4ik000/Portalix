@@ -1,5 +1,6 @@
 package dev.portalix.client.compat.sodium;
 
+import dev.portalix.client.compat.TerrainIntegration;
 import dev.portalix.client.portal.scene.PortalSceneManager;
 import dev.portalix.client.mixin.compat.sodium.RenderRegionAccessor;
 import dev.portalix.client.compat.PortalTerrainBackend;
@@ -443,7 +444,7 @@ public final class SodiumViewCullingState {
       SectionTree primaryTree, float distance, SectionStorage sections, RenderRegionManager regions) {
     if (camera.cullFrustum == null) return false;
     var viewport = ((ViewportProvider) camera.cullFrustum).sodium$createViewport();
-    if (!camera.smartCull) return unculledComplete(viewport, regions);
+    if (!TerrainIntegration.usesOcclusionCulling(camera)) return unculledComplete(viewport, regions);
     var visibility = primary ? null : views.get(renderer);
     var tree = primary ? primaryTree : visibility == null ? null : visibility.tree;
     var snapshot = primary ? primarySnapshot : visibility == null ? null : visibility.snapshot;

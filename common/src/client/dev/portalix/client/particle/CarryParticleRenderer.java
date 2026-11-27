@@ -86,7 +86,7 @@ public final class CarryParticleRenderer {
       }
 
       BillboardOrientation facing =
-          new BillboardOrientation(RenderSystem.getModelViewMatrixCopy().mul(pose.last().pose()));
+          new BillboardOrientation(new Matrix4f(RenderSystem.getModelViewStack()).mul(pose.last().pose()));
       Vector3f camera = facing.camera();
       float stop = animation.isCarrying() ? Float.POSITIVE_INFINITY : animation.holdStopAge();
 

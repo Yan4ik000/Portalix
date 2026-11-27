@@ -2,12 +2,10 @@ package dev.portalix.client.mixin.compat.iris;
 
 import dev.portalix.client.compat.iris.IrisScene;
 import dev.portalix.client.compat.iris.IrisStorageHistory;
-import dev.portalix.client.mixin.scene.GameRendererAccessor;
 import java.nio.ByteBuffer;
 import net.irisshaders.iris.Iris;
 import net.irisshaders.iris.gl.buffer.BuiltShaderStorageInfo;
 import net.irisshaders.iris.gl.buffer.ShaderStorageBuffer;
-import net.minecraft.client.Minecraft;
 import org.lwjgl.opengl.GL43C;
 import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
@@ -40,7 +38,7 @@ abstract class IrisStorageBufferMixin implements IrisStorageHistory {
     if (IrisScene.prewarming()) return size;
 
     var pack = (IrisShaderPackAccessor) Iris.getCurrentPack().orElseThrow();
-    var primary = ((GameRendererAccessor) Minecraft.getInstance().gameRenderer).portalix$mainTarget();
+    var primary = IrisScene.primaryTarget();
     long fullWidth = (long) (primary.width * info.scaleX());
     long fullHeight = (long) (primary.height * info.scaleY());
     long fullSize = fullWidth * fullHeight * info.size();

@@ -21,7 +21,6 @@ import net.irisshaders.iris.pipeline.IrisRenderingPipeline;
 import net.irisshaders.iris.shadows.ShadowRenderTargets;
 import net.irisshaders.iris.targets.ClearPass;
 import net.irisshaders.iris.targets.RenderTargets;
-import net.minecraft.client.Minecraft;
 import org.joml.Vector4f;
 import org.lwjgl.opengl.GL11C;
 import org.lwjgl.opengl.GL30C;
@@ -73,7 +72,7 @@ abstract class IrisPipelineHistoryMixin implements IrisPipelineHistory {
     if (!customImages.isEmpty()) {
       GL43C.glMemoryBarrier(GL43C.GL_TEXTURE_UPDATE_BARRIER_BIT);
       for (var image : customImages) {
-        if (!image.shouldClear()) image.clear();
+        if (!image.shouldClear()) IrisScene.clearImage(image);
       }
     }
   }
@@ -159,7 +158,7 @@ abstract class IrisPipelineHistoryMixin implements IrisPipelineHistory {
     }
     var white = new Vector4f(1);
     for (var clear : clears) clear.execute(white);
-    ((RenderTargetInterface) Minecraft.getInstance().gameRenderer.mainRenderTarget())
+    ((RenderTargetInterface) IrisScene.mainTarget())
         .iris$bindFramebuffer();
   }
 }

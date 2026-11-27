@@ -13,11 +13,20 @@ def versionDirectory = minecraftSourcesDir
 def versionProperties = new Properties()
 new File(versionDirectory, 'gradle.properties').withReader('UTF-8') { versionProperties.load(it) }
 versionProperties.each { name, value -> ext.set(name, providers.gradleProperty(name).getOrElse(value)) }
+
+def addVersionedDirectory = { SourceDirectorySet sources, File common, String path ->
+    def versioned = new File(versionDirectory, path)
+    sources.srcDirs(common, versioned)
+    sources.exclude { entry ->
+        !entry.directory && entry.file.toPath().startsWith(common.toPath()) && new File(versioned, entry.path).isFile()
+    }
+}
+
 ext.addMinecraftSources = { SourceSet sourceSet, String path ->
     def sharedDirectory = file(path)
-    def targetDirectory = new File(versionDirectory, path.replace('/src/', '/'))
-    sourceSet.java.srcDirs sharedDirectory, targetDirectory
-    sourceSet.resources.srcDirs new File(sharedDirectory, 'resources'), new File(targetDirectory, 'resources')
+    def versionedPath = path.replace('/src/', '/')
+    addVersionedDirectory(sourceSet.java, sharedDirectory, versionedPath)
+    addVersionedDirectory(sourceSet.resources, new File(sharedDirectory, 'resources'), versionedPath + '/resources')
 }
 
 layout.buildDirectory = layout.projectDirectory.dir("tests/build/${minecraftVersion}")
@@ -28,10 +37,13 @@ subprojects {
     version = rootProject.version
     layout.buildDirectory = layout.projectDirectory.dir("build/${minecraftVersion}")
     sourceSets.configureEach { sourceSet ->
-        def directory = new File(versionDirectory, "${project.name}/${sourceSet.name}")
-        sourceSet.java.setSrcDirs([file("src/${sourceSet.name}"), directory])
+        def versionedPath = "${project.name}/${sourceSet.name}"
+        def shared = file("src/${sourceSet.name}")
+        sourceSet.java.setSrcDirs([])
+        addVersionedDirectory(sourceSet.java, shared, versionedPath)
         sourceSet.java.exclude('resources/**')
-        sourceSet.resources.srcDir new File(directory, 'resources')
+        sourceSet.resources.setSrcDirs([])
+        addVersionedDirectory(sourceSet.resources, new File(shared, 'resources'), versionedPath + '/resources')
     }
     repositories {
         mavenCentral()

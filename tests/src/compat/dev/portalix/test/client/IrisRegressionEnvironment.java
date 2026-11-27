@@ -18,8 +18,9 @@ public final class IrisRegressionEnvironment implements ClientRegressionRunner.S
     ClientAssertions.check(net.irisshaders.iris.Iris.getIrisConfig().areShadersEnabled(),
         "Iris shader configuration is disabled");
     String shader = net.irisshaders.iris.Iris.getCurrentPackName();
-    ClientAssertions.check("ComplementaryUnbound_r5.9.3.zip".equals(shader),
-        "Complementary Unbound must be active; actual pack " + shader);
+    String expected = System.getProperty("portalix.test.shaderPack");
+    ClientAssertions.check(expected != null && expected.equals(shader),
+        "Expected shader pack " + expected + "; actual pack " + shader);
     var pack = net.irisshaders.iris.Iris.getCurrentPack().orElseThrow(() -> new AssertionError("Active shader pack missing"));
     String shaderProfile = pack.getProfileInfo();
     ClientAssertions.check(shaderProfile.equals("Profile: HIGH (+0 options changed by user)"),

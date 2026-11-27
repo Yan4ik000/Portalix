@@ -61,7 +61,7 @@ final class ContentRegression {
   private static void craftVariant(RegressionWorld world, PortalixVariant variant,
       DyeColor first, DyeColor second) {
     upgrade(world, ModItems.gun(variant), ModItems.CONTROL_BOARD.get(),
-        Items.DYE.pick(first), Items.DYE.pick(second));
+        TestContent.dye(first), TestContent.dye(second));
   }
 
   private static void upgrade(RegressionWorld world, Item result, Item... materials) {
